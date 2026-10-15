@@ -1,0 +1,90 @@
+// Derives the clarification threads of a conversation from its flat turn
+// list, and provides the small formatting helpers the transcript and rail
+// share.
+
+import type { Clarification, Conversation, Turn } from '$lib/api/types';
+
+export interface ThreadTurn {
+	question: Turn;
+	reply: Turn | undefined;
+}
+
+export interface Thread {
+	clarification: Clarification;
+	turns: ThreadTurn[];
+}
+
+/** Clarification id → its question/reply pairs in order. */
+export function buildThreads(conv: Conversation): Map<string, Thread> {
+	const map = new Map<string, Thread>();
+	for (const cl of conv.clarifications) map.set(cl.id, { clarification: cl, turns: [] });
+	for (const t of conv.turns) {
+		if (!t.clarificationId) continue;
+		const th = map.get(t.clarificationId);
+		if (!th) continue;
+		if (t.role === 'user') th.turns.push({ question: t, reply: undefined });
+		else {
+			const last = th.turns[th.turns.length - 1];
+			if (last && !last.reply) last.reply = t;
+			else th.turns.push({ question: t, reply: t });
+		}
+	}
+	return map;
+}
+
+/** Turn id part of a block id (`<turnId>:<index>`). */
+export function turnOfBlock(blockId: string): string {
+	return blockId.slice(0, blockId.lastIndexOf(':'));
+}
+
+/** The top-level assistant turn a clarification ultimately hangs off. */
+export function rootTurnOf(cl: Clarification, all: Clarification[]): string {
+	let cur: Clarification | undefined = cl;
+	const seen = new Set<string>();
+	while (cur?.parentId && !seen.has(cur.id)) {
+		seen.add(cur.id);
+		cur = all.find((c) => c.id === cur!.parentId);
+	}
+	return cur ? turnOfBlock(cur.anchorBlockId) : turnOfBlock(cl.anchorBlockId);
+}
+
+export function pad(n: number): string {
+	return String(n).padStart(2, '0');
+}
+
+export function short(s: string, n = 44): string {
+	const flat = s.replace(/\s+/g, ' ').trim();
+	return flat.length > n ? flat.slice(0, n).trim() + '…' : flat;
+}
+
+export function turnsLabel(n: number): string {
+	return `${n} ${n === 1 ? 'turn' : 'turns'}`;
+}
+
+export function relativeTime(ms: number): string {
+	const diff = Date.now() - ms;
+	const m = Math.round(diff / 60_000);
+	if (m < 1) return 'just now';
+	if (m < 60) return `${m} min ago`;
+	const h = Math.round(m / 60);
+	if (h < 24) return `${h} h ago`;
+	const d = Math.round(h / 24);
+	if (d === 1) return 'yesterday';
+	return `${d} d ago`;
+}
+
+export type Group = 'Today' | 'Yesterday' | 'Last week' | 'Older';
+
+export function groupOf(ms: number): Group {
+	const d = new Date(ms);
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	const start = today.getTime();
+	if (d.getTime() >= start) return 'Today';
+	if (d.getTime() >= start - 86_400_000) return 'Yesterday';
+	if (d.getTime() >= start - 7 * 86_400_000) return 'Last week';
+	return 'Older';
+}
+
+/** Plain text and nesting context of every rendered block, keyed by block id. */
+export const blockRegistry = new Map<string, { text: string; parentId: string | null; kind: string }>();

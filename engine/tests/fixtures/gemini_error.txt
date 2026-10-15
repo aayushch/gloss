@@ -1,0 +1,9 @@
+Ripgrep is not available. Falling back to GrepTool.
+[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.
+{"type":"init","timestamp":"2026-10-13T13:02:47.056Z","session_id":"3a744804-df5f-4f68-8095-61b78c4120f5","model":"gemini-3-flash-preview"}
+{"type":"message","timestamp":"2026-10-13T13:02:47.056Z","role":"user","content":"Reply with exactly: pong"}
+[STARTUP] Cannot measure phase 'cleanup_ops': start mark 'startup:cleanup_ops:start' not found (likely cleared by reset).
+Error when talking to Gemini API Full report available at: /var/folders/xx/T/gemini-client-error-2026-10-13T13-02-47-300Z.json _ApiError: {"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}
+    at throwIfError (file:///opt/homebrew/lib/node_modules/@google/gemini-cli/node_modules/@google/genai/dist/node/index.mjs:1:1)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+{"type":"result","timestamp":"2026-10-13T13:02:47.307Z","status":"error","error":{"type":"unknown","message":"[API Error: {\"error\":{\"code\":400,\"message\":\"API key not valid. Please pass a valid API key.\",\"status\":\"INVALID_ARGUMENT\",\"details\":[{\"reason\":\"API_KEY_INVALID\"}]}}]"},"stats":{"total_tokens":0,"input_tokens":0,"output_tokens":0,"cached":0,"input":0,"duration_ms":0,"tool_calls":0,"models":{"gemini-3-flash-preview":{"total_tokens":0,"input_tokens":0,"output_tokens":0,"cached":0,"input":0}}}}

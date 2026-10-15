@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--font:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;
+--bg:#f7f6f3;--surface:#efede8;--surface-2:#e6e3dc;--text:#26241f;--text-2:#5f5b53;--text-3:#8e897f;--line:#dedbd3;--accent:#b4573a;--accent-text:#9a4328;--accent-tint:#f3e2da;--on-accent:#fff;--shadow:0 4px 16px rgba(40,30,20,.12)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.55}
+a{color:var(--accent-text)}a:hover{color:var(--accent)}
+*,*::before,*::after{box-sizing:border-box}
+::selection{background:var(--accent-tint)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[data-palette="warm"][data-mode="light"]{--bg:#f7f6f3;--surface:#efede8;--surface-2:#e6e3dc;--text:#26241f;--text-2:#5f5b53;--text-3:#8e897f;--line:#dedbd3;--accent:#b4573a;--accent-text:#9a4328;--accent-tint:#f3e2da;--on-accent:#fff;--shadow:0 4px 16px rgba(40,30,20,.12)}
+[data-palette="warm"][data-mode="dark"]{color-scheme:dark;--bg:#1f1e1b;--surface:#2a2825;--surface-2:#34312d;--text:#ebe8e1;--text-2:#b3ada2;--text-3:#7f796f;--line:#3a3733;--accent:#d4785a;--accent-text:#e39a80;--accent-tint:#4a3128;--on-accent:#1f1e1b;--shadow:0 4px 16px rgba(0,0,0,.5)}
+[data-palette="cool"][data-mode="light"]{--bg:#f5f6f7;--surface:#eceef0;--surface-2:#e2e5e9;--text:#1f2327;--text-2:#59606a;--text-3:#8a919b;--line:#d9dde2;--accent:#3f6f8f;--accent-text:#2f5a76;--accent-tint:#dde8f0;--on-accent:#fff;--shadow:0 4px 16px rgba(20,30,40,.12)}
+[data-palette="cool"][data-mode="dark"]{color-scheme:dark;--bg:#1a1d21;--surface:#23272c;--surface-2:#2c3137;--text:#e4e7eb;--text-2:#a7adb6;--text-3:#737a84;--line:#333940;--accent:#7fa6c2;--accent-text:#9dbfd8;--accent-tint:#263642;--on-accent:#1a1d21;--shadow:0 4px 16px rgba(0,0,0,.5)}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px var(--mono);padding:3px 7px;background:var(--text);color:var(--bg);border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--font);color:var(--text)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px var(--mono);padding:3px 7px;background:var(--surface-2);color:var(--text);border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 12px/1.3 var(--font);color:var(--text-2)}
+.dv-card{max-width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.dv-opt:target .dv-oid{background:var(--accent);color:var(--on-accent)}
+.dv-next{margin:22px 0 0;font:12px/1.5 var(--font);color:var(--text-2)}
+.dv-brief{max-width:720px;font-size:13px;line-height:1.5;color:var(--text-2);margin:0 0 24px}
+.dv-brief p{margin:0 0 6px}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font:500 13px var(--font);color:var(--text);background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 12px;line-height:1.2}
+.ibtn:hover{background:var(--surface)}.ibtn:active{background:var(--surface-2)}
+.ibtn-primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ibtn-primary:hover{filter:brightness(.94)}.ibtn-primary:active{filter:brightness(.88)}
+.ibtn-ghost{border-color:transparent;color:var(--accent-text)}.ibtn-ghost:hover{background:var(--accent-tint)}
+.iinput{width:100%;min-height:36px;padding:7px 10px;font:inherit;font-size:14px;color:var(--text);caret-color:var(--accent);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.iinput::placeholder{color:var(--text-3)}.iinput:hover{border-color:var(--text-3)}.iinput:focus-visible{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-tint)}
+.bare{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+@keyframes dcpulse{0%,100%{opacity:.25}50%{opacity:1}}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Quiet / neutral — own theme, no design system</span></div>
+<div class="dv-brief"><p>Warm paper neutrals with a clay accent (<a class="dv-oid" href="#3a">3a</a> light, <a class="dv-oid" href="#3b">3b</a> dark) and a cool graphite alternative (<a class="dv-oid" href="#3c">3c</a>). Soft radii, IBM Plex. Each header has a light/dark toggle. Clarifications sit in a recessed, smaller-type well with a labelled header so they read as an aside, not the response.</p>
+<p><strong>Spec — rich responses.</strong> The response renders model markdown as-is: headings, bullets, nested numbered lists, <strong>bold</strong>, <em>italic</em>, inline <code>code</code>, and fenced code blocks with a language label and syntax tones. Selection-to-ask works across any of these, including inside a heading or an inline code span, and the highlight keeps the original formatting. Selecting inside a code block asks about that code; the block gets a “clarified below” marker instead of an in-text mark.</p></div>
+<div class="dv-opts">
+
+<sc-for list="{{ panels }}" as="pn" hint-placeholder-count="3">
+<div class="dv-opt" id="{{ pn.optId }}"><div class="dv-olabel"><a class="dv-oid" href="{{ pn.href }}">{{ pn.optId }}</a>{{ pn.label }}</div>
+<div class="dv-card" data-palette="{{ pn.palette }}" data-mode="{{ pn.theme }}" style="width:620px;height:860px;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:10px;padding:12px 12px 12px 20px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px;margin-right:auto">How CPUs implement CAS</span><span style="font-size:12px;color:var(--text-2);background:var(--surface);padding:3px 9px;border-radius:999px">{{ pn.count }}</span>
+<button class="ibtn ibtn-ghost" data-v="{{ pn.v }}" onClick="{{ toggleTheme }}" title="Toggle theme" style="width:32px;height:32px;padding:0;color:var(--text-2)">
+<sc-if value="{{ pn.isDark }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+<sc-if value="{{ pn.isLight }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+</button></div>
+<div id="{{ pn.scrollId }}" data-v="{{ pn.v }}" onMouseUp="{{ onSelect }}" style="flex:1;overflow:auto;position:relative;padding:20px 24px 32px">
+<div style="display:flex;justify-content:flex-end;margin-bottom:24px"><div style="max-width:80%;background:var(--surface);padding:10px 14px;font-size:14px;line-height:1.5;border-radius:14px 14px 4px 14px">How do CPUs actually implement atomic compare-and-swap, and how do locks build on it?</div></div>
+<sc-for list="{{ pn.paras }}" as="p" hint-placeholder-count="6">
+<sc-if value="{{ p.isH }}"><h4 data-para="{{ p.id }}" style="font-size:17px;font-weight:600;margin:22px 0 8px;line-height:1.3"><sc-for list="{{ p.segs }}" as="s"><sc-if value="{{ s.plain }}"><span style="{{ s.style }}">{{ s.t }}</span></sc-if><sc-if value="{{ s.hl }}"><mark data-v="{{ pn.v }}" data-t="{{ s.tid }}" onClick="{{ toggleThread }}" style="{{ s.mstyle }}">{{ s.t }}</mark></sc-if></sc-for></h4></sc-if>
+<sc-if value="{{ p.isBody }}">
+<div data-para="{{ p.id }}" style="display:flex;margin-bottom:10px;font-size:15px;line-height:1.6">
+<sc-if value="{{ p.isLi }}"><span style="flex:none;width:5px;height:5px;border-radius:50%;background:var(--text-2);margin:10px 13px 0 8px"></span></sc-if>
+<sc-if value="{{ p.isOl }}"><span style="flex:none;width:22px;margin-left:34px;font-size:13px;color:var(--text-2);padding-top:2px;font-variant-numeric:tabular-nums">{{ p.num }}.</span></sc-if>
+<div style="flex:1;min-width:0;text-wrap:pretty"><sc-for list="{{ p.segs }}" as="s"><sc-if value="{{ s.plain }}"><span style="{{ s.style }}">{{ s.t }}</span></sc-if><sc-if value="{{ s.hl }}"><mark data-v="{{ pn.v }}" data-t="{{ s.tid }}" onClick="{{ toggleThread }}" style="{{ s.mstyle }}">{{ s.t }}</mark></sc-if></sc-for></div>
+</div>
+</sc-if>
+<sc-if value="{{ p.isCode }}">
+<div data-para="{{ p.id }}" style="margin:6px 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:var(--mono);font-size:12.5px;line-height:1.65">
+<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:11px;color:var(--text-3);border-bottom:1px solid var(--line)"><span>{{ p.lang }}</span><sc-if value="{{ p.hasThreads }}"><span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:var(--accent-text);font-family:var(--font)"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>clarified below</span></sc-if></div>
+<pre style="margin:0;padding:12px 14px;overflow-x:auto;font:inherit;color:var(--text)"><sc-for list="{{ p.lines }}" as="ln"><div><sc-for list="{{ ln.toks }}" as="tk"><span style="{{ tk.style }}">{{ tk.t }}</span></sc-for></div></sc-for></pre>
+</div>
+</sc-if>
+<sc-if value="{{ p.composer }}">
+<div style="margin:8px 0 20px 28px;background:var(--surface);border:1px solid var(--line);border-radius:10px;font-size:13px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span>Clarification</span><span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ p.composerQuote }}”</span></div>
+<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:8px">
+<textarea id="{{ pn.composerId }}" class="iinput" data-v="{{ pn.v }}" onKeyDown="{{ composerKey }}" placeholder="What would you like clarified?" style="min-height:52px;font-size:13px;resize:vertical"></textarea>
+<div style="display:flex;gap:8px"><button class="ibtn ibtn-primary" data-v="{{ pn.v }}" onClick="{{ sendQuestion }}">Ask</button><button class="ibtn" data-v="{{ pn.v }}" onClick="{{ cancelComposer }}">Cancel</button></div>
+</div>
+</div>
+</sc-if>
+<sc-for list="{{ p.threads }}" as="th">
+<div id="{{ th.domId }}" style="margin:8px 0 20px 28px;background:var(--surface);border:1px solid var(--line);border-radius:10px;font-size:13px;overflow:hidden">
+<button class="bare" data-v="{{ pn.v }}" data-t="{{ th.id }}" onClick="{{ toggleThread }}" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)">
+<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none"></span>
+<span style="flex:none">Clarification {{ th.n }}</span>
+<span style="flex:1;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ th.quote }}”</span>
+<span style="flex:none;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-3)">{{ th.countLabel }}</span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.75" style="{{ th.chev }}"><path d="m6 9 6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{ th.open }}">
+<sc-for list="{{ th.turns }}" as="tn">
+<div style="border-top:1px solid var(--line);padding:9px 12px;display:grid;grid-template-columns:40px 1fr;gap:4px 10px">
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding-top:3px">You</span>
+<div style="font-size:13px;font-weight:500;line-height:1.45">{{ tn.q }}</div>
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);padding-top:3px">Reply</span>
+<div style="font-size:13px;line-height:1.5;text-wrap:pretty;color:var(--text-2)">
+<sc-if value="{{ tn.pending }}"><div style="display:flex;gap:4px;padding:6px 0"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:dcpulse 1s infinite"></span><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:dcpulse 1s .2s infinite"></span><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:dcpulse 1s .4s infinite"></span></div></sc-if>
+{{ tn.a }}</div>
+</div>
+</sc-for>
+<div style="border-top:1px solid var(--line);padding:6px 12px 8px 62px;display:flex;gap:8px"><input id="{{ th.inputId }}" class="iinput" data-v="{{ pn.v }}" data-t="{{ th.id }}" onKeyDown="{{ followKey }}" placeholder="Follow up in this clarification…" style="min-height:28px;font-size:12px;padding:3px 9px"><button class="ibtn ibtn-ghost" data-v="{{ pn.v }}" data-t="{{ th.id }}" onClick="{{ sendFollow }}" style="padding:3px 8px;font-size:12px">Ask</button></div>
+</sc-if>
+</div>
+</sc-for>
+</sc-for>
+<sc-if value="{{ pn.hasStubs }}">
+<div style="margin-top:22px;display:flex;flex-direction:column;gap:6px">
+<sc-for list="{{ pn.stubs }}" as="st">
+<button class="bare" data-v="{{ pn.v }}" data-t="{{ st.id }}" onClick="{{ jumpTo }}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;width:100%;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--text-2)">
+<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none"></span><span>Asked about “{{ st.quote }}”</span><span style="margin-left:auto;color:var(--text-3)">{{ st.meta }}</span><span style="color:var(--accent-text);font-weight:500">View inline →</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ pn.hasAsk }}"><button data-ask="1" data-v="{{ pn.v }}" onMouseDown="{{ openComposer }}" class="ibtn ibtn-primary" style="{{ pn.askStyle }}">Ask about this</button></sc-if>
+</div>
+<div style="border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:8px"><input class="iinput" placeholder="Reply…" style="border-radius:999px;padding-left:14px"><button class="ibtn ibtn-primary" style="border-radius:999px">Send</button></div>
+</div></div>
+</sc-for>
+
+</div>
+<p class="dv-next">Try next: “use <a class="dv-oid" href="#3c">3c</a>'s cool palette with <a class="dv-oid" href="#3a">3a</a>'s layout” · “swap Plex for a geometric sans” · “try a serif body for the response text”</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+// Response body in a markdown subset: `code`, **bold**, *italic*; kinds p / h / li / ol / code.
+const RAW = [
+  {id:'def',kind:'p',md:'The simplest way to say what CAS does: “compare the value at this address with what I expect; if they match, write the new value; and tell me whether it worked.” In C-like pseudocode:'},
+  {id:'code1',kind:'code',lang:'c',md:'bool CAS(int *addr, int expected, int new) {\n    if (*addr == expected) { *addr = new; return true; }\n    return false;\n}'},
+  {id:'useless',kind:'p',md:'Written like that in software it is useless for synchronization. It is a read followed by a write, and another core can write to `addr` between the two. The hardware has to guarantee that the read-compare-write happens as one indivisible step that no other agent in the system can observe partway through.'},
+  {id:'h0',kind:'h',md:'Why software alone can’t do it'},
+  {id:'single',kind:'p',md:'On a single-core machine you can get atomicity by disabling interrupts around the read and write. With multiple cores that doesn’t help: other cores keep executing and touching the same memory in parallel, and so do DMA devices. You need something that arbitrates access to memory itself, and only the hardware sits in that position.'},
+  {id:'h1',kind:'h',md:'Approach 1: Lock the memory location (x86 `LOCK CMPXCHG`)'},
+  {id:'cmpxchg',kind:'p',md:'On x86, CAS is the `CMPXCHG` instruction with a `LOCK` prefix. Implementations have changed over time:'},
+  {id:'bus',kind:'li',md:'**Bus locking (old processors).** The CPU asserted a physical `LOCK#` signal on the shared front-side bus. While it was held, no other processor could access memory, so the read and write were trivially atomic.'},
+  {id:'cache',kind:'li',md:'**Cache locking (modern processors).** Atomicity now comes from the cache coherence protocol (MESI and its variants):'},
+  {id:'ol1',kind:'ol',num:1,md:'The core requests the cache line containing `addr` in an **exclusive/modified** state, which invalidates every other core’s copy.'},
+  {id:'ol2',kind:'ol',num:2,md:'It then **locks that line in its own cache** for the duration of the instruction. If another core sends a coherence request for the line (a snoop), the response is delayed until the CAS finishes.'},
+  {id:'x86',kind:'p',md:'A locked instruction on x86 also acts as a full memory barrier. Earlier loads and stores can’t be reordered past it, which is part of why it works as a lock-acquire primitive.'},
+  {id:'arm',kind:'li',md:'On ARM and RISC-V you choose explicitly: acquire variants (`LDAXR`, `CASA`), release variants (`STLXR`, `CASL`), or both. Lock acquire uses acquire semantics so later accesses can’t move above it. Unlock uses release semantics so earlier accesses can’t move below it.'},
+  {id:'h2',kind:'h',md:'From CAS to mutexes and semaphores'},
+  {id:'intro',kind:'p',md:'With that hardware guarantee in place, the rest is software:'},
+  {id:'spin',kind:'li',md:'**Spinlock:** `while (!CAS(&lock, 0, 1)) { pause; }`, and unlock is a release-store of 0.'},
+  {id:'mutex',kind:'li',md:'**Mutex (e.g., Linux futex):** the uncontended fast path is a single CAS in user space with no syscall. If the CAS fails, the thread asks the kernel to put it to sleep on that address, and the unlocker wakes it.'},
+  {id:'sem',kind:'li',md:'**Semaphore:** a CAS loop on a counter (or an atomic decrement), plus the same sleep/wake mechanism when the count reaches zero.'},
+  {id:'sum',kind:'p',md:'The hardware’s role is to make one memory location’s read-compare-write indivisible and properly ordered. It does this either by holding exclusive ownership of the cache line for the whole operation (x86) or by detecting any interference and failing the store (LL/SC). Every higher-level synchronization primitive is built on that one guarantee.'}
+];
+const parseInline = md => { const runs=[]; const re=/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g; let last=0, m;
+  while ((m=re.exec(md))) { if (m.index>last) runs.push({t:md.slice(last,m.index)}); const s=m[0];
+    if (s[0]==='`') runs.push({t:s.slice(1,-1), code:true}); else if (s.startsWith('**')) runs.push({t:s.slice(2,-2), b:true}); else runs.push({t:s.slice(1,-1), i:true}); last=m.index+s.length; }
+  if (last<md.length) runs.push({t:md.slice(last)}); return runs; };
+const KW = /^(bool|int|if|return|while|true|false|void|else|for)$/;
+const tokenize = line => (line.match(/\/\/.*$|\w+|\s+|[^\w\s]/g)||[]).map((t,i,arr) => {
+  let style={};
+  if (t.startsWith('//')) style={color:'var(--text-3)',fontStyle:'italic'};
+  else if (KW.test(t)) style={color:'var(--accent-text)'};
+  else if (/^\w+$/.test(t) && arr[i+1]==='(') style={color:'var(--text)',fontWeight:600};
+  else if (/^\d+$/.test(t)) style={color:'var(--accent-text)'};
+  else if (/^[^\w\s]$/.test(t)) style={color:'var(--text-2)'};
+  return {t, style}; });
+const PARAS = RAW.map(r => { const runs = r.kind==='code' ? [{t:r.md}] : parseInline(r.md); return {...r, runs, text: runs.map(x=>x.t).join(''),
+  lines: r.kind==='code' ? r.md.split('\n').map(l=>({toks:tokenize(l)})) : null}; });
+const CODE_STYLE = {fontFamily:'var(--mono)',fontSize:'.87em',background:'var(--surface-2)',padding:'1px 5px',borderRadius:'4px'};
+const runStyle = r => ({...(r.code?CODE_STYLE:{}), ...(r.b?{fontWeight:600}:{}), ...(r.i?{fontStyle:'italic'}:{})});
+const HL_STYLE = {background:'var(--accent-tint)',color:'inherit',padding:'1px 3px',borderRadius:'3px',borderBottom:'1.5px solid var(--accent)',cursor:'pointer',boxDecorationBreak:'clone',WebkitBoxDecorationBreak:'clone'};
+const ANSWERS = [
+  [/reorder|compiler|cpu|barrier/i,'Both, for different reasons. The compiler reorders at build time when it can prove a single thread won’t notice; the CPU reorders at run time through its store buffer and out-of-order pipeline. A locked instruction constrains both: the compiler treats it as a barrier, and the core drains the store buffer before retiring it.'],
+  [/futex|sleep|address|kernel|wake/i,'A futex is a kernel wait queue keyed by a user-space address. In the fast path the kernel is never involved: the lock is a plain word and acquiring it is one CAS. Only on contention does the thread call futex_wait on that address, and the unlocker calls futex_wake on the same address.'],
+  [/ll\/sc|interference|failing the store/i,'Load-Linked/Store-Conditional splits CAS into two instructions. LL reads and arms a reservation on the cache line; SC stores only if the reservation is still intact. Any other core’s write to that line clears it, so the SC fails and the loop retries.'],
+  [/cache line|exclusive|ownership/i,'Exclusive ownership means the core holds the line in the Modified or Exclusive MESI state for the whole instruction, so no other core can read or write it mid-operation. That is what makes the read-compare-write appear as one indivisible step.'],
+  [/acquire|release|LDAXR|STLXR|CASA|CASL/i,'Acquire means “nothing after me may move before me”; release means “nothing before me may move after me”. Pairing them around a critical section is the minimum ordering a lock needs, which is why ARM lets you pay for exactly that instead of a full barrier.'],
+  [/pause|spin/i,'The pause hint tells the core it is in a spin-wait loop: it slows the loop down, reduces power, and on hyper-threaded cores yields issue slots to the sibling thread. Without it, the tight CAS loop hammers the cache line and slows the unlocker.'],
+  [/count|semaphore|decrement/i,'The counter is the number of free slots. Acquire tries to CAS it from n to n−1 while n > 0; if it reads 0 it sleeps on the counter’s address exactly like a futex, and a release increments and wakes one sleeper.']
+];
+const FOLLOW = 'Yes — and the practical consequence is that you rarely have to reason about this unless you write lock-free code yourself. The acquire/release pair inside a mutex gives ordinary code the ordering it needs for free.';
+const SEED = (palette, theme) => ({
+  palette, theme, nextId: 3, composer: null,
+  threads: [
+    {id:1, paraId:'x86', quote:'Earlier loads and stores can’t be reordered past it', open:true, turns:[
+      {q:'Who is actually doing this reordering — the compiler or the CPU?', a:ANSWERS[0][1]},
+      {q:'So is “not allowed” enforced at compile time or at runtime?', a:'Both, separately. The compiler enforces its half statically: it never emits a load or store across the barrier. The CPU enforces its half dynamically: the core won’t retire the locked instruction until the store buffer is drained and no younger load has speculatively run past it.'}
+    ]},
+    {id:2, paraId:'mutex', quote:'put it to sleep on that address', open:false, turns:[
+      {q:'What does “on that address” mean here?', a:ANSWERS[1][1]}
+    ]}
+  ]
+});
+const pad = n => String(n).padStart(2,'0');
+const short = (s,n=44) => s.length>n ? s.slice(0,n).trim()+'…' : s;
+const answerFor = (quote,q) => { const h=q+' '+quote; const hit=ANSWERS.find(([re])=>re.test(h)); return hit?hit[1]:`That line is about guarantees rather than mechanism. “${short(quote,60)}” means the primitive only promises atomicity for the single word it touches; every other ordering the surrounding code relies on comes from the acquire/release semantics attached to it.`; };
+const META = { a:{optId:'3a', label:'Warm paper · light'}, b:{optId:'3b', label:'Warm paper · dark'}, c:{optId:'3c', label:'Cool graphite · light (toggle for dark)'} };
+
+class Component extends DCLogic {
+  state = { panels:{a:SEED('warm','light'), b:SEED('warm','dark'), c:SEED('cool','light')}, ask:null, focus:null };
+
+  patch(v, fn){ this.setState(s => { const p = {...s.panels[v]}; fn(p); return {panels:{...s.panels,[v]:p}}; }); }
+  thread(p, id){ p.threads = p.threads.map(t => t.id===Number(id) ? {...t} : t); return p.threads.find(t=>t.id===Number(id)); }
+
+  toggleTheme = e => this.patch(e.currentTarget.dataset.v, p => { p.theme = p.theme==='dark' ? 'light' : 'dark'; });
+  onSelect = e => {
+    const v = e.currentTarget.dataset.v;
+    if (e.target.closest('[data-ask]')) return;
+    const sel = window.getSelection();
+    const text = sel && !sel.isCollapsed ? sel.toString().trim() : '';
+    if (!text || text.length < 3) { if (this.state.ask) this.setState({ask:null}); return; }
+    const el = sel.anchorNode && (sel.anchorNode.nodeType===3 ? sel.anchorNode.parentElement : sel.anchorNode);
+    const para = el && el.closest('[data-para]');
+    const paraId = para && para.dataset.para;
+    const src = PARAS.find(p=>p.id===paraId);
+    if (!src || !src.text.includes(text)) { this.setState({ask:null}); return; }
+    const r = sel.getRangeAt(0).getBoundingClientRect(), c = e.currentTarget.getBoundingClientRect();
+    const x = Math.min(Math.max(r.left - c.left + r.width/2, 70), c.width - 70);
+    const y = r.top - c.top + e.currentTarget.scrollTop - 44;
+    this.setState({ask:{v, paraId, quote:text, x, y}});
+  };
+  openComposer = e => {
+    e.preventDefault();
+    const ask = this.state.ask; if (!ask) return;
+    window.getSelection().removeAllRanges();
+    this.patch(ask.v, p => { p.composer = {paraId:ask.paraId, quote:ask.quote}; });
+    this.setState({ask:null, focus:`${ask.v}-composer`});
+  };
+  cancelComposer = e => this.patch(e.currentTarget.dataset.v, p => { p.composer = null; });
+  sendQuestion = e => {
+    const v = e.currentTarget.dataset.v;
+    const ta = document.getElementById(`${v}-composer`); const q = ta && ta.value.trim(); if (!q) return;
+    const id = this.state.panels[v].nextId;
+    const {paraId, quote} = this.state.panels[v].composer;
+    this.patch(v, p => { p.composer = null; p.nextId = id+1; p.threads = [...p.threads, {id, paraId, quote, open:true, turns:[{q, a:'', pending:true}]}]; });
+    this.reply(v, id, answerFor(quote, q));
+  };
+  sendFollow = e => {
+    const {v,t} = e.currentTarget.dataset;
+    const inp = document.getElementById(`${v}-th-${t}-in`); const q = inp && inp.value.trim(); if (!q) return;
+    inp.value = '';
+    this.patch(v, p => { const th = this.thread(p,t); th.turns = [...th.turns, {q, a:'', pending:true}]; });
+    const th = this.state.panels[v].threads.find(x=>x.id===Number(t));
+    this.reply(v, Number(t), /^(why|how|what|is|does|so)/i.test(q) && th.turns.length ? FOLLOW : answerFor(th.quote, q));
+  };
+  reply(v, id, text){ setTimeout(() => this.patch(v, p => { const th = this.thread(p,id); th.turns = th.turns.map((tn,i)=> i===th.turns.length-1 ? {q:tn.q, a:text} : tn); }), 1100); }
+  composerKey = e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); this.sendQuestion(e); } };
+  followKey = e => { if (e.key==='Enter') { e.preventDefault(); this.sendFollow(e); } };
+  toggleThread = e => { const {v,t} = e.currentTarget.dataset; this.patch(v, p => { const th = this.thread(p,t); th.open = !th.open; }); };
+  jumpTo = e => {
+    const {v,t} = e.currentTarget.dataset;
+    this.patch(v, p => { const th = this.thread(p,t); th.open = true; });
+    setTimeout(() => { const sc = document.getElementById(`${v}-scroll`), el = document.getElementById(`${v}-th-${t}`); if (sc && el) sc.scrollTo({top: el.offsetTop - 80, behavior:'smooth'}); }, 50);
+  };
+  componentDidUpdate(){ if (this.state.focus) { const el = document.getElementById(this.state.focus); if (el) el.focus(); this.setState({focus:null}); } }
+
+  view(v){
+    const p = this.state.panels[v], ask = this.state.ask;
+    const order = p.threads.map(t=>t.id);
+    const thView = t => ({ id:t.id, domId:`${v}-th-${t.id}`, inputId:`${v}-th-${t.id}-in`, n:pad(order.indexOf(t.id)+1), quote:short(t.quote), open:t.open,
+      countLabel:`${t.turns.length} ${t.turns.length===1?'turn':'turns'}`, chev:{transform:t.open?'rotate(180deg)':'none', transition:'transform .15s', flex:'none'},
+      turns:t.turns.map(tn=>({q:tn.q, a:tn.a, pending:!!tn.pending})) });
+    const paras = PARAS.map(src => {
+      const marks = p.threads.filter(t=>t.paraId===src.id).map(t=>({idx:src.text.indexOf(t.quote), len:t.quote.length, tid:t.id}));
+      if (p.composer && p.composer.paraId===src.id) marks.push({idx:src.text.indexOf(p.composer.quote), len:p.composer.quote.length, tid:0});
+      const valid = marks.filter(m=>m.idx>=0).sort((a,b)=>a.idx-b.idx);
+      const bounds = new Set([0, src.text.length]); let off=0; const runAt=[];
+      src.runs.forEach(r => { runAt.push({s:off, e:off+r.t.length, r}); bounds.add(off); off+=r.t.length; });
+      valid.forEach(m => { bounds.add(m.idx); bounds.add(m.idx+m.len); });
+      const bs=[...bounds].sort((a,b)=>a-b); const segs=[];
+      for (let i=0;i<bs.length-1;i++){ const a=bs[i], b=bs[i+1]; if (b<=a) continue;
+        const run=(runAt.find(x=>a>=x.s && a<x.e)||{r:{}}).r; const m=valid.find(x=>a>=x.idx && a<x.idx+x.len);
+        const st=runStyle(run);
+        segs.push(m ? {t:src.text.slice(a,b), hl:true, tid:m.tid, mstyle:{...st,...HL_STYLE}} : {t:src.text.slice(a,b), plain:true, style:st}); }
+      const threads = p.threads.filter(t=>t.paraId===src.id).map(thView);
+      return { id:src.id, text:src.text, isH:src.kind==='h', isBody:src.kind!=='h'&&src.kind!=='code', isLi:src.kind==='li', isOl:src.kind==='ol', num:src.num, isCode:src.kind==='code', lang:src.lang, lines:src.lines, hasThreads:threads.length>0, segs,
+        composer: !!(p.composer && p.composer.paraId===src.id), composerQuote: p.composer ? short(p.composer.quote) : '',
+        threads };
+    });
+    const stubs = p.threads.map(t => ({ id:t.id, quote:short(t.quote,36), meta:`${t.turns.length} ${t.turns.length===1?'turn':'turns'} · just now` }));
+    const has = ask && ask.v===v;
+    return { v, ...META[v], href:'#'+META[v].optId, palette:p.palette, theme:p.theme, isDark:p.theme==='dark', isLight:p.theme!=='dark', scrollId:`${v}-scroll`, composerId:`${v}-composer`,
+      paras, stubs, hasStubs:stubs.length>0, count:`${p.threads.length} clarification${p.threads.length===1?'':'s'}`, hasAsk:!!has,
+      askStyle: has ? {position:'absolute', left:ask.x+'px', top:ask.y+'px', transform:'translateX(-50%)', boxShadow:'var(--shadow)', fontSize:'13px', padding:'6px 12px', zIndex:5, borderRadius:'999px'} : {} };
+  }
+  renderVals(){
+    return { panels:[this.view('a'), this.view('b'), this.view('c')],
+      toggleTheme:this.toggleTheme, onSelect:this.onSelect, openComposer:this.openComposer, cancelComposer:this.cancelComposer, sendQuestion:this.sendQuestion, sendFollow:this.sendFollow,
+      composerKey:this.composerKey, followKey:this.followKey, toggleThread:this.toggleThread, jumpTo:this.jumpTo };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = ["engine", "ui/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time"] }
+tokio-util = "0.7"
+anyhow = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+dirs = "7"
+regex = "1"
+base64 = "0.22"
+
+# Stripping is off for release builds and for the build-override profile that
+# compiles proc macros. Rust before 1.98 strips debuginfo from proc-macro
+# dylibs by default, and on macOS 27 the result has a 4-byte-aligned LINKEDIT
+# string pool that dyld refuses to load ("mis-aligned LINKEDIT string pool"),
+# so every crate using a derive macro fails to compile (rust-lang/rust#157750).
+[profile.release]
+codegen-units = 1
+lto = true
+strip = "none"
+
+[profile.release.build-override]
+strip = "none"

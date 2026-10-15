@@ -1,0 +1,23 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+ui/build/
+ui/.svelte-kit/
+ui/vite.config.ts.timestamp-*
+
+# Tauri
+ui/src-tauri/gen/
+ui/src-tauri/target/
+
+# OS / editor
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.local

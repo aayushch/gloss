@@ -1,0 +1,206 @@
+/* Design tokens from the Gloss handoff. Light is the default; dark flips the
+   palette and tells the browser to use dark form controls. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+
+:root,
+[data-mode='light'] {
+	--font: 'IBM Plex Sans', system-ui, sans-serif;
+	--mono: 'IBM Plex Mono', ui-monospace, monospace;
+	--bg: #f7f6f3;
+	--surface: #efede8;
+	--surface-2: #e6e3dc;
+	--text: #26241f;
+	--text-2: #5f5b53;
+	--text-3: #8e897f;
+	--line: #dedbd3;
+	--accent: #b4573a;
+	--accent-text: #9a4328;
+	--accent-tint: #f3e2da;
+	--on-accent: #fff;
+	--shadow: 0 4px 16px rgba(40, 30, 20, 0.12);
+	--syn-kw: #7a4fa3;
+	--syn-type: #2f6f8f;
+	--syn-fn: #9a4328;
+	--syn-num: #3f7a4c;
+	--syn-str: #3f7a4c;
+	--syn-cmt: #8e897f;
+}
+
+[data-mode='dark'] {
+	color-scheme: dark;
+	--bg: #1f1e1b;
+	--surface: #2a2825;
+	--surface-2: #34312d;
+	--text: #ebe8e1;
+	--text-2: #b3ada2;
+	--text-3: #7f796f;
+	--line: #3a3733;
+	--accent: #d4785a;
+	--accent-text: #e39a80;
+	--accent-tint: #4a3128;
+	--on-accent: #1f1e1b;
+	--shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+	--syn-kw: #c39be6;
+	--syn-type: #86bcd8;
+	--syn-fn: #e39a80;
+	--syn-num: #9fcf9a;
+	--syn-str: #9fcf9a;
+	--syn-cmt: #7f796f;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	font-size: 15px;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--accent-text);
+}
+a:hover {
+	color: var(--accent);
+}
+
+::selection {
+	background: var(--accent-tint);
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+button,
+input,
+textarea {
+	font-family: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+	background: none;
+	border: 0;
+	padding: 0;
+}
+
+/* Shared controls */
+.ibtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+	padding: 6px 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text);
+	line-height: 1.3;
+}
+.ibtn:hover {
+	background: var(--surface);
+}
+.ibtn:active {
+	background: var(--surface-2);
+}
+.ibtn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--on-accent);
+}
+.ibtn.primary:hover {
+	filter: brightness(0.94);
+	background: var(--accent);
+}
+.ibtn.ghost {
+	border-color: transparent;
+	color: var(--accent-text);
+}
+.ibtn.ghost:hover {
+	background: var(--accent-tint);
+}
+.ibtn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.iinput {
+	font-size: 14px;
+	padding: 7px 10px;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	color: var(--text);
+	outline: none;
+	width: 100%;
+}
+.iinput::placeholder {
+	color: var(--text-3);
+}
+.iinput:hover {
+	border-color: var(--text-3);
+}
+.iinput:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+.pill {
+	border-radius: 999px;
+}
+
+.mono {
+	font-family: var(--mono);
+}
+
+/* Syntax roles, coloured by the --syn-* palette. */
+.syn-kw {
+	color: var(--syn-kw);
+}
+.syn-type {
+	color: var(--syn-type);
+}
+.syn-fn {
+	color: var(--syn-fn);
+}
+.syn-num {
+	color: var(--syn-num);
+}
+.syn-str {
+	color: var(--syn-str);
+}
+.syn-cmt {
+	color: var(--syn-cmt);
+	font-style: italic;
+}
+
+/* Highlight mark for a quoted span. Keeps the span's own formatting. */
+.mark {
+	background: var(--accent-tint);
+	border-bottom: 1.5px solid var(--accent);
+	padding: 1px 3px;
+	border-radius: 3px;
+	cursor: pointer;
+	box-decoration-break: clone;
+	-webkit-box-decoration-break: clone;
+}

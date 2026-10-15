@@ -1,0 +1,64 @@
+name: CI
+
+# Every push and pull request compiles the engine and the Tauri shell on all
+# three platforms and runs the engine and frontend test suites.
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Frontend check, tests and build
+        working-directory: ui
+        run: |
+          npm run check
+          npm test
+          npm run build
+
+      - name: Engine tests
+        run: cargo test -p gloss-engine
+
+      - name: Clippy (engine and shell)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build the app binary
+        working-directory: ui
+        run: npx tauri build --debug --no-bundle
