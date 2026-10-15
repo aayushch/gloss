@@ -1,0 +1,43 @@
+# Gloss
+
+> Gloss is a free, open-source desktop chat app for the command-line AI agents already installed on a computer: Claude Code, Codex CLI, Gemini CLI, Pi and Cursor Agent. It shows their conversations like a chat client and adds inline clarifications: select any text in a reply, ask about it, and the answer appears right under that sentence as a collapsible thread.
+
+Gloss never talks to a model API and needs no API keys. Each message runs the agent's own CLI in non-interactive mode inside a private folder (`~/.gloss/workspace`), so nothing appears in the user's real projects. Conversations, clarifications and attachments are stored locally in SQLite at `~/.gloss/gloss.db`.
+
+## How a clarification works
+
+1. Select: highlight any text in a reply. An "Ask about this" button appears over the selection.
+2. Ask: a small composer opens under that paragraph. The question is sent to the agent as an ordinary message: the quoted text plus the question, in the same session.
+3. Read in place: the answer appears under the sentence it is about, collapsible, with follow-ups threaded inside. Text inside an answer can be highlighted and asked about again.
+
+## Features
+
+- Inline clarifications with nesting and follow-ups; a navigation rail lists every clarification in the conversation.
+- Artifacts: pages, SVG drawings, Mermaid diagrams, documents and code the agent writes open in a side pane with a sandboxed preview, versions, copy and save.
+- Attachments: images and text files can be dropped into a message.
+- Full-text search across all conversations, clarifications included; pin and tag conversations.
+- Export a reply or a whole conversation as Markdown with clarifications folded in under their sentences.
+- Per-conversation agent and model choice; web search toggle where the agent supports it.
+- In-app updates from GitHub releases.
+
+## Supported agents
+
+| Agent | Command | Web search | Images | Models |
+| --- | --- | --- | --- | --- |
+| Claude Code | claude | On / off | Yes | Pick per turn |
+| Codex CLI | codex | On / off | Yes | Pick per turn |
+| Gemini CLI | gemini | Always on | Yes | Pick per turn |
+| Pi | pi | — | Yes | Pick per turn |
+| Cursor Agent | cursor-agent | On / off | Yes | Auto |
+
+## Architecture
+
+- Desktop app: Tauri 2 shell with a Svelte 5 frontend.
+- Engine: Rust library linked into the shell, with a `gloss-engine` CLI for scripting. No sidecar, no local server.
+- Platforms: macOS (Apple Silicon and Intel), Windows x64, Linux x64 (AppImage, .deb, .rpm).
+
+## Links
+
+- Source: https://github.com/aayushch/gloss
+- Releases: https://github.com/aayushch/gloss/releases
+- Docs: https://github.com/aayushch/gloss/tree/main/docs

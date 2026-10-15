@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gloss — Highlight a line, ask about it, the answer stays in place</title>
+<meta name="description" content="Gloss is a free, open-source desktop chat app for the AI agents already on your computer: Claude Code, Codex CLI, Gemini CLI, Pi and Cursor Agent. Select any text in a reply, ask about it, and the answer appears right under that sentence.">
+<meta property="og:title" content="Gloss — a chat app for the AI agents already on your computer">
+<meta property="og:description" content="Select any text in a reply, ask about it, and the answer appears right under that sentence. Runs on Claude Code, Codex, Gemini CLI, Pi and Cursor Agent. Free, open source, local.">
+<meta property="og:url" content="https://aayushch.github.io/gloss/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+// Applies the saved or system theme before the first paint so the page does
+// not flash light when the reader prefers dark.
+(function () {
+	var saved = null;
+	try { saved = localStorage.getItem('gloss-mode'); } catch (e) {}
+	var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+	if (dark) document.documentElement.setAttribute('data-mode', 'dark');
+})();
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Gloss",
+  "url": "https://aayushch.github.io/gloss/",
+  "description": "A desktop chat app for the command-line AI agents installed on your computer (Claude Code, Codex CLI, Gemini CLI, Pi, Cursor Agent). Highlight any text in a reply, ask about it, and the answer appears inline under that sentence.",
+  "applicationCategory": "ProductivityApplication",
+  "operatingSystem": "macOS, Windows, Linux",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": ["https://github.com/aayushch/gloss"],
+  "downloadUrl": "https://github.com/aayushch/gloss/releases/latest"
+}
+</script>
+</head>
+<body>
+
+<nav class="nav">
+	<div class="wrap">
+		<a href="#" class="brand"><span class="gmark">G</span>Gloss</a>
+		<div class="navlinks">
+			<a href="#how">How it works</a>
+			<a href="#agents">Agents</a>
+			<a href="#download">Download</a>
+		</div>
+		<button type="button" class="ibtn ibtn-ghost ibtn-sm ibtn-icon" id="theme" title="Toggle theme" aria-label="Toggle theme">
+			<svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+			<svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+		</button>
+		<a href="https://github.com/aayushch/gloss" target="_blank" rel="noopener" class="ibtn ibtn-sm">
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.1c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.8 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg>
+			GitHub
+		</a>
+	</div>
+</nav>
+
+<main class="wrap">
+
+<section class="hero">
+	<div class="two">
+		<div>
+			<span class="eyebrow">A chat app for the AI agents already on your computer</span>
+			<h1>Highlight a line.<br>Ask about it.<br><span class="accent">The answer stays in place.</span></h1>
+			<p class="lead">Gloss runs on Claude Code, Codex, Gemini CLI, Pi and Cursor Agent. It shows their conversations like a proper chat client and adds one thing they lack: select any text in a reply, ask about it, and the answer appears right under that sentence — without derailing the conversation.</p>
+			<div class="actions">
+				<div class="split">
+					<a class="ibtn ibtn-primary" data-dl-link href="https://github.com/aayushch/gloss/releases/latest" target="_blank" rel="noopener">
+						<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+						<span data-dl-label>Download Gloss</span>
+					</a>
+					<button type="button" class="ibtn ibtn-primary" data-open-dl title="Other platforms" aria-label="Other platforms">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+					</button>
+				</div>
+				<a href="#how" class="ibtn ibtn-ghost">See how it works</a>
+			</div>
+			<p class="meta">
+				<button type="button" class="bare linkbtn" data-open-dl>All platforms</button>
+				<span>·</span>
+				<span data-version>Latest release</span>
+				<span>·</span>
+				<a href="https://github.com/aayushch/gloss" target="_blank" rel="noopener">View source</a>
+			</p>
+			<p class="footnote">Free and open source. Everything stays on your machine. No API keys — it uses the agents you're already signed into.</p>
+		</div>
+		<div class="aside">
+			<div class="well">
+				<div class="whead"><span class="dot"></span>Why this exists</div>
+				<div class="wbody">Asking “wait, what does this bit mean?” in a normal chat means copy, paste, a new message — and now the conversation is about that one line instead of your actual question. Gloss keeps the question attached to the text it is about. To the agent, nothing changed: it is one more message in the same chat.</div>
+			</div>
+			<div class="stats">
+				<div class="stat"><b>5</b><span>agents supported</span></div>
+				<div class="stat"><b>0</b><span>API keys to paste</span></div>
+				<div class="stat"><b>100%</b><span>local, open source</span></div>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="demo" aria-label="Interactive demo">
+	<div class="demo-head">
+		<span class="eyebrow">Try it — select any text in the reply below, then ask</span>
+		<span class="note">Interactive demo · replies are pre-written</span>
+	</div>
+	<div class="frame">
+		<div class="rail">
+			<button type="button" class="ibtn ibtn-sm newchat">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+				New chat
+			</button>
+			<input class="iinput search" type="search" placeholder="Search conversations" aria-label="Search conversations">
+			<div class="list">
+				<div class="glabel">Today</div>
+				<button type="button" class="bare navitem" aria-current="page"><span class="title">Sourdough starter help</span><span class="countpill" data-count>2</span></button>
+				<div id="g-subs"></div>
+				<button type="button" class="bare navitem"><span class="title">Plan a 3-day Lisbon trip</span></button>
+				<div class="glabel">Yesterday</div>
+				<button type="button" class="bare navitem"><span class="title">Fix my résumé summary</span></button>
+				<button type="button" class="bare navitem"><span class="title">Why is my basil wilting?</span></button>
+			</div>
+			<div class="foot">
+				<span class="gmark">G</span>
+				<div><div class="app">Gloss</div><div class="via">via Claude Code</div></div>
+			</div>
+		</div>
+		<div class="conv">
+			<div class="conv-head">
+				<span class="title">Sourdough starter help</span>
+				<span class="pill"><span class="mono cmd">claude</span>Claude Sonnet 4.5</span>
+				<span class="pill count"><span data-count>2</span> clarifications</span>
+			</div>
+			<div class="scroll" id="g-scroll">
+				<div class="bubble-row"><div class="bubble">My sourdough starter smells like nail polish remover and isn't rising much. What's going on?</div></div>
+				<div id="g-body"></div>
+				<div id="g-ask"></div>
+			</div>
+			<div class="send-row">
+				<textarea class="iinput" rows="1" id="g-reply" placeholder="Reply…" aria-label="Reply"></textarea>
+				<button type="button" class="ibtn ibtn-primary">Send</button>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section id="how" class="section">
+	<span class="eyebrow">How a clarification works</span>
+	<h2 class="h2" style="max-width:24ch">Three steps. The agent sees an ordinary message.</h2>
+	<div class="grid3">
+		<div class="step"><div class="stepn">1</div><div><h3>Select</h3><p>Highlight any text in a reply — a sentence, a list item, a word in a heading, a line of code. An <em>Ask about this</em> button appears over the selection.</p></div></div>
+		<div class="step"><div class="stepn">2</div><div><h3>Ask</h3><p>A small composer opens under that paragraph. Your question is sent to the agent like any other message: the quoted text plus what you asked. Same session, same memory.</p></div></div>
+		<div class="step"><div class="stepn">3</div><div><h3>Read in place</h3><p>The answer appears under the sentence it is about — collapsible, with follow-ups threaded inside. You can highlight text in <em>that</em> answer and ask again, as deep as you need.</p></div></div>
+	</div>
+	<div class="grid3 feats">
+		<div class="feat"><span class="eyebrow">Also in the box</span><h3>Artifacts</h3><p>When the agent writes a page, drawing, diagram, document or file, it shows as a card and opens in a side pane — safe preview, versions, save to disk.</p></div>
+		<div class="feat"><span class="eyebrow">Also in the box</span><h3>Attachments &amp; search</h3><p>Drop images and text files into a message. Search every conversation at once — clarifications included. Pin and tag the ones that matter.</p></div>
+		<div class="feat"><span class="eyebrow">Also in the box</span><h3>Export</h3><p>Save a reply or a whole conversation as Markdown, with each clarification folded in right under the sentence it was asked about.</p></div>
+	</div>
+</section>
+
+<section id="agents" class="section">
+	<span class="eyebrow">Supported agents</span>
+	<h2 class="h2" style="max-width:26ch">Bring the agents you already pay for.</h2>
+	<p class="lead small" style="margin-top:14px;max-width:60ch">Gloss never talks to a model API. Each message runs the agent's own command-line tool in the background, inside a private folder, so nothing shows up in your real projects. Pick the agent and model per conversation.</p>
+	<div class="table" role="table" aria-label="Supported agents">
+		<div class="agentrow" role="row"><span>Agent</span><span>Command</span><span>Web search</span><span>Images</span><span>Models</span></div>
+		<div class="agentrow" role="row"><span class="name">Claude Code</span><span class="mono v">claude</span><span class="v">On / off</span><span class="v">Yes</span><span class="v">Pick per turn</span></div>
+		<div class="agentrow" role="row"><span class="name">Codex CLI</span><span class="mono v">codex</span><span class="v">On / off</span><span class="v">Yes</span><span class="v">Pick per turn</span></div>
+		<div class="agentrow" role="row"><span class="name">Gemini CLI</span><span class="mono v">gemini</span><span class="v">Always on</span><span class="v">Yes</span><span class="v">Pick per turn</span></div>
+		<div class="agentrow" role="row"><span class="name">Pi</span><span class="mono v">pi</span><span class="v">—</span><span class="v">Yes</span><span class="v">Pick per turn</span></div>
+		<div class="agentrow" role="row"><span class="name">Cursor Agent</span><span class="mono v">cursor-agent</span><span class="v">On / off</span><span class="v">Yes</span><span class="v">Auto</span></div>
+	</div>
+	<p class="tablenote">Needs at least one of these installed: <span class="mono">claude</span>, <span class="mono">codex</span>, <span class="mono">gemini</span>, <span class="mono">pi</span> or <span class="mono">cursor-agent</span>. Installed via npm, Homebrew or Cargo? Found automatically, even when you launch from the Dock.</p>
+</section>
+
+<section id="download" class="section dl">
+	<div class="two">
+		<div>
+			<span class="eyebrow">Download</span>
+			<h2 class="h2">Get Gloss</h2>
+			<p class="lead small" style="margin-top:14px">macOS, Windows and Linux. Builds are produced by GitHub Actions and published on the releases page; this list is read live from the latest release.</p>
+			<div class="actions">
+				<a class="ibtn ibtn-primary ibtn-pill" data-dl-link href="https://github.com/aayushch/gloss/releases/latest" target="_blank" rel="noopener" style="padding:11px 20px;font-size:15px"><span data-dl-label>Download Gloss</span></a>
+				<a href="https://github.com/aayushch/gloss/releases" target="_blank" rel="noopener" class="ibtn ibtn-pill">All releases on GitHub</a>
+			</div>
+			<p class="version" data-version>Latest release</p>
+		</div>
+		<div class="assets" id="dl-list">
+			<div class="status loading">Fetching the latest release…</div>
+		</div>
+	</div>
+</section>
+
+<footer class="footer">
+	<span>Gloss · open source · built with Svelte, Tauri and a Rust engine · data lives in <span class="mono">~/.gloss</span></span>
+	<span class="links">
+		<a href="https://github.com/aayushch/gloss" target="_blank" rel="noopener">GitHub</a>
+		<a href="https://github.com/aayushch/gloss/releases" target="_blank" rel="noopener">Releases</a>
+		<a href="https://github.com/aayushch/gloss/tree/main/docs" target="_blank" rel="noopener">Docs</a>
+	</span>
+</footer>
+
+</main>
+
+<div class="modal" id="dl-modal" hidden>
+	<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dl-title">
+		<div class="head">
+			<div class="t"><b id="dl-title">Download Gloss</b><span data-dl-sub>Pick the build for your platform.</span></div>
+			<button type="button" class="bare close" data-close-dl aria-label="Close">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+			</button>
+		</div>
+		<div class="rows" id="dl-rows">
+			<div class="dlrow"><span>Platform</span><span>Format</span><span>Arch</span><span>Size</span><span></span></div>
+			<div class="status">Fetching the latest release…</div>
+		</div>
+		<div class="foot">
+			<span>All releases and checksums are published on GitHub.</span>
+			<a href="https://github.com/aayushch/gloss/releases" target="_blank" rel="noopener">Browse all releases →</a>
+		</div>
+	</div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

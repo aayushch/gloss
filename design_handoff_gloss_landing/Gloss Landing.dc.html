@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--font:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;
+--bg:#f7f6f3;--surface:#efede8;--surface-2:#e6e3dc;--text:#26241f;--text-2:#5f5b53;--text-3:#8e897f;--line:#dedbd3;--accent:#b4573a;--accent-text:#9a4328;--accent-tint:#f3e2da;--on-accent:#fff;--shadow:0 4px 16px rgba(40,30,20,.12)}
+[data-mode="dark"]{color-scheme:dark;--bg:#1f1e1b;--surface:#2a2825;--surface-2:#34312d;--text:#ebe8e1;--text-2:#b3ada2;--text-3:#7f796f;--line:#3a3733;--accent:#d4785a;--accent-text:#e39a80;--accent-tint:#4a3128;--on-accent:#1f1e1b;--shadow:0 4px 16px rgba(0,0,0,.5)}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.6;text-wrap:pretty}
+*,*::before,*::after{box-sizing:border-box}
+a{color:var(--accent-text);text-underline-offset:3px}a:hover{color:var(--accent)}
+::selection{background:var(--accent-tint)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(20px,5vw,56px)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text)}
+.h2{font-size:clamp(26px,3.2vw,34px);line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0}
+.lead{font-size:17px;line-height:1.6;color:var(--text-2);margin:0}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font:500 14px var(--font);color:var(--text);background:transparent;border:1px solid var(--line);border-radius:8px;padding:9px 16px;line-height:1.2;text-decoration:none}
+.ibtn:hover{background:var(--surface);color:var(--text)}.ibtn:active{background:var(--surface-2)}
+.ibtn-primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ibtn-primary:hover{filter:brightness(.94);background:var(--accent);color:var(--on-accent)}
+.ibtn-ghost{border-color:transparent;color:var(--accent-text)}.ibtn-ghost:hover{background:var(--accent-tint);color:var(--accent-text)}
+.ibtn-sm{font-size:13px;padding:6px 12px}
+.iinput{width:100%;min-height:36px;padding:7px 10px;font:inherit;font-size:14px;color:var(--text);caret-color:var(--accent);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.iinput::placeholder{color:var(--text-3)}.iinput:focus-visible{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-tint)}
+.bare{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.navitem{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:8px;font-size:13px;color:var(--text-2);line-height:1.3}
+.navitem:hover{background:var(--surface-2);color:var(--text)}
+.navitem[aria-current="page"]{background:var(--surface-2);color:var(--text);font-weight:500}
+.well{background:var(--surface);border:1px solid var(--line);border-radius:10px;font-size:13px;overflow:hidden}
+.well .well{background:var(--bg)}
+.whead{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)}
+.wq{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding-top:3px}
+.wa{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);padding-top:3px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.pulse{display:flex;gap:4px;padding:6px 0}.pulse span{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:gpulse 1s infinite}.pulse span:nth-child(2){animation-delay:.2s}.pulse span:nth-child(3){animation-delay:.4s}
+.feat{display:flex;flex-direction:column;gap:10px;padding:22px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.feat h3{font-size:17px;font-weight:600;margin:0;line-height:1.3}
+.feat p{font-size:14.5px;line-height:1.55;color:var(--text-2);margin:0}
+.step{display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:start}
+.stepn{width:44px;height:44px;border-radius:12px;background:var(--accent-tint);color:var(--accent-text);display:grid;place-items:center;font:600 16px var(--mono)}
+.agentrow{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:12px;align-items:center;padding:14px 18px;border-top:1px solid var(--line);font-size:14px}
+.agentrow:first-child{border-top:0;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.mono{font-family:var(--mono);font-size:.92em}
+.dlrow{display:grid;grid-template-columns:minmax(84px,.9fr) minmax(120px,1.4fr) auto auto auto;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px}
+.dlrow:first-child{border-top:0;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.dlrow[data-rec="true"]{background:var(--accent-tint)}
+@keyframes gpulse{0%,100%{opacity:.25}50%{opacity:1}}
+@media (max-width:900px){.mockwrap{height:auto!important}.rail{display:none!important}.grid3{grid-template-columns:1fr!important}.hero2{grid-template-columns:1fr!important}.agentrow{grid-template-columns:1fr 1fr 1fr;row-gap:4px}.agentrow span:nth-child(n+4){font-size:12.5px;color:var(--text-3)}.agentrow:first-child span:nth-child(n+4){display:none}}
+@media (max-width:640px){.navlinks{display:none}.dlrow{grid-template-columns:1fr auto}.dlrow span:nth-child(2),.dlrow span:nth-child(3),.dlrow span:nth-child(4){display:none}}
+</style>
+</helmet>
+
+<div data-mode="{{ mode }}" style="background:var(--bg);color:var(--text);min-height:100vh">
+
+<nav style="position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)">
+<div class="wrap" style="display:flex;align-items:center;gap:22px;height:58px">
+<a href="#" style="display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-weight:600;font-size:15px;margin-right:auto"><span style="width:26px;height:26px;border-radius:8px;background:var(--text);color:var(--bg);display:grid;place-items:center;font:600 13px var(--font)">G</span>Gloss</a>
+<div class="navlinks" style="display:flex;gap:22px;font-size:14px"><a href="#how" style="color:var(--text-2);text-decoration:none">How it works</a><a href="#agents" style="color:var(--text-2);text-decoration:none">Agents</a><a href="#download" style="color:var(--text-2);text-decoration:none">Download</a></div>
+<button class="ibtn ibtn-ghost ibtn-sm" onClick="{{ toggleMode }}" title="Toggle theme" style="width:34px;height:34px;padding:0;color:var(--text-2)"><sc-if value="{{ isDark }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if><sc-if value="{{ isLight }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if></button>
+<a href="{{ repoUrl }}" target="_blank" rel="noopener" class="ibtn ibtn-sm"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5A11.5 11.5 0 0 0 .5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.1c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.8 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"></path></svg>GitHub</a>
+</div>
+</nav>
+
+<div class="wrap">
+
+<section style="padding:clamp(56px,8vw,96px) 0 40px">
+<div class="hero2" style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:clamp(28px,5vw,64px);align-items:center">
+<div>
+<span class="eyebrow">A chat app for the AI agents already on your computer</span>
+<h1 style="font-size:clamp(38px,5.4vw,60px);line-height:1.08;font-weight:600;letter-spacing:-.02em;margin:14px 0 0">Highlight a line.<br>Ask about it.<br><span style="color:var(--accent-text)">The answer stays in place.</span></h1>
+<p class="lead" style="margin-top:22px;max-width:52ch">Gloss runs on Claude Code, Codex, Gemini CLI, Pi and Cursor Agent. It shows their conversations like a proper chat client and adds one thing they lack: select any text in a reply, ask about it, and the answer appears right under that sentence — without derailing the conversation.</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:28px">
+<div style="display:inline-flex">
+<a href="{{ heroHref }}" target="_blank" rel="noopener" class="ibtn ibtn-primary" style="border-radius:999px 0 0 999px;padding:11px 18px 11px 20px;font-size:15px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>{{ heroLabel }}</a>
+<button class="ibtn ibtn-primary" onClick="{{ openDownloads }}" title="Other platforms" style="border-radius:0 999px 999px 0;padding:11px 14px 11px 10px;border-left:1px solid color-mix(in srgb,var(--on-accent) 30%,transparent)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+</div>
+<a href="#how" class="ibtn ibtn-ghost">See how it works</a>
+</div>
+<p style="font-size:13px;color:var(--text-3);margin:14px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="bare" onClick="{{ openDownloads }}" style="color:var(--accent-text);font-size:13px">All platforms</button><span>·</span><span>{{ versionLabel }}</span><span>·</span><a href="{{ repoUrl }}" target="_blank" rel="noopener">View source</a></p>
+<p style="font-size:14px;color:var(--text-2);margin:20px 0 0">Free and open source. Everything stays on your machine. No API keys — it uses the agents you're already signed into.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div class="well" style="font-size:14px">
+<div class="whead"><span class="dot"></span>Why this exists</div>
+<div style="padding:4px 14px 14px;color:var(--text-2);line-height:1.6">Asking “wait, what does this bit mean?” in a normal chat means copy, paste, a new message — and now the conversation is about that one line instead of your actual question. Gloss keeps the question attached to the text it is about. To the agent, nothing changed: it is one more message in the same chat.</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><div style="font:600 22px var(--font);letter-spacing:-.02em">5</div><div style="font-size:12.5px;color:var(--text-2)">agents supported</div></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><div style="font:600 22px var(--font);letter-spacing:-.02em">0</div><div style="font-size:12.5px;color:var(--text-2)">API keys to paste</div></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><div style="font:600 22px var(--font);letter-spacing:-.02em">100%</div><div style="font-size:12.5px;color:var(--text-2)">local, open source</div></div>
+</div>
+</div>
+</div>
+</section>
+
+<section style="padding:24px 0 72px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px"><span class="eyebrow">Try it — select any text in the reply below, then ask</span><span style="font-size:13px;color:var(--text-3)">Interactive demo · replies are pre-written</span></div>
+<div class="mockwrap" style="display:flex;height:620px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:var(--shadow)">
+<div class="rail" style="width:224px;flex:none;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px 10px;gap:10px">
+<button class="ibtn ibtn-sm" style="width:100%;justify-content:flex-start;gap:8px;background:var(--bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>New chat</button>
+<input class="iinput" placeholder="Search conversations" style="min-height:30px;font-size:12.5px;padding:4px 10px">
+<div style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:2px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:10px 10px 4px">Today</div>
+<button class="bare navitem" aria-current="page"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sourdough starter help</span><span style="font-size:10.5px;color:var(--accent-text);background:var(--accent-tint);padding:1px 6px;border-radius:999px">{{ count }}</span></button>
+<sc-for list="{{ subs }}" as="sb"><button class="bare navitem" data-t="{{ sb.id }}" onClick="{{ jumpTo }}" style="{{ sb.style }}"><span class="dot" style="width:5px;height:5px"></span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sb.label }}</span></button></sc-for>
+<button class="bare navitem"><span>Plan a 3-day Lisbon trip</span></button>
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:12px 10px 4px">Yesterday</div>
+<button class="bare navitem"><span>Fix my résumé summary</span></button>
+<button class="bare navitem"><span>Why is my basil wilting?</span></button>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:10px 4px 0 6px;font-size:12.5px;color:var(--text-2);border-top:1px solid var(--line)"><span style="width:24px;height:24px;border-radius:7px;background:var(--text);color:var(--bg);display:grid;place-items:center;font:600 12px var(--font)">G</span><div style="flex:1;line-height:1.2"><div style="font-weight:600;color:var(--text);font-size:13px">Gloss</div><div style="font-size:11px;color:var(--text-3)">via Claude Code</div></div></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:10px;padding:12px 16px 12px 24px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px;margin-right:auto">Sourdough starter help</span><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:999px;background:var(--surface)"><span class="mono" style="color:var(--text-3);font-size:11px">claude</span>Claude Sonnet 4.5</span><span style="font-size:12px;color:var(--text-2);background:var(--surface);padding:3px 9px;border-radius:999px">{{ count }} clarifications</span></div>
+<div id="g-scroll" onMouseUp="{{ onSelect }}" style="flex:1;overflow:auto;position:relative;padding:20px 28px 28px;font-size:15px">
+<div style="display:flex;justify-content:flex-end;margin-bottom:24px"><div style="max-width:78%;background:var(--surface);padding:10px 14px;font-size:14px;line-height:1.5;border-radius:14px 14px 4px 14px">My sourdough starter smells like nail polish remover and isn't rising much. What's going on?</div></div>
+<sc-for list="{{ paras }}" as="p" hint-placeholder-count="5">
+<sc-if value="{{ p.isH }}"><h4 data-para="{{ p.id }}" style="font-size:17px;font-weight:600;margin:22px 0 8px;line-height:1.3"><sc-for list="{{ p.segs }}" as="s"><sc-if value="{{ s.plain }}"><span style="{{ s.style }}">{{ s.t }}</span></sc-if><sc-if value="{{ s.hl }}"><mark data-t="{{ s.tid }}" onClick="{{ toggleThread }}" style="{{ s.mstyle }}">{{ s.t }}</mark></sc-if></sc-for></h4></sc-if>
+<sc-if value="{{ p.isBody }}">
+<div data-para="{{ p.id }}" style="display:flex;margin-bottom:10px;line-height:1.6">
+<sc-if value="{{ p.isLi }}"><span style="flex:none;width:5px;height:5px;border-radius:50%;background:var(--text-2);margin:10px 13px 0 8px"></span></sc-if>
+<sc-if value="{{ p.isOl }}"><span style="flex:none;width:22px;font-size:13px;color:var(--text-2);padding-top:2px">{{ p.num }}.</span></sc-if>
+<div style="flex:1;min-width:0"><sc-for list="{{ p.segs }}" as="s"><sc-if value="{{ s.plain }}"><span style="{{ s.style }}">{{ s.t }}</span></sc-if><sc-if value="{{ s.hl }}"><mark data-t="{{ s.tid }}" onClick="{{ toggleThread }}" style="{{ s.mstyle }}">{{ s.t }}</mark></sc-if></sc-for></div>
+</div>
+</sc-if>
+<sc-if value="{{ p.composer }}">
+<div class="well" style="margin:8px 0 20px 28px">
+<div class="whead"><span class="dot"></span><span>Clarification</span><span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ p.composerQuote }}”</span></div>
+<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:8px"><textarea id="g-composer" class="iinput" rows="2" onKeyDown="{{ composerKey }}" placeholder="What would you like clarified?" style="min-height:52px;font-size:13px;resize:none"></textarea><div style="display:flex;gap:8px"><button class="ibtn ibtn-primary ibtn-sm" onClick="{{ sendQuestion }}">Ask</button><button class="ibtn ibtn-sm" onClick="{{ cancelComposer }}">Cancel</button></div></div>
+</div>
+</sc-if>
+<sc-for list="{{ p.threads }}" as="th">
+<div id="{{ th.domId }}" class="well" style="margin:8px 0 20px 28px">
+<button class="bare whead" data-t="{{ th.id }}" onClick="{{ toggleThread }}"><span class="dot"></span><span style="flex:none">Clarification {{ th.n }}</span><span style="flex:1;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ th.quote }}”</span><span style="flex:none;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-3)">{{ th.countLabel }}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.75" style="{{ th.chev }}"><path d="m6 9 6 6 6-6"></path></svg></button>
+<sc-if value="{{ th.open }}">
+<sc-for list="{{ th.turns }}" as="tn">
+<div style="border-top:1px solid var(--line);padding:9px 12px;display:grid;grid-template-columns:40px 1fr;gap:4px 10px">
+<span class="wq">You</span><div style="font-size:13px;font-weight:500;line-height:1.45">{{ tn.q }}</div>
+<span class="wa">Reply</span>
+<div style="min-width:0;font-size:13px;line-height:1.5;color:var(--text-2)">
+<sc-if value="{{ tn.pending }}"><div class="pulse"><span></span><span></span><span></span></div></sc-if>
+<sc-for list="{{ tn.blocks }}" as="b">
+<sc-if value="{{ b.isBody }}"><div data-para="{{ b.id }}" style="margin-bottom:6px"><sc-for list="{{ b.segs }}" as="s"><sc-if value="{{ s.plain }}"><span style="{{ s.style }}">{{ s.t }}</span></sc-if><sc-if value="{{ s.hl }}"><mark data-t="{{ s.tid }}" onClick="{{ toggleThread }}" style="{{ s.mstyle }}">{{ s.t }}</mark></sc-if></sc-for></div></sc-if>
+<sc-if value="{{ b.composer }}">
+<div class="well" style="margin:6px 0 12px 16px"><div class="whead"><span class="dot"></span><span>Nested clarification</span><span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ b.composerQuote }}”</span></div>
+<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:8px"><textarea id="g-composer" class="iinput" rows="2" onKeyDown="{{ composerKey }}" placeholder="What would you like clarified?" style="min-height:48px;font-size:13px;resize:none"></textarea><div style="display:flex;gap:8px"><button class="ibtn ibtn-primary ibtn-sm" onClick="{{ sendQuestion }}">Ask</button><button class="ibtn ibtn-sm" onClick="{{ cancelComposer }}">Cancel</button></div></div></div>
+</sc-if>
+<sc-for list="{{ b.threads }}" as="nt">
+<div id="{{ nt.domId }}" class="well" style="margin:6px 0 12px 16px">
+<button class="bare whead" data-t="{{ nt.id }}" onClick="{{ toggleThread }}"><span class="dot"></span><span style="flex:none">Clarification {{ nt.n }}</span><span style="flex:1;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">re “{{ nt.quote }}”</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.75" style="{{ nt.chev }}"><path d="m6 9 6 6 6-6"></path></svg></button>
+<sc-if value="{{ nt.open }}"><sc-for list="{{ nt.turns }}" as="ntn">
+<div style="border-top:1px solid var(--line);padding:8px 12px;display:grid;grid-template-columns:40px 1fr;gap:4px 10px"><span class="wq">You</span><div style="font-size:12.5px;font-weight:500;color:var(--text)">{{ ntn.q }}</div><span class="wa">Reply</span><div style="font-size:12.5px;line-height:1.5;color:var(--text-2)"><sc-if value="{{ ntn.pending }}"><div class="pulse"><span></span><span></span><span></span></div></sc-if><sc-for list="{{ ntn.blocks }}" as="nb"><sc-if value="{{ nb.isBody }}"><div style="margin-bottom:5px"><sc-for list="{{ nb.segs }}" as="s"><span style="{{ s.style }}">{{ s.t }}</span></sc-for></div></sc-if></sc-for></div></div>
+</sc-for></sc-if>
+</div>
+</sc-for>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="border-top:1px solid var(--line);padding:6px 12px 8px 62px;display:flex;gap:8px"><input id="{{ th.inputId }}" class="iinput" data-t="{{ th.id }}" onKeyDown="{{ followKey }}" placeholder="Follow up in this clarification…" style="min-height:28px;font-size:12px;padding:3px 9px"><button class="ibtn ibtn-ghost ibtn-sm" data-t="{{ th.id }}" onClick="{{ sendFollow }}" style="padding:3px 8px;font-size:12px">Ask</button></div>
+</sc-if>
+</div>
+</sc-for>
+</sc-for>
+<sc-if value="{{ hasAsk }}"><button data-ask="1" onMouseDown="{{ openComposer }}" class="ibtn ibtn-primary ibtn-sm" style="{{ askStyle }}">Ask about this</button></sc-if>
+</div>
+<div style="padding:8px 16px 14px;display:flex;gap:8px;align-items:flex-end"><textarea class="iinput" rows="1" onInput="{{ autoGrow }}" placeholder="Reply…" style="border-radius:18px;padding:8px 14px;resize:none;min-height:36px;max-height:160px;line-height:1.45"></textarea><button class="ibtn ibtn-primary" style="border-radius:999px;height:36px">Send</button></div>
+</div>
+</div>
+</section>
+
+<section id="how" style="padding:56px 0 72px;border-top:1px solid var(--line)">
+<span class="eyebrow">How a clarification works</span>
+<h2 class="h2" style="margin-top:12px;max-width:24ch">Three steps. The agent sees an ordinary message.</h2>
+<div class="grid3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin-top:36px">
+<div class="step"><div class="stepn">1</div><div><h3 style="font-size:17px;font-weight:600;margin:0 0 6px">Select</h3><p style="font-size:14.5px;color:var(--text-2);margin:0;line-height:1.55">Highlight any text in a reply — a sentence, a list item, a word in a heading, a line of code. An <em>Ask about this</em> button appears over the selection.</p></div></div>
+<div class="step"><div class="stepn">2</div><div><h3 style="font-size:17px;font-weight:600;margin:0 0 6px">Ask</h3><p style="font-size:14.5px;color:var(--text-2);margin:0;line-height:1.55">A small composer opens under that paragraph. Your question is sent to the agent like any other message: the quoted text plus what you asked. Same session, same memory.</p></div></div>
+<div class="step"><div class="stepn">3</div><div><h3 style="font-size:17px;font-weight:600;margin:0 0 6px">Read in place</h3><p style="font-size:14.5px;color:var(--text-2);margin:0;line-height:1.55">The answer appears under the sentence it is about — collapsible, with follow-ups threaded inside. You can highlight text in <em>that</em> answer and ask again, as deep as you need.</p></div></div>
+</div>
+<div class="grid3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:48px">
+<div class="feat"><span class="eyebrow">Also in the box</span><h3>Artifacts</h3><p>When the agent writes a page, drawing, diagram, document or file, it shows as a card and opens in a side pane — safe preview, versions, save to disk.</p></div>
+<div class="feat"><span class="eyebrow">Also in the box</span><h3>Attachments &amp; search</h3><p>Drop images and text files into a message. Search every conversation at once — clarifications included. Pin and tag the ones that matter.</p></div>
+<div class="feat"><span class="eyebrow">Also in the box</span><h3>Export</h3><p>Save a reply or a whole conversation as Markdown, with each clarification folded in right under the sentence it was asked about.</p></div>
+</div>
+</section>
+
+<section id="agents" style="padding:56px 0 72px;border-top:1px solid var(--line)">
+<span class="eyebrow">Supported agents</span>
+<h2 class="h2" style="margin-top:12px;max-width:26ch">Bring the agents you already pay for.</h2>
+<p class="lead" style="margin-top:14px;max-width:60ch;font-size:16px">Gloss never talks to a model API. Each message runs the agent's own command-line tool in the background, inside a private folder, so nothing shows up in your real projects. Pick the agent and model per conversation.</p>
+<div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:28px;background:var(--surface)">
+<div class="agentrow"><span>Agent</span><span>Command</span><span>Web search</span><span>Images</span><span>Models</span></div>
+<sc-for list="{{ agents }}" as="ag" hint-placeholder-count="5">
+<div class="agentrow" style="background:var(--bg)"><span style="font-weight:600">{{ ag.name }}</span><span class="mono" style="color:var(--text-2)">{{ ag.cmd }}</span><span style="color:var(--text-2)">{{ ag.web }}</span><span style="color:var(--text-2)">{{ ag.img }}</span><span style="color:var(--text-2)">{{ ag.models }}</span></div>
+</sc-for>
+</div>
+<p style="font-size:13px;color:var(--text-3);margin:14px 0 0">Needs at least one of these installed: <span class="mono">claude</span>, <span class="mono">codex</span>, <span class="mono">gemini</span>, <span class="mono">pi</span> or <span class="mono">cursor-agent</span>. Installed via npm, Homebrew or Cargo? Found automatically, even when you launch from the Dock.</p>
+</section>
+
+<section id="download" style="padding:56px 0 72px;border-top:1px solid var(--line)">
+<div class="hero2" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:clamp(28px,5vw,64px);align-items:start">
+<div>
+<span class="eyebrow">Download</span>
+<h2 class="h2" style="margin-top:12px">Get Gloss</h2>
+<p class="lead" style="margin-top:14px;font-size:16px">macOS, Windows and Linux. Builds are produced by GitHub Actions and published on the releases page; this list is read live from the latest release.</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:22px">
+<a href="{{ heroHref }}" target="_blank" rel="noopener" class="ibtn ibtn-primary" style="border-radius:999px;padding:11px 20px;font-size:15px">{{ heroLabel }}</a>
+<a href="{{ releasesUrl }}" target="_blank" rel="noopener" class="ibtn" style="border-radius:999px">All releases on GitHub</a>
+</div>
+<p style="font-size:13px;color:var(--text-3);margin:14px 0 0">{{ versionLabel }}</p>
+</div>
+<div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)">
+<sc-if value="{{ dlLoading }}"><div style="padding:22px 14px;font-size:13.5px;color:var(--text-3);background:var(--bg)">Fetching the latest release…</div></sc-if>
+<sc-if value="{{ dlError }}"><div style="padding:22px 14px;font-size:13.5px;color:var(--text-2);background:var(--bg)">Couldn't reach GitHub right now. <a href="{{ releasesUrl }}" target="_blank" rel="noopener">Open the latest release →</a></div></sc-if>
+<sc-for list="{{ assets }}" as="a">
+<div data-rec="{{ a.rec }}" style="{{ a.rowStyle }}"><span style="display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.3"><span style="font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap">{{ a.osLabel }}<span class="mono" style="font-weight:400;font-size:12px;color:var(--text-3)">{{ a.archLabel }}</span><sc-if value="{{ a.isRec }}"><span style="font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--accent-text)">Recommended</span></sc-if></span><span style="font-size:12.5px;color:var(--text-2)">{{ a.format }}<sc-if value="{{ a.hasSize }}"> · {{ a.size }}</sc-if></span></span><a href="{{ a.url }}" class="ibtn ibtn-sm" download="" style="white-space:nowrap;flex:none">Download</a></div>
+</sc-for>
+<div style="padding:10px 14px;font-size:12.5px;color:var(--text-3);border-top:1px solid var(--line)">{{ platformNote }}</div>
+</div>
+</div>
+</section>
+
+<footer style="padding:36px 0 48px;border-top:1px solid var(--line);display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--text-3)">
+<span>Gloss · open source · built with Svelte, Tauri and a Rust engine · data lives in <span class="mono">~/.gloss</span></span>
+<span style="margin-left:auto;display:flex;gap:18px"><a href="{{ repoUrl }}" target="_blank" rel="noopener">GitHub</a><a href="{{ releasesUrl }}" target="_blank" rel="noopener">Releases</a><a href="{{ docsUrl }}" target="_blank" rel="noopener">Docs</a></span>
+</footer>
+</div>
+
+<sc-if value="{{ dlOpen }}">
+<div onClick="{{ closeDownloads }}" style="position:fixed;inset:0;background:rgba(20,16,12,.45);z-index:50;display:grid;place-items:center;padding:20px">
+<div onClick="{{ stop }}" data-mode="{{ mode }}" style="width:640px;max-width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="flex:1"><div style="font-weight:600;font-size:17px">Download Gloss</div><div style="font-size:13px;color:var(--text-2)">{{ dlSub }}</div></div><button class="bare" onClick="{{ closeDownloads }}" style="color:var(--text-3);width:30px;height:30px;display:grid;place-items:center;border-radius:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div>
+<div style="background:var(--surface)">
+<div class="dlrow"><span>Platform</span><span>Format</span><span>Arch</span><span>Size</span><span></span></div>
+<sc-if value="{{ dlLoading }}"><div style="padding:22px 14px;font-size:13.5px;color:var(--text-3);background:var(--bg)">Fetching the latest release…</div></sc-if>
+<sc-if value="{{ dlError }}"><div style="padding:22px 14px;font-size:13.5px;color:var(--text-2);background:var(--bg)">Couldn't reach GitHub right now. <a href="{{ releasesUrl }}" target="_blank" rel="noopener">Open the latest release →</a></div></sc-if>
+<sc-for list="{{ assets }}" as="a">
+<div class="dlrow" data-rec="{{ a.rec }}" style="background:var(--bg)"><span style="font-weight:500">{{ a.osLabel }}</span><span style="color:var(--text-2)">{{ a.format }}</span><span class="mono" style="color:var(--text-2)">{{ a.archLabel }}</span><span style="color:var(--text-3)">{{ a.size }}</span><a href="{{ a.url }}" class="ibtn ibtn-sm" download="" style="white-space:nowrap">Download</a></div>
+</sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 20px;font-size:12.5px;color:var(--text-3);border-top:1px solid var(--line)"><span>All releases and checksums are published on GitHub.</span><a href="{{ releasesUrl }}" target="_blank" rel="noopener">Browse all releases →</a></div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const REPO = 'aayushch/gloss';
+const REPO_URL = `https://github.com/${REPO}`, RELEASES_URL = `${REPO_URL}/releases`, LATEST_URL = `${RELEASES_URL}/latest`;
+const RAW = [
+  {id:'p1',kind:'p',md:'That smell is a very good sign, not a bad one — it means your starter is **hungry**, not dead. Here is what is happening and how to fix it.'},
+  {id:'h1',kind:'h',md:'Why it smells like nail polish remover'},
+  {id:'p2',kind:'p',md:'When the yeast and bacteria in the jar run out of flour to eat, they switch to producing acetone-like compounds, and a thin grey liquid called *hooch* can collect on top. Both are the starter telling you it has been waiting too long between meals.'},
+  {id:'h2',kind:'h',md:'Why it is not rising much'},
+  {id:'li1',kind:'li',md:'**It is underfed.** A starter that is fed once a day at room temperature usually peaks and collapses within 6–8 hours, then sits exhausted until the next feed.'},
+  {id:'li2',kind:'li',md:'**The kitchen is cool.** Below about 21 °C everything slows down. The same starter that doubles in 5 hours at 26 °C may take 12 at 19 °C.'},
+  {id:'li3',kind:'li',md:'**The ratio is too generous to the old starter.** Keeping a lot of old starter and adding a little flour means the colony is crowded and the fresh food runs out fast.'},
+  {id:'h3',kind:'h',md:'What to do over the next three days'},
+  {id:'ol1',kind:'ol',num:1,md:'Pour off the hooch, then discard all but about **a tablespoon** of starter.'},
+  {id:'ol2',kind:'ol',num:2,md:'Feed it 50 g flour and 50 g lukewarm water (a 1:5:5 ratio by weight). Stir well and mark the level on the jar with a rubber band.'},
+  {id:'ol3',kind:'ol',num:3,md:'Keep it somewhere warm — inside the oven with just the light on works — and feed twice a day, morning and evening.'},
+  {id:'p3',kind:'p',md:'By day two or three the smell should shift from solvent to something yoghurty and pleasantly sour, and it should reliably double between feeds. That is when it is ready to bake with.'}
+];
+const parseInline = md => { const runs=[]; const re=/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g; let last=0, m;
+  while ((m=re.exec(md))) { if (m.index>last) runs.push({t:md.slice(last,m.index)}); const s=m[0];
+    if (s[0]==='`') runs.push({t:s.slice(1,-1), code:true}); else if (s.startsWith('**')) runs.push({t:s.slice(2,-2), b:true}); else runs.push({t:s.slice(1,-1), i:true}); last=m.index+s.length; }
+  if (last<md.length) runs.push({t:md.slice(last)}); return runs; };
+const parseBlock = r => { const runs = parseInline(r.md); return {...r, runs, text: runs.map(x=>x.t).join('')}; };
+const PARAS = RAW.map(parseBlock);
+const runStyle = r => ({...(r.code?{fontFamily:'var(--mono)',fontSize:'.88em',background:'var(--surface-2)',padding:'1px 5px',borderRadius:'4px'}:{}), ...(r.b?{fontWeight:600}:{}), ...(r.i?{fontStyle:'italic'}:{})});
+const HL = {background:'var(--accent-tint)',color:'inherit',padding:'1px 3px',borderRadius:'3px',borderBottom:'1.5px solid var(--accent)',cursor:'pointer',boxDecorationBreak:'clone',WebkitBoxDecorationBreak:'clone'};
+const P = md => ({kind:'p', md});
+const ANSWERS = [
+  [/hooch|liquid|grey|gray/i, [P('*Hooch* is mostly water and alcohol that separates out once the flour is used up. It is harmless. Pour it off for a milder flavour, or stir it back in if you like your bread more sour.')]],
+  [/1:5:5|ratio|tablespoon|discard/i, [P('The three numbers are **starter : flour : water** by weight. 1:5:5 means for every 10 g of old starter you add 50 g flour and 50 g water — lots of fresh food for a small colony, so it has fuel to work through until the next feed. 1:1:1 is the common “maintenance” ratio once things are healthy.')]],
+  [/oven|light|warm|21|26|19|°C|cool/i, [P('An oven light gives off just enough heat to hold the inside at roughly 24–27 °C with the door closed. Leave the oven itself off and put a sticky note on the dial so nobody preheats it with the jar inside.')]],
+  [/double|peak|collapse|6–8|hours/i, [P('“Peaks” means the starter has risen as high as it will go — the surface is domed and full of bubbles. After that it runs out of food, the dome flattens and it sinks back. Baking with it right at the peak gives the best rise.')]],
+  [/acetone|solvent|nail polish|smell/i, [P('When the microbes are starved they produce **ethyl acetate** and a little acetone — the same family of compounds as nail polish remover. It fades within a feed or two once the starter is eating regularly.')]],
+  [/yoghurt|sour|ready|bake/i, [P('A quick test: drop a spoonful into a glass of water. If it floats, it is full of gas and ready to bake with. If it sinks, give it another feed and try again in a few hours.')]]
+];
+const FOLLOW = [P('Yes. Once the starter is healthy you can slow everything down by keeping it in the fridge and feeding it once a week — just give it two feeds at room temperature before you bake.')];
+const pad = n => String(n).padStart(2,'0'), short = (s,n=40) => s.length>n ? s.slice(0,n).trim()+'…' : s;
+const answerFor = (quote,q) => { const h=q+' '+quote; const hit=ANSWERS.find(([re])=>re.test(h)); return (hit ? hit[1] : [P(`Good question. “${short(quote,50)}” is a rule of thumb rather than a hard rule — flour, water and room temperature all nudge it, so treat it as a starting point and adjust from what you see in the jar.`)]).map(parseBlock); };
+const turn = (q, blocks) => ({q, blocks: blocks.map(parseBlock)});
+const AGENTS = [
+  {name:'Claude Code', cmd:'claude', web:'On / off', img:'Yes', models:'Pick per turn'},
+  {name:'Codex CLI', cmd:'codex', web:'On / off', img:'Yes', models:'Pick per turn'},
+  {name:'Gemini CLI', cmd:'gemini', web:'Always on', img:'Yes', models:'Pick per turn'},
+  {name:'Pi', cmd:'pi', web:'—', img:'Yes', models:'Pick per turn'},
+  {name:'Cursor Agent', cmd:'cursor-agent', web:'On / off', img:'Yes', models:'Auto'}
+];
+const detectOS = () => { const p=(navigator.platform||'').toLowerCase(), u=navigator.userAgent.toLowerCase(); if (/mac/.test(p)||/mac os|darwin/.test(u)) return 'macos'; if (/win/.test(p)||/windows/.test(u)) return 'windows'; return 'linux'; };
+const detectArch = () => /arm|aarch64/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1) ? 'arm64' : 'x64';
+const classify = name => { const l=name.toLowerCase(); if (/\.(sig|sha256|json|txt|yml)$/.test(l)) return null;
+  if (l.endsWith('.dmg')) return {os:'macos', osLabel:'macOS', arch:/aarch64|arm64/.test(l)?'arm64':'x64', archLabel:/aarch64|arm64/.test(l)?'Apple Silicon':'Intel', format:'Disk image (.dmg)', rank:0};
+  if (l.endsWith('.exe')) return {os:'windows', osLabel:'Windows', arch:'x64', archLabel:'x64', format:'Installer (.exe)', rank:1};
+  if (l.endsWith('.msi')) return {os:'windows', osLabel:'Windows', arch:'x64', archLabel:'x64', format:'MSI package', rank:2};
+  if (l.endsWith('.appimage')) return {os:'linux', osLabel:'Linux', arch:'x64', archLabel:'x64', format:'AppImage', rank:1};
+  if (l.endsWith('.deb')) return {os:'linux', osLabel:'Linux', arch:'x64', archLabel:'x64', format:'.deb (Debian / Ubuntu)', rank:2};
+  if (l.endsWith('.rpm')) return {os:'linux', osLabel:'Linux', arch:'x64', archLabel:'x64', format:'.rpm (Fedora / RHEL)', rank:3};
+  return null; };
+const OS_ORDER = ['macos','windows','linux'];
+const fmtSize = b => b>1e9 ? (b/1e9).toFixed(2)+' GB' : (b/1e6).toFixed(1)+' MB';
+const NOTES = { macos:'Unsigned builds are blocked by Gatekeeper on first launch: right-click the app and choose Open.', windows:'Needs WebView2, which is preinstalled on Windows 10 and 11.', linux:'.deb and .rpm use the system WebKitGTK; the AppImage bundles it.' };
+// Fallback asset list mirrors the names the Release workflow produces, so the page is usable before the first public release.
+// Release workflow targets: aarch64-apple-darwin, x86_64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu.
+const FALLBACK = v => ['Gloss_'+v+'_aarch64.dmg','Gloss_'+v+'_x64.dmg','Gloss_'+v+'_x64-setup.exe','Gloss_'+v+'_amd64.AppImage','Gloss_'+v+'_amd64.deb'].map(n => ({name:n, browser_download_url:`${LATEST_URL}`, size:0}));
+
+class Component extends DCLogic {
+  state = { mode:'light', nextId:3, composer:null, ask:null, focus:null, dlOpen:false, dlLoading:true, dlError:false, release:null, threads:[
+    {id:1, paraId:'li1', quote:'peaks and collapses within 6–8 hours', open:true, turns:[turn('What does “peaks” look like? How do I know when it has happened?', ANSWERS[3][1])]},
+    {id:2, paraId:'1.0.0', quote:'right at the peak', open:false, turns:[turn('Is there a simple test for that?', ANSWERS[5][1])]}
+  ]};
+  blocks = {};
+  thread(n, id){ n.threads = n.threads.map(t => t.id===Number(id) ? {...t} : t); return n.threads.find(t=>t.id===Number(id)); }
+  patch(fn){ this.setState(s => { const n = {...s, threads:[...s.threads]}; fn(n); return n; }); }
+
+  componentDidMount(){ this.fetchLatest(); }
+  async fetchLatest(){
+    try { const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {headers:{Accept:'application/vnd.github+json'}}); if (!res.ok) throw new Error(res.status);
+      const j = await res.json(); const version=(j.tag_name||j.name||'').replace(/^v/,'');
+      this.setState({dlLoading:false, release:{version, assets:j.assets||[], live:true}});
+    } catch(e){ this.setState({dlLoading:false, dlError:false, release:{version:'0.2.0', assets:FALLBACK('0.2.0'), live:false}}); }
+  }
+  toggleMode = () => this.setState(s => ({mode: s.mode==='dark'?'light':'dark'}));
+  openDownloads = e => { e && e.preventDefault && e.preventDefault(); this.setState({dlOpen:true}); };
+  closeDownloads = () => this.setState({dlOpen:false});
+  stop = e => e.stopPropagation();
+  onSelect = e => {
+    if (e.target.closest('[data-ask]')) return;
+    const sel = window.getSelection(); const text = sel && !sel.isCollapsed ? sel.toString().trim() : '';
+    if (!text || text.length < 3) { if (this.state.ask) this.setState({ask:null}); return; }
+    const el = sel.anchorNode && (sel.anchorNode.nodeType===3 ? sel.anchorNode.parentElement : sel.anchorNode);
+    const para = el && el.closest('[data-para]'); const paraId = para && para.dataset.para; const src = paraId && this.blocks[paraId];
+    if (!src || !src.text.includes(text)) { this.setState({ask:null}); return; }
+    const r = sel.getRangeAt(0).getBoundingClientRect(), c = e.currentTarget.getBoundingClientRect();
+    this.setState({ask:{paraId, quote:text, x:Math.min(Math.max(r.left-c.left+r.width/2,80), c.width-80), y:r.top-c.top+e.currentTarget.scrollTop-44}});
+  };
+  openComposer = e => { e.preventDefault(); const a=this.state.ask; if (!a) return; window.getSelection().removeAllRanges(); this.setState({composer:{paraId:a.paraId, quote:a.quote}, ask:null, focus:'g-composer'}); };
+  cancelComposer = () => this.setState({composer:null});
+  sendQuestion = () => {
+    const ta = document.getElementById('g-composer'); const q = ta && ta.value.trim(); if (!q) return;
+    const {paraId, quote} = this.state.composer; const id = this.state.nextId;
+    this.patch(n => { n.composer=null; n.nextId=id+1; n.threads.push({id, paraId, quote, open:true, turns:[{q, blocks:[], pending:true}]}); });
+    this.reply(id, answerFor(quote, q));
+  };
+  sendFollow = e => {
+    const t = e.currentTarget.dataset.t; const inp = document.getElementById(`g-th-${t}-in`); const q = inp && inp.value.trim(); if (!q) return; inp.value='';
+    this.patch(n => { const th=this.thread(n,t); th.turns=[...th.turns,{q, blocks:[], pending:true}]; });
+    const th = this.state.threads.find(x=>x.id===Number(t));
+    this.reply(Number(t), /^(can|could|should|is it|so)/i.test(q) ? FOLLOW.map(parseBlock) : answerFor(th.quote, q));
+  };
+  reply(id, blocks){ setTimeout(() => this.patch(n => { const th=this.thread(n,id); th.turns = th.turns.map((tn,i)=> i===th.turns.length-1 ? {q:tn.q, blocks} : tn); }), 1000); }
+  autoGrow = e => { const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,160)+'px'; };
+  composerKey = e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); this.sendQuestion(); } };
+  followKey = e => { if (e.key==='Enter') { e.preventDefault(); this.sendFollow(e); } };
+  toggleThread = e => { const t=e.currentTarget.dataset.t; this.patch(n => { const th=this.thread(n,t); if (th) th.open=!th.open; }); };
+  jumpTo = e => { const t=e.currentTarget.dataset.t; this.patch(n => { const th=this.thread(n,t); if (th) { th.open=true; const parent=n.threads.find(x=>x.turns.some((tn,ti)=>tn.blocks.some((b,bi)=>`${x.id}.${ti}.${bi}`===th.paraId))); if (parent) this.thread(n,parent.id).open=true; } });
+    setTimeout(()=>{ const sc=document.getElementById('g-scroll'), el=document.getElementById(`g-th-${t}`); if (sc&&el) sc.scrollTo({top:el.offsetTop-70, behavior:'smooth'}); },50); };
+  componentDidUpdate(){ if (this.state.focus) { const el=document.getElementById(this.state.focus); if (el) el.focus(); this.setState({focus:null}); } }
+
+  renderVals(){
+    const s=this.state, order=s.threads.map(t=>t.id); this.blocks={};
+    const blockView = (src, id, depth) => {
+      this.blocks[id]=src;
+      const marks = s.threads.filter(t=>t.paraId===id).map(t=>({idx:src.text.indexOf(t.quote), len:t.quote.length, tid:t.id}));
+      if (s.composer && s.composer.paraId===id) marks.push({idx:src.text.indexOf(s.composer.quote), len:s.composer.quote.length, tid:0});
+      const valid=marks.filter(m=>m.idx>=0).sort((a,b)=>a.idx-b.idx);
+      const bounds=new Set([0,src.text.length]); let off=0; const runAt=[];
+      src.runs.forEach(r=>{ runAt.push({s:off,e:off+r.t.length,r}); bounds.add(off); off+=r.t.length; });
+      valid.forEach(m=>{ bounds.add(m.idx); bounds.add(m.idx+m.len); });
+      const bs=[...bounds].sort((a,b)=>a-b); const segs=[];
+      for (let i=0;i<bs.length-1;i++){ const a=bs[i], b=bs[i+1]; if (b<=a) continue; const run=(runAt.find(x=>a>=x.s&&a<x.e)||{r:{}}).r; const m=valid.find(x=>a>=x.idx&&a<x.idx+x.len); const st=runStyle(run);
+        segs.push(m ? {t:src.text.slice(a,b), hl:true, tid:m.tid, mstyle:{...st,...HL}} : {t:src.text.slice(a,b), plain:true, style:st}); }
+      const threads = depth<2 ? s.threads.filter(t=>t.paraId===id).map(t=>thView(t, depth+1)) : [];
+      return { id, isH:src.kind==='h', isBody:src.kind!=='h', isLi:src.kind==='li', isOl:src.kind==='ol', num:src.num, segs, hasThreads:threads.length>0,
+        composer: !!(s.composer && s.composer.paraId===id), composerQuote: s.composer ? short(s.composer.quote) : '', threads };
+    };
+    const thView = (t, depth) => ({ id:t.id, domId:`g-th-${t.id}`, inputId:`g-th-${t.id}-in`, n:pad(order.indexOf(t.id)+1), quote:short(t.quote), open:t.open,
+      countLabel:`${t.turns.length} ${t.turns.length===1?'turn':'turns'}`, chev:{transform:t.open?'rotate(180deg)':'none', transition:'transform .15s', flex:'none'},
+      turns:t.turns.map((tn,ti)=>({q:tn.q, pending:!!tn.pending, blocks:(tn.blocks||[]).map((b,bi)=>blockView(b, `${t.id}.${ti}.${bi}`, depth))})) });
+    const paras = PARAS.map(src => blockView(src, src.id, 0));
+    const nested = t => /\./.test(t.paraId);
+    const subs = s.threads.map((t,i)=>({id:t.id, label:`Clarification ${pad(i+1)} · ${short(t.quote,24)}`, style:{paddingLeft: nested(t)?'34px':'22px', fontSize:'12px'}}));
+    const os=detectOS(), arch=detectArch();
+    const rel=s.release; let assets=[], rec=null, version='';
+    if (rel) { version=rel.version; assets = rel.assets.map(a=>({...a, meta:classify(a.name)})).filter(a=>a.meta).sort((a,b)=> (a.meta.os===os?0:1)-(b.meta.os===os?0:1) || OS_ORDER.indexOf(a.meta.os)-OS_ORDER.indexOf(b.meta.os) || a.meta.rank-b.meta.rank);
+      const forOS=assets.filter(a=>a.meta.os===os); rec = forOS.find(a=>a.meta.arch===arch) || forOS[0] || null; }
+    const osLabel = {macos:'macOS',windows:'Windows',linux:'Linux'}[os];
+    const ask=s.ask;
+    return { mode:s.mode, isDark:s.mode==='dark', isLight:s.mode!=='dark', repoUrl:REPO_URL, releasesUrl:RELEASES_URL, docsUrl:`${REPO_URL}/tree/main/docs`,
+      count:s.threads.length, subs, paras, agents:AGENTS,
+      heroHref: rec ? rec.browser_download_url : LATEST_URL, heroLabel: `Download for ${osLabel}`,
+      versionLabel: rel ? (rel.live ? `Latest release · v${version}` : `v${version} · release assets build on GitHub Actions`) : 'Latest release',
+      dlOpen:s.dlOpen, dlLoading:s.dlLoading, dlError:s.dlError, dlSub: rel ? `Latest release · v${version} · pick the build for your platform.` : 'Pick the build for your platform.',
+      assets: assets.map(a=>({ osLabel:a.meta.osLabel, format:a.meta.format, archLabel:a.meta.archLabel, size:a.size?fmtSize(a.size):'—', hasSize:!!a.size, url:a.browser_download_url, isRec:a===rec, rec:a===rec?'true':'false',
+        rowStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',padding:'10px 14px',borderTop:'1px solid var(--line)',fontSize:'13.5px',background:a===rec?'var(--accent-tint)':'var(--bg)'} })),
+      platformNote: NOTES[os],
+      hasAsk:!!ask, askStyle: ask ? {position:'absolute', left:ask.x+'px', top:ask.y+'px', transform:'translateX(-50%)', boxShadow:'var(--shadow)', zIndex:5, borderRadius:'999px'} : {},
+      onSelect:this.onSelect, openComposer:this.openComposer, cancelComposer:this.cancelComposer, sendQuestion:this.sendQuestion, sendFollow:this.sendFollow, composerKey:this.composerKey, followKey:this.followKey, autoGrow:this.autoGrow, toggleThread:this.toggleThread, jumpTo:this.jumpTo,
+      toggleMode:this.toggleMode, openDownloads:this.openDownloads, closeDownloads:this.closeDownloads, stop:this.stop };
+  }
+}
+</script>
+</body>
+</html>

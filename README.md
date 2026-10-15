@@ -119,3 +119,11 @@ Platform signing is optional. Add the `APPLE_*` secrets for a signed and
 notarized macOS build and `WINDOWS_CERTIFICATE`/`WINDOWS_CERTIFICATE_PASSWORD`
 for Authenticode; without them the installers are unsigned. The `CI` workflow
 runs the tests and compiles the app on all three platforms for every push.
+
+## Landing page
+
+`landing/` is the static site at <https://aayushch.github.io/gloss/>: plain
+HTML, CSS and one script, no build step. The `Deploy landing page` workflow
+publishes it to GitHub Pages on every push to `main` that touches that folder.
+The download section reads the latest release from the GitHub API, so it
+always lists exactly the installers the `Release` workflow produced.
