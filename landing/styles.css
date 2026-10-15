@@ -289,6 +289,19 @@ p {
 .navlinks a:hover {
 	color: var(--text);
 }
+/* Developer link: quiet by default, readable on hover. */
+.nav .dev {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 13px;
+	color: var(--text-3);
+	text-decoration: none;
+	white-space: nowrap;
+}
+.nav .dev:hover {
+	color: var(--text);
+}
 [data-mode='dark'] .icon-moon,
 :root:not([data-mode='dark']) .icon-sun {
 	display: none;
