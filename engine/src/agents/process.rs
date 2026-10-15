@@ -231,19 +231,40 @@ pub async fn read_all<R: AsyncReadExt + Unpin>(mut r: R) -> String {
 mod tests {
     use super::*;
 
-    fn sh(script: &str) -> CommandSpec {
+    fn spec(program: &str, args: &[&str]) -> CommandSpec {
         CommandSpec {
-            program: PathBuf::from("/bin/sh"),
-            args: vec!["-c".into(), script.into()],
+            program: PathBuf::from(program),
+            args: args.iter().map(|a| a.to_string()).collect(),
             env: vec![],
             cwd: std::env::temp_dir(),
             stdin: None,
         }
     }
 
+    /// `script` run by the platform's shell: `sh -c` or `cmd /C`.
+    fn sh(script: &str) -> CommandSpec {
+        if cfg!(windows) {
+            spec("cmd", &["/C", script])
+        } else {
+            spec("/bin/sh", &["-c", script])
+        }
+    }
+
+    /// A process that stays silent for 30 seconds. On Windows it is a direct
+    /// program rather than a shell child, because killing cmd.exe leaves its
+    /// child alive and holding the stdout pipe.
+    fn silent_for_30s() -> CommandSpec {
+        if cfg!(windows) {
+            spec("ping", &["-n", "31", "127.0.0.1"])
+        } else {
+            sh("sleep 30")
+        }
+    }
+
     #[tokio::test]
     async fn stdin_bytes_reach_the_child() {
-        let mut spec = sh("cat");
+        // `sort` on Windows and `cat` elsewhere both echo a single stdin line.
+        let mut spec = if cfg!(windows) { spec("sort", &[]) } else { sh("cat") };
         spec.stdin = Some(b"from stdin\n".to_vec());
         let mut lines = Vec::new();
         let out = run_lines(&spec, &HashMap::new(), Duration::from_secs(5), CancellationToken::new(), |l| lines.push(l.to_string()))
@@ -256,8 +277,9 @@ mod tests {
     #[tokio::test]
     async fn collects_lines_and_exit_code() {
         let mut lines = Vec::new();
+        let script = if cfg!(windows) { "echo a& echo b& echo err 1>&2& exit 3" } else { "printf 'a\\nb\\n'; echo err >&2; exit 3" };
         let out = run_lines(
-            &sh("printf 'a\\nb\\n'; echo err >&2; exit 3"),
+            &sh(script),
             &std::env::vars().collect(),
             Duration::from_secs(5),
             CancellationToken::new(),
@@ -274,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn idle_timeout_kills_silent_process() {
         let out = run_lines(
-            &sh("sleep 30"),
+            &silent_for_30s(),
             &std::env::vars().collect(),
             Duration::from_millis(200),
             CancellationToken::new(),
@@ -295,7 +317,7 @@ mod tests {
             t2.cancel();
         });
         let out = run_lines(
-            &sh("sleep 30"),
+            &silent_for_30s(),
             &std::env::vars().collect(),
             Duration::from_secs(10),
             token,

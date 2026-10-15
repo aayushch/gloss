@@ -52,17 +52,18 @@ impl ShellEnv {
         if let Some(shell_vars) = login_shell_env(Duration::from_secs(5)) {
             vars.extend(shell_vars);
         }
-        let mut env = ShellEnv { vars };
-        env.augment_path();
-        env
+        ShellEnv::from_vars(vars)
     }
 
     /// The current process environment only, with the extra PATH directories.
     /// Used by tests and when a shell probe is not wanted.
     pub fn from_process() -> ShellEnv {
-        let mut env = ShellEnv {
-            vars: std::env::vars().collect(),
-        };
+        ShellEnv::from_vars(std::env::vars().collect())
+    }
+
+    fn from_vars(mut vars: HashMap<String, String>) -> ShellEnv {
+        canonicalize_keys(&mut vars);
+        let mut env = ShellEnv { vars };
         env.augment_path();
         env
     }
@@ -143,6 +144,29 @@ impl ShellEnv {
         vec![name.to_string()]
     }
 }
+
+/// Windows environment variable names are case-insensitive and the system
+/// spells the search path `Path`. The map is case-sensitive, so the names this
+/// module reads are moved to their upper-case spelling; a child process then
+/// receives one search path, not `Path` and `PATH` side by side.
+#[cfg(windows)]
+fn canonicalize_keys(vars: &mut HashMap<String, String>) {
+    for canonical in ["PATH", "PATHEXT"] {
+        let aliases: Vec<String> = vars
+            .keys()
+            .filter(|k| k.as_str() != canonical && k.eq_ignore_ascii_case(canonical))
+            .cloned()
+            .collect();
+        for alias in aliases {
+            if let Some(value) = vars.remove(&alias) {
+                vars.entry(canonical.to_string()).or_insert(value);
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn canonicalize_keys(_vars: &mut HashMap<String, String>) {}
 
 fn is_executable(p: &Path) -> bool {
     #[cfg(unix)]
@@ -262,6 +286,18 @@ mod tests {
         assert_eq!(m.get("PATH").unwrap(), "/a:/b");
         assert_eq!(m.get("MULTI").unwrap(), "line1\nline2");
         assert_eq!(m.len(), 2);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_key_is_canonical_on_windows() {
+        let mut vars = HashMap::new();
+        vars.insert("Path".to_string(), r"C:\Windows".to_string());
+        vars.insert("PathExt".to_string(), ".EXE".to_string());
+        canonicalize_keys(&mut vars);
+        assert_eq!(vars.get("PATH").map(String::as_str), Some(r"C:\Windows"));
+        assert_eq!(vars.get("PATHEXT").map(String::as_str), Some(".EXE"));
+        assert!(!vars.contains_key("Path"));
     }
 
     #[test]
