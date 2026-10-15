@@ -31,6 +31,13 @@ The engine is Rust and linked straight into the shell. There is no sidecar,
 no local HTTP server and no second runtime to bootstrap: the shell starts, opens
 the database, captures the shell environment, and is ready.
 
+Updates come through Tauri's updater plugin. The app fetches `latest.json`
+from the newest GitHub release shortly after launch and every two hours, and
+offers a newer version in the rail. The bundle it downloads must carry a
+minisign signature that matches the public key in `tauri.conf.json`; the
+release workflow signs with the matching private key from the repository
+secrets. The frontend state lives in `ui/src/lib/state/updater.svelte.ts`.
+
 ## A turn, end to end
 
 1. The frontend calls `send_turn` with the typed text and, for a

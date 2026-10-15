@@ -1,6 +1,8 @@
 <script lang="ts">
-	// Modal settings sheet: agent choice, default model per agent, appearance.
+	// Modal settings sheet: agent choice, default model per agent, appearance
+	// and app updates.
 	import { app } from '$lib/state/app.svelte';
+	import { updater, type CheckResult } from '$lib/state/updater.svelte';
 	import type { AgentId } from '$lib/api/types';
 	import Icon from './Icon.svelte';
 
@@ -17,6 +19,22 @@
 
 	function pickModel(id: string) {
 		app.saveSettings({ defaultModel: { [selectedAgent]: id } });
+	}
+
+	/** Outcome of the last check started from this sheet, for the result line. */
+	let checkResult = $state<CheckResult | null>(null);
+
+	async function checkNow() {
+		checkResult = null;
+		checkResult = await updater.check();
+	}
+
+	function lastChecked(at: number | null): string {
+		if (!at) return 'never';
+		const mins = Math.round((Date.now() - at) / 60000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins} min ago`;
+		return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
 
 	$effect(() => {
@@ -82,6 +100,37 @@
 							<span class="radio" class:on={m.id === selectedModel}></span>
 						</button>
 					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<section>
+			<h3>Updates</h3>
+			{#if !updater.supported}
+				<p class="intro">Updates are checked in the desktop app only.</p>
+			{:else}
+				<p class="intro">
+					Gloss {updater.currentVersion ?? ''} checks for a newer release shortly after launch and every two hours while open. Last checked: {lastChecked(updater.lastCheckedAt)}.
+				</p>
+				<div class="update">
+					{#if updater.status === 'ready'}
+						<span class="result">Version {updater.version} is installed. Restart to use it.</span>
+						<button type="button" class="ibtn" onclick={() => updater.relaunch()}>Restart Gloss</button>
+					{:else if updater.status === 'downloading'}
+						<span class="result">Downloading {updater.version}… {updater.progress}%</span>
+					{:else if updater.status === 'available'}
+						<span class="result">Version {updater.version} is available.</span>
+						<button type="button" class="ibtn" onclick={() => updater.install()}>Update</button>
+					{:else}
+						<button type="button" class="ibtn" disabled={updater.status === 'checking'} onclick={checkNow}>
+							{updater.status === 'checking' ? 'Checking…' : 'Check for updates'}
+						</button>
+						{#if updater.status === 'error' && checkResult === 'error'}
+							<span class="result err" title={updater.error ?? ''}>Check failed. {updater.error ?? ''}</span>
+						{:else if checkResult === 'up-to-date'}
+							<span class="result">You are up to date.</span>
+						{/if}
+					{/if}
 				</div>
 			{/if}
 		</section>
@@ -239,6 +288,19 @@
 		height: 8px;
 		border-radius: 50%;
 		background: var(--accent);
+	}
+	.update {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.result {
+		font-size: 12.5px;
+		color: var(--text-2);
+	}
+	.result.err {
+		color: var(--accent-text);
 	}
 	.seg {
 		display: inline-flex;

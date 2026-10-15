@@ -17,6 +17,8 @@ gloss-engine = { path = "../../engine" }
 tauri = { version = "2.12", features = [] }
 tauri-plugin-opener = "2.7"
 tauri-plugin-dialog = "2.8"
+tauri-plugin-updater = "2.14"
+tauri-plugin-process = "2.4"
 base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true

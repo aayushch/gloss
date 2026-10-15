@@ -1,7 +1,9 @@
 name: Release
 
 # Pushing a tag like v0.2.0 builds installers for every platform and attaches
-# them to a draft GitHub release named after the tag. Publish the draft to ship.
+# them to a draft GitHub release named after the tag, together with the signed
+# updater bundles and the latest.json manifest the in-app updater reads.
+# Publish the draft to ship; installed copies then offer the update.
 
 on:
   push:
@@ -63,6 +65,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater bundles with the key whose public half is in
+          # tauri.conf.json; the app refuses an update without a valid signature.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing and notarization; the build is unsigned when unset.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -79,5 +85,6 @@ jobs:
           releaseBody: 'Installers for macOS (.dmg), Windows (.exe, .msi) and Linux (.AppImage, .deb, .rpm) are attached below.'
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
           projectPath: ui
           args: --target ${{ matrix.target }}

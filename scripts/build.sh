@@ -9,6 +9,10 @@
 #
 # Prerequisites: Node.js 20+, Rust stable, and on Linux the WebKitGTK
 # development packages (see README). Output lands in target/release/bundle/.
+#
+# The signed bundles for the in-app updater are only produced when
+# TAURI_SIGNING_PRIVATE_KEY (and its password) are set, as in the release
+# workflow; a plain local build leaves them out.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,6 +46,9 @@ fi
 ARGS=()
 [ -n "$TARGET" ] && ARGS+=(--target "$TARGET")
 [ "$DEBUG" = true ] && ARGS+=(--debug)
+if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+    ARGS+=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
+fi
 
 if [ -n "$SIGN" ]; then
     export APPLE_SIGNING_IDENTITY="$SIGN"

@@ -103,10 +103,19 @@ Output lands in `target/release/bundle/` (`dmg/`, `macos/`, `nsis/`, `msi/`,
 1. `scripts/set-version.sh 0.2.0` and commit.
 2. `git tag v0.2.0 && git push --tags`.
 3. The `Release` workflow builds macOS (arm64 and x64), Windows x64 and Linux
-   x64 installers and attaches them to a draft release named after the tag.
-   Publish the draft when the assets look right.
+   x64 installers and attaches them to a draft release named after the tag,
+   with the updater bundles and `latest.json` beside them. Publish the draft
+   when the assets look right.
 
-Signing is optional. Add the `APPLE_*` secrets for a signed and notarized
-macOS build and `WINDOWS_CERTIFICATE`/`WINDOWS_CERTIFICATE_PASSWORD` for
-Authenticode; without them the installers are unsigned. The `CI` workflow runs
-the tests and compiles the app on all three platforms for every push.
+Installed copies check that `latest.json` a few seconds after launch and every
+two hours, offer the new version in the rail, and install it in place after a
+restart. Updater bundles are signed with a minisign key: the public half lives
+in `ui/src-tauri/tauri.conf.json`, the private half must be in the
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets,
+or the release build fails. Keep that key safe; a lost key means shipped apps
+can never update again. The Linux updater works for the AppImage only.
+
+Platform signing is optional. Add the `APPLE_*` secrets for a signed and
+notarized macOS build and `WINDOWS_CERTIFICATE`/`WINDOWS_CERTIFICATE_PASSWORD`
+for Authenticode; without them the installers are unsigned. The `CI` workflow
+runs the tests and compiles the app on all three platforms for every push.

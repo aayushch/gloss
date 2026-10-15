@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "category": "Productivity",
     "shortDescription": "Inline clarifications for CLI-agent conversations",
     "longDescription": "Gloss is a desktop chat UI for the coding agents installed on your machine (Claude Code, Codex CLI, Gemini CLI, Pi, Cursor Agent). Highlight any part of an answer and ask about it; the reply appears inline under that sentence.",
@@ -61,6 +62,14 @@
       "rpm": {
         "release": "1"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDAzMjQ3RkRCOTcyMjZDRUYKUldUdmJDS1gyMzhrQXk2a3h6UENad0RKeTBQRW1ZUTlqUStzMUE3UXRDQkk2SnVvSlM4ZG9RTUcK",
+      "endpoints": [
+        "https://github.com/aayushch/gloss/releases/latest/download/latest.json"
+      ]
     }
   }
 }

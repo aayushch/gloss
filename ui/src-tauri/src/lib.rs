@@ -233,6 +233,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let paths = GlossPaths::from_env();
             let engine = Engine::open(paths).map_err(|e| std::io::Error::other(e.to_string()))?;

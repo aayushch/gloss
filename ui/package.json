@@ -30,6 +30,8 @@
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@shikijs/engine-javascript": "^4.5.0",
     "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "marked": "^18.1.1",
     "mermaid": "^12.2.0",
     "shiki": "^4.5.0"

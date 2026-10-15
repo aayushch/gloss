@@ -5,6 +5,7 @@
 	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
 	import { groupOf, pad, short, type Group } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
+	import UpdateBanner from './UpdateBanner.svelte';
 
 	const GROUPS: Group[] = ['Today', 'Yesterday', 'Last week', 'Older'];
 
@@ -125,6 +126,8 @@
 		{/each}
 		{/if}
 	</div>
+
+	<UpdateBanner />
 
 	<div class="foot">
 		<div class="mark">G</div>

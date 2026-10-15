@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { app } from '$lib/state/app.svelte';
+	import { updater } from '$lib/state/updater.svelte';
 	import ArtifactPane from '$lib/components/ArtifactPane.svelte';
 	import Composer from '$lib/components/Composer.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -10,6 +11,8 @@
 
 	onMount(() => {
 		app.init();
+		updater.start();
+		return () => updater.stop();
 	});
 
 	const composerDisabled = $derived.by(() => {
