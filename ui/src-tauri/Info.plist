@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS 26 and newer draw the app icon from icons/Assets.car, which holds
+	     a light and a dark appearance; older macOS keeps using icon.icns. -->
+	<key>CFBundleIconName</key>
+	<string>Gloss</string>
+</dict>
+</plist>

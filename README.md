@@ -121,6 +121,18 @@ notarized macOS build and `WINDOWS_CERTIFICATE`/`WINDOWS_CERTIFICATE_PASSWORD`
 for Authenticode; without them the installers are unsigned. The `CI` workflow
 runs the tests and compiles the app on all three platforms for every push.
 
+## Icons
+
+The app icon lives in `design/icon/`: `gloss-dark.svg` and `gloss-light.svg`
+are the mark on each theme, and `Gloss.icon` is an Icon Composer package with
+a light and a dark appearance. `scripts/icons.sh` regenerates everything in
+`ui/src-tauri/icons/` from them: the PNG and ICO set for Windows, Linux and
+the window, `icon.icns` for macOS 15 and older, and `Assets.car`, the compiled
+package that macOS 26 and newer read (`CFBundleIconName` in
+`ui/src-tauri/Info.plist`), switching between the light and dark icon with
+the system appearance. The script needs librsvg and Xcode 26 or newer; the
+generated files are committed, so a release build does not run it.
+
 ## Landing page
 
 `landing/` is the static site at <https://aayushch.github.io/gloss/>: plain

@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#26241f"/><text x="32" y="44" text-anchor="middle" font-family="IBM Plex Sans, system-ui, sans-serif" font-size="36" font-weight="600" fill="#f7f6f3">G</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="32 32 448 448">
+<style>
+  .bg { fill: #1f1e1b; } .q { fill: #d4785a; } .l { fill: #ebe8e1; }
+  @media (prefers-color-scheme: light) { .bg { fill: #f7f6f3; } .q { fill: #b4573a; } .l { fill: #26241f; } }
+</style>
+<rect class="bg" x="32" y="32" width="448" height="448" rx="104"/>
+<g class="q"><g transform="rotate(180 230 178)"><path d="M136 236 V176 Q136 120 192 120 H200 V156 H196 Q176 156 176 176 V184 H212 V236 Z"/><path d="M248 236 V176 Q248 120 304 120 H312 V156 H308 Q288 156 288 176 V184 H324 V236 Z"/></g></g>
+<g class="l"><rect x="136" y="280" width="240" height="28" rx="14"/><rect x="136" y="332" width="160" height="28" rx="14"/><rect x="136" y="384" width="200" height="28" rx="14"/></g>
+</svg>

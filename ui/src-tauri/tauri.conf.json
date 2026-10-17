@@ -44,7 +44,10 @@
     ],
     "macOS": {
       "minimumSystemVersion": "12.0",
-      "signingIdentity": null
+      "signingIdentity": null,
+      "files": {
+        "Resources/Assets.car": "icons/Assets.car"
+      }
     },
     "windows": {
       "wix": {

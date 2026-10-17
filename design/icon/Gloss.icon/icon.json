@@ -1,0 +1,62 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.96863,0.96471,0.95294,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.12157,0.11765,0.10588,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "Mark",
+      "layers": [
+        {
+          "name": "quotes",
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "quotes-light.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "quotes-dark.svg"
+            }
+          ]
+        },
+        {
+          "name": "lines",
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "lines-light.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "lines-dark.svg"
+            }
+          ]
+        }
+      ],
+      "specular": false,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
