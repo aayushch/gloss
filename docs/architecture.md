@@ -72,7 +72,12 @@ in their own homes, keyed by the Gloss cwd, so nothing Gloss does shows up in
 a real project's history. `docs/agents.md` lists what each CLI stores and where.
 
 `turns_fts` is an FTS5 index over finished turns, kept current by triggers on
-`turns`; the rail's search box queries it. The schema carries a version number
+`turns`; the rail's search box queries it. Picking a hit opens its
+conversation, expands the well if the hit is inside one, and hands the search
+text to the frontend's find bar, which highlights every occurrence in the
+rendered transcript and scrolls to the first one in the hit's turn. The same
+bar opens on Cmd/Ctrl+F and searches only what is rendered, so a collapsed
+well is covered by the rail search, not by find. The schema carries a version number
 and `Store::open` migrates older files in place.
 
 Export runs in the frontend: it serialises the same blocks the transcript

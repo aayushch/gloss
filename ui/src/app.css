@@ -84,6 +84,15 @@ a:hover {
 	background: var(--accent-tint);
 }
 
+/* Find-in-conversation matches; the current one is stronger. */
+::highlight(gloss-find) {
+	background: var(--accent-tint);
+}
+::highlight(gloss-find-current) {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
 :focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;

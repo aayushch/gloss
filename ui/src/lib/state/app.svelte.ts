@@ -2,6 +2,7 @@
 // component; it loads data through the API client and applies streamed turn
 // events to the active conversation.
 
+import { tick } from 'svelte';
 import { api } from '$lib/api/client';
 import type {
 	AgentId,
@@ -18,6 +19,7 @@ import type {
 	TurnEventEnvelope
 } from '$lib/api/types';
 import { copyText } from '$lib/clipboard';
+import { find } from '$lib/state/find.svelte';
 import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
 import { exportConversation, exportFileName, exportTurn } from '$lib/markdown/export';
 
@@ -181,11 +183,24 @@ class AppState {
 		this.refreshList();
 	}
 
-	/** Opens the conversation a search hit belongs to and scrolls to its turn. */
+	/** Opens the conversation a search hit belongs to and lands on the matched
+	 * words: the find bar opens with the search text and its current match is
+	 * the first one inside the hit's turn. When the words are not found as a
+	 * phrase, the first search word is tried; when nothing matches at all,
+	 * the transcript scrolls to the turn instead. */
 	async openHit(hit: SearchHit): Promise<void> {
 		if (this.active?.id !== hit.conversationId) await this.open(hit.conversationId);
 		if (!hit.turnId) return;
-		if (hit.clarificationId) this.jumpTo(hit.clarificationId);
+		if (hit.clarificationId) this.openClarificationChain(hit.clarificationId);
+		await tick();
+		await new Promise(requestAnimationFrame);
+		const turnEl = document.getElementById(`turn-${hit.turnId}`);
+		const phrase = this.search.trim();
+		const word = phrase.split(/\s+/)[0] ?? '';
+		for (const q of [phrase, word]) {
+			if (q && find.show(q, turnEl)) return;
+		}
+		find.hide();
 		this.jumpTarget = `turn-${hit.turnId}`;
 	}
 
@@ -506,13 +521,19 @@ class AppState {
 	/** Opens a clarification (and its parent chain) and scrolls to it. */
 	jumpTo(id: string): void {
 		if (!this.active) return;
+		this.openClarificationChain(id);
+		this.jumpTarget = `well-${id}`;
+	}
+
+	/** Expands a clarification and every well it is nested in. */
+	private openClarificationChain(id: string): void {
+		if (!this.active) return;
 		let cur: Clarification | undefined = this.active.clarifications.find((c) => c.id === id);
 		while (cur) {
 			if (!cur.open) this.toggleClarification(cur.id, true);
 			const parentId: string | null = cur.parentId;
 			cur = parentId ? this.active.clarifications.find((c) => c.id === parentId) : undefined;
 		}
-		this.jumpTarget = `well-${id}`;
 	}
 
 	private applyEvent(e: TurnEventEnvelope): void {

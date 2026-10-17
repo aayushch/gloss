@@ -45,7 +45,7 @@
 				<span class="col you">You</span>
 				<div class="q">{row.question.text}</div>
 				<span class="col reply">Reply</span>
-				<div class="a">
+				<div class="a" id={row.reply ? `turn-${row.reply.id}` : undefined}>
 					{#if row.reply}
 						{#if row.reply.status === 'error'}
 							<div class="err">

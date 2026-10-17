@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { app } from '$lib/state/app.svelte';
+	import { find } from '$lib/state/find.svelte';
 	import { updater } from '$lib/state/updater.svelte';
 	import ArtifactPane from '$lib/components/ArtifactPane.svelte';
 	import Composer from '$lib/components/Composer.svelte';
+	import FindBar from '$lib/components/FindBar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import Rail from '$lib/components/Rail.svelte';
 	import SettingsSheet from '$lib/components/SettingsSheet.svelte';
@@ -15,6 +17,24 @@
 		return () => updater.stop();
 	});
 
+	// Cmd/Ctrl+F opens find in the conversation, seeded with any text selected
+	// in the transcript; Cmd/Ctrl+G and Shift step through matches.
+	function onKey(e: KeyboardEvent) {
+		const mod = e.metaKey || e.ctrlKey;
+		if (!mod || e.altKey) return;
+		if (e.key === 'f' || e.key === 'F') {
+			if (!app.active) return;
+			e.preventDefault();
+			const sel = window.getSelection();
+			const selected = sel && !sel.isCollapsed && sel.anchorNode && document.querySelector('.transcript')?.contains(sel.anchorNode) ? sel.toString().trim() : '';
+			find.show(selected && !selected.includes('\n') ? selected : undefined);
+		} else if ((e.key === 'g' || e.key === 'G') && find.open) {
+			e.preventDefault();
+			if (e.shiftKey) find.prev();
+			else find.next();
+		}
+	}
+
 	const composerDisabled = $derived.by(() => {
 		if (app.loadError) return true;
 		const agent = app.activeAgent;
@@ -22,11 +42,16 @@
 	});
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <div class="shell">
 	<Rail />
 	<main class="conversation">
 		<Header />
-		<Transcript />
+		<div class="body">
+			<FindBar />
+			<Transcript />
+		</div>
 		<Composer disabled={composerDisabled} running={app.running} onsend={(t) => app.send(t)} onstop={() => app.cancel()} />
 	</main>
 	{#if app.viewedArtifact}
@@ -55,6 +80,14 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+	}
+	/* Hosts the transcript and the find bar floating over its top edge. */
+	.body {
+		flex: 1;
+		min-height: 0;
+		position: relative;
+		display: flex;
+		flex-direction: column;
 	}
 	.notice {
 		position: fixed;

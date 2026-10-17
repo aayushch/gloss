@@ -3,6 +3,7 @@
 	// about this" button), scroll-to-well jumps and auto-scroll on new turns.
 	import type { Turn } from '$lib/api/types';
 	import { app } from '$lib/state/app.svelte';
+	import { find } from '$lib/state/find.svelte';
 	import { blockRegistry, buildThreads } from '$lib/state/threads';
 	import AskButton from './AskButton.svelte';
 	import AssistantTurn from './AssistantTurn.svelte';
@@ -18,6 +19,10 @@
 	function userBefore(turns: Turn[], i: number): Turn | undefined {
 		for (let j = i - 1; j >= 0; j--) if (turns[j].role === 'user') return turns[j];
 		return undefined;
+	}
+
+	function flat(s: string): string {
+		return s.replace(/\s+/g, ' ').trim();
 	}
 
 	function elementOf(n: Node | null): HTMLElement | null {
@@ -42,7 +47,12 @@
 		}
 		const blockId = a.dataset.block!;
 		const reg = blockRegistry.get(blockId);
-		if (!reg || reg.kind === 'table' || !reg.text.includes(text)) {
+		// The selection must come from the block's own text. Whitespace is
+		// collapsed on both sides because a selection across code lines or
+		// table cells picks up newlines and tabs the block text does not have,
+		// and a table's text joins its cells with " | " which the DOM lacks.
+		const haystack = reg ? flat(reg.kind === 'table' ? reg.text.replace(/ \| /g, ' ') : reg.text) : '';
+		if (!reg || !haystack.includes(flat(text))) {
 			app.pendingAsk = null;
 			return;
 		}
@@ -70,19 +80,33 @@
 		return () => document.removeEventListener('mousedown', onDown);
 	});
 
-	// Jump to a well when a stub or rail item asks for it.
+	// The find bar searches whatever this container renders.
+	$effect(() => {
+		find.attach(container ?? null);
+		return () => find.attach(null);
+	});
+
+	// Jump to a well or turn when a stub or rail item asks for it. The target
+	// may still be rendering (a well that was just opened, a conversation that
+	// was just loaded), so the lookup is retried for up to a second.
 	$effect(() => {
 		const target = app.jumpTarget;
 		if (!target || !container) return;
 		const el = container;
-		setTimeout(() => {
+		const deadline = Date.now() + 1000;
+		const attempt = () => {
 			const node = document.getElementById(target);
+			if (!node && Date.now() < deadline) {
+				requestAnimationFrame(attempt);
+				return;
+			}
 			if (node) {
 				const top = node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 80;
-				el.scrollTo({ top, behavior: 'smooth' });
+				el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 			}
-			app.jumpTarget = null;
-		}, 60);
+			if (app.jumpTarget === target) app.jumpTarget = null;
+		};
+		requestAnimationFrame(attempt);
 	});
 
 	// Scroll to the top when switching conversations and to the bottom when a

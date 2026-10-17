@@ -15,7 +15,8 @@ A *gloss* is a short explanation written beside a word in a text.
 Also in the box: artifacts (a page, drawing, diagram, document or file the
 agent writes shows as a card in the reply and opens in a side pane with a
 sandboxed preview, versions and save), attachments of images and text files,
-full-text search across every conversation, pinned and tagged conversations,
+full-text search across every conversation and find within the open one
+(Cmd/Ctrl+F), pinned and tagged conversations,
 and export of a reply or a whole conversation as Markdown with the
 clarifications folded in under the sentences they were asked about.
 
