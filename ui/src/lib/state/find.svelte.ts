@@ -1,8 +1,10 @@
 // In-conversation find (Cmd/Ctrl+F). Matches are DOM ranges over the text
-// the transcript currently renders, so a collapsed well is not searched; the
-// rail's search covers every turn and opens the well when a hit is picked.
-// Matches are painted with the CSS custom highlight API where the webview
-// has it and by selecting the current match where it does not.
+// the transcript currently renders. A collapsed well renders nothing, so
+// once typing pauses the bar asks the app (through `expand`) to open every
+// well whose stored text holds the query; the mutation observer then picks
+// up the newly rendered matches. Matches are painted with the CSS custom
+// highlight API where the webview has it and by selecting the current match
+// where it does not.
 
 const HIGHLIGHT_ALL = 'gloss-find';
 const HIGHLIGHT_CURRENT = 'gloss-find-current';
@@ -77,10 +79,15 @@ class FindState {
 	/** 0-based index of the current match, or -1 with no matches. */
 	current = $state(-1);
 
+	/** Opens the collapsed wells whose text contains the query. Set by the
+	 * app state, which owns the conversation data. */
+	expand: ((query: string) => void) | null = null;
+
 	private root: HTMLElement | null = null;
 	private ranges: Range[] = [];
 	private observer: MutationObserver | null = null;
 	private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+	private expandTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/** The transcript element to search. Called by the transcript on mount. */
 	attach(root: HTMLElement | null): void {
@@ -98,6 +105,7 @@ class FindState {
 		if (query !== undefined) this.query = query;
 		this.observe();
 		this.search();
+		this.scheduleExpand();
 		if (within && this.ranges.length) {
 			const idx = this.ranges.findIndex((r) => within.contains(r.startContainer));
 			if (idx >= 0) this.goto(idx);
@@ -110,6 +118,7 @@ class FindState {
 		this.observer?.disconnect();
 		this.observer = null;
 		clearTimeout(this.refreshTimer);
+		clearTimeout(this.expandTimer);
 		this.ranges = [];
 		this.count = 0;
 		this.current = -1;
@@ -119,6 +128,7 @@ class FindState {
 	setQuery(q: string): void {
 		this.query = q;
 		this.search();
+		this.scheduleExpand();
 	}
 
 	next(): void {
@@ -148,6 +158,16 @@ class FindState {
 			if (idx < 0) idx = 0;
 		}
 		this.goto(idx);
+	}
+
+	/** Opens wells holding the query once the user pauses typing, so a
+	 * half-typed word does not expand every well in the conversation. One
+	 * character is too little to act on. */
+	private scheduleExpand(): void {
+		clearTimeout(this.expandTimer);
+		const q = this.query.trim();
+		if (q.length < 2 || !this.expand) return;
+		this.expandTimer = setTimeout(() => this.expand?.(q), 250);
 	}
 
 	private goto(idx: number): void {

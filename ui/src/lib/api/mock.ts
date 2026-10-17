@@ -442,6 +442,7 @@ export function mockApi(): Api {
 				emit({ conversationId: c.id, turnId: turn.id, event: { type: 'cancelled', turn: { ...turn } } });
 			}
 		},
+		startDrag: async () => {},
 		setClarificationOpen: async (id, open) => {
 			for (const c of convs) {
 				const cl = c.clarifications.find((x) => x.id === id);

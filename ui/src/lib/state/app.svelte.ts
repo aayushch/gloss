@@ -20,6 +20,7 @@ import type {
 } from '$lib/api/types';
 import { copyText } from '$lib/clipboard';
 import { find } from '$lib/state/find.svelte';
+import { wellsContaining } from '$lib/state/threads';
 import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
 import { exportConversation, exportFileName, exportTurn } from '$lib/markdown/export';
 
@@ -129,6 +130,7 @@ class AppState {
 	}
 
 	async init(): Promise<void> {
+		find.expand = (q) => this.openWellsContaining(q);
 		const a = await api();
 		try {
 			const [agents, settings, conversations] = await Promise.all([a.listAgents(), a.getSettings(), a.listConversations()]);
@@ -523,6 +525,13 @@ class AppState {
 		if (!this.active) return;
 		this.openClarificationChain(id);
 		this.jumpTarget = `well-${id}`;
+	}
+
+	/** Opens every well in the open conversation whose text contains `query`,
+	 * so find can match inside it. Wells stay open after find closes. */
+	openWellsContaining(query: string): void {
+		if (!this.active) return;
+		for (const id of wellsContaining(this.active, query)) this.openClarificationChain(id);
 	}
 
 	/** Expands a clarification and every well it is nested in. */

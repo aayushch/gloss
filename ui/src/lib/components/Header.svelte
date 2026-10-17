@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Conversation header: title, tags, pin, web-search toggle, model pill,
 	// clarification count and the export menu.
+	import { titleMouseDown } from '$lib/drag';
 	import { app } from '$lib/state/app.svelte';
 	import Icon from './Icon.svelte';
 	import ModelMenu from './ModelMenu.svelte';
@@ -42,7 +43,8 @@
 	const showWeb = $derived(!agent || agent.supportsWebSearch);
 </script>
 
-<header data-tauri-drag-region>
+<!-- The header doubles as the title bar: pressing anywhere outside a control drags the window. -->
+<header onmousedown={titleMouseDown} role="presentation">
 	<h1 title={title}>{title}</h1>
 	{#if app.active}
 		{#if editingTags}
@@ -71,7 +73,7 @@
 			<Icon name="pin" size={14} />
 		</button>
 	{/if}
-	<div class="spacer" data-tauri-drag-region></div>
+	<div class="spacer"></div>
 	{#if showWeb}
 		<button
 			type="button"

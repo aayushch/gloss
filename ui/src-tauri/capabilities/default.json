@@ -6,7 +6,6 @@
   "permissions": [
     "core:default",
     "core:window:allow-set-theme",
-    "core:window:allow-start-dragging",
     "opener:default",
     "updater:default",
     "process:default"

@@ -46,6 +46,8 @@ export interface Api {
 	cancelTurn(conversationId: string): Promise<void>;
 	setClarificationOpen(id: string, open: boolean): Promise<void>;
 	setTheme(theme: Theme): Promise<void>;
+	/** Title-bar press: 1 click starts a window drag, 2 toggles maximize. */
+	startDrag(clicks: number): Promise<void>;
 	onTurnEvent(cb: (e: TurnEventEnvelope) => void): Promise<() => void>;
 }
 
@@ -92,6 +94,7 @@ function tauriApi(): Api {
 		cancelTurn: (conversationId) => call('cancel_turn', { conversationId }),
 		setClarificationOpen: (id, open) => call('set_clarification_open', { id, open }),
 		setTheme: (theme) => call('set_theme', { theme }),
+		startDrag: (clicks) => call('start_drag', { clicks }),
 		onTurnEvent: async (cb) => {
 			const { listen } = await import('@tauri-apps/api/event');
 			return listen<TurnEventEnvelope>('turn-event', (ev) => cb(ev.payload));

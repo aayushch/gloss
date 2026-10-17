@@ -32,6 +32,7 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `cancel_turn` | `conversationId: string` | – | Kills the agent process; the turn ends with a `cancelled` event. |
 | `set_clarification_open` | `id: string, open: boolean` | – | Persists the collapsed state. |
 | `set_theme` | `theme: Theme` | – | Also switches the native window appearance. |
+| `start_drag` | `clicks: number` | – | Title-bar press. One click starts moving the window with the mouse, two toggles maximize. On macOS the shell synthesizes the mouse-down itself because AppKit's current event is usually gone by the time the request arrives. |
 
 ## Event `turn-event`
 

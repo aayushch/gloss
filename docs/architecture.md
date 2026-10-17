@@ -76,9 +76,10 @@ a real project's history. `docs/agents.md` lists what each CLI stores and where.
 conversation, expands the well if the hit is inside one, and hands the search
 text to the frontend's find bar, which highlights every occurrence in the
 rendered transcript and scrolls to the first one in the hit's turn. The same
-bar opens on Cmd/Ctrl+F and searches only what is rendered, so a collapsed
-well is covered by the rail search, not by find. The schema carries a version number
-and `Store::open` migrates older files in place.
+bar opens on Cmd/Ctrl+F. It matches rendered text, and a collapsed well
+renders nothing, so when typing pauses it opens every well whose stored text
+contains the query and the new matches join the count. The schema carries a
+version number and `Store::open` migrates older files in place.
 
 Export runs in the frontend: it serialises the same blocks the transcript
 renders back to Markdown and inserts each clarification as a blockquote after

@@ -88,3 +88,16 @@ export function groupOf(ms: number): Group {
 
 /** Plain text and nesting context of every rendered block, keyed by block id. */
 export const blockRegistry = new Map<string, { text: string; parentId: string | null; kind: string }>();
+
+/** Ids of the clarifications whose question, reply or quoted text contains
+ * `query` (case-insensitive, whitespace collapsed). Find uses it to open the
+ * wells a match is hiding in, since a collapsed well renders no text. */
+export function wellsContaining(conv: Conversation, query: string): string[] {
+	const flat = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+	const q = flat(query);
+	if (!q) return [];
+	const hit = new Set<string>();
+	for (const cl of conv.clarifications) if (flat(cl.quote).includes(q)) hit.add(cl.id);
+	for (const t of conv.turns) if (t.clarificationId && flat(t.text).includes(q)) hit.add(t.clarificationId);
+	return [...hit];
+}
