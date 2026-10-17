@@ -459,11 +459,19 @@ class AppState {
 		await this.dispatch(body, null, ids);
 	}
 
-	/** Opens a new clarification on the composer's target. */
+	/**
+	 * Opens a new clarification on the composer's target. The engine accepts
+	 * one turn per conversation at a time, so while a reply is running the
+	 * composer stays open and a notice says to wait.
+	 */
 	async ask(question: string): Promise<void> {
 		const target = this.composerFor;
 		const body = question.trim();
 		if (!target || !body || !this.active) return;
+		if (this.running) {
+			this.flash('Wait for the reply to finish before asking');
+			return;
+		}
 		this.composerFor = null;
 		await this.dispatch(body, { kind: 'new', anchorBlockId: target.blockId, quote: target.quote, parentId: target.parentId });
 	}

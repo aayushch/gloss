@@ -28,6 +28,25 @@ describe('app state against the mock api', () => {
 		expect(app.conversations.find((c) => c.id === 'conv_cas')?.clarificationCount).toBe(before + 1);
 	});
 
+	it('keeps the composer open and refuses a clarification while a reply runs', async () => {
+		await app.init();
+		const reply = app.active!.turns.find((t) => t.role === 'assistant')!;
+		const before = app.active!.turns.length;
+		app.composerFor = { blockId: `${reply.id}:2`, quote: 'useless for synchronization', parentId: null };
+		await app.ask('First question');
+		expect(app.running).toBe(true);
+		expect(app.active!.turns.length).toBe(before + 2);
+
+		app.composerFor = { blockId: `${reply.id}:1`, quote: 'spinlock', parentId: null };
+		await app.ask('Second question while running');
+		expect(app.composerFor).not.toBeNull();
+		expect(app.active!.turns.length).toBe(before + 2);
+		expect(app.notice).toMatch(/wait for the reply/i);
+		app.composerFor = null;
+		await settle(1900);
+		expect(app.running).toBe(false);
+	});
+
 	it('creates a conversation from a draft on first send and cancels', async () => {
 		app.newChat();
 		expect(app.draft).not.toBeNull();

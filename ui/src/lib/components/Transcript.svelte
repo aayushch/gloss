@@ -152,7 +152,7 @@
 		<div class="empty error">Could not reach the engine: {app.loadError}</div>
 	{/if}
 	{#if app.pendingAsk}
-		<AskButton x={app.pendingAsk.x} y={app.pendingAsk.y} onask={openComposer} />
+		<AskButton x={app.pendingAsk.x} y={app.pendingAsk.y} disabled={app.running} onask={openComposer} />
 	{/if}
 </div>
 

@@ -93,7 +93,9 @@ block id and the quoted text; at render time the quote is located in the
 block's plain text and the block's inline runs are split at the mark
 boundaries, so bold, code and italic formatting survives inside the highlight.
 Clarification replies are themselves turns parsed the same way, which is what
-makes nesting unbounded.
+makes nesting unbounded. The engine runs one turn per conversation at a time,
+so while a reply is streaming the "Ask about this" pill is shown inert with a
+note to wait, and the well follow-up boxes are disabled.
 
 Artifacts are part of the reply text. The system note asks every agent to
 wrap a standalone piece of work (page, SVG, Mermaid diagram, document, file)
