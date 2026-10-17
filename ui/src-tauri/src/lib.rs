@@ -211,72 +211,22 @@ fn set_clarification_open(engine: State<'_, Eng>, id: String, open: bool) -> Res
 #[tauri::command]
 fn set_theme(app: AppHandle, engine: State<'_, Eng>, theme: Theme) -> Result<(), String> {
     engine.set_theme(theme).map_err(err)?;
-    let native = match theme {
-        Theme::Light => tauri::Theme::Light,
-        Theme::Dark => tauri::Theme::Dark,
-    };
-    for window in app.webview_windows().values() {
-        let _ = window.set_theme(Some(native));
-    }
+    apply_native_theme(&app, theme);
     Ok(())
 }
 
-/// Starts moving the window from the title bar, or toggles maximize on a
-/// double click (`clicks` is the mouse event's click count).
-///
-/// On macOS the frontend's own drag region is the only title bar, because the
-/// window hides the native one. Tauri's built-in drag asks AppKit to drag with
-/// the application's current event, but the request arrives over IPC after
-/// the mouse-down has been processed, so that event is often gone or of a
-/// different type and the window does not move. This command builds a
-/// left-mouse-down at the live cursor position and hands AppKit that instead.
-#[tauri::command]
-fn start_drag(window: tauri::Window, clicks: u32) -> Result<(), String> {
-    if clicks == 2 {
-        return if window.is_maximized().map_err(err)? { window.unmaximize() } else { window.maximize() }
-            .map_err(err);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let w = window.clone();
-        window.run_on_main_thread(move || macos::drag(&w)).map_err(err)
-    }
-    #[cfg(not(target_os = "macos"))]
-    window.start_dragging().map_err(err)
-}
-
-#[cfg(target_os = "macos")]
-mod macos {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType, NSWindow};
-
-    /// Asks the window server to move the window, following the mouse that
-    /// is currently held down. Must run on the main thread.
-    pub fn drag(window: &tauri::Window) {
-        let (Some(mtm), Ok(ptr)) = (MainThreadMarker::new(), window.ns_window()) else { return };
-        // SAFETY: Tauri hands out the NSWindow it owns, and the window
-        // outlives this call because the command holds a handle to it.
-        let ns_window: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
-        let current = NSApplication::sharedApplication(mtm).currentEvent();
-        tracing::debug!(
-            event_type = current.as_ref().map(|e| e.r#type().0),
-            "start_drag: synthesizing mouse-down for performWindowDragWithEvent"
-        );
-        let timestamp = current.map(|e| e.timestamp()).unwrap_or(0.0);
-        let event = NSEvent::mouseEventWithType_location_modifierFlags_timestamp_windowNumber_context_eventNumber_clickCount_pressure(
-            NSEventType::LeftMouseDown,
-            NSEvent::mouseLocation(),
-            NSEventModifierFlags::empty(),
-            timestamp,
-            ns_window.windowNumber(),
-            None,
-            0,
-            1,
-            1.0,
-        );
-        if let Some(event) = event {
-            ns_window.performWindowDragWithEvent(&event);
-        }
+/// Switches every window's native appearance and background to `theme`.
+/// The background matters on macOS, where the transparent title bar shows
+/// it: the colour is the frontend's `--bg` for that theme, so the bar reads
+/// as part of the page.
+fn apply_native_theme(app: &AppHandle, theme: Theme) {
+    let (native, bg) = match theme {
+        Theme::Light => (tauri::Theme::Light, tauri::window::Color(0xf7, 0xf6, 0xf3, 0xff)),
+        Theme::Dark => (tauri::Theme::Dark, tauri::window::Color(0x1f, 0x1e, 0x1b, 0xff)),
+    };
+    for window in app.webview_windows().values() {
+        let _ = window.set_theme(Some(native));
+        let _ = window.set_background_color(Some(bg));
     }
 }
 
@@ -299,13 +249,7 @@ pub fn run() {
             let engine = Engine::open(paths).map_err(|e| std::io::Error::other(e.to_string()))?;
             // The stored theme decides the native window appearance at launch.
             let theme = engine.settings().map(|s| s.theme).unwrap_or(Theme::Light);
-            let native = match theme {
-                Theme::Light => tauri::Theme::Light,
-                Theme::Dark => tauri::Theme::Dark,
-            };
-            for window in app.webview_windows().values() {
-                let _ = window.set_theme(Some(native));
-            }
+            apply_native_theme(app.handle(), theme);
             app.manage(Arc::new(engine));
             Ok(())
         })
@@ -325,7 +269,6 @@ pub fn run() {
             cancel_turn,
             set_clarification_open,
             set_theme,
-            start_drag,
             search,
             set_pinned,
             set_tags,

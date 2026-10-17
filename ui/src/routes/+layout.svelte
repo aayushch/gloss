@@ -2,13 +2,13 @@
 	import '../app.css';
 	let { children } = $props();
 
-	// The window chrome differs per platform: macOS hides the native title bar
-	// and draws traffic lights over the rail, so the rail needs a spacer there
-	// and nowhere else. Components read `data-platform` to adapt.
+	// On macOS the native title bar is a transparent band in the page colour,
+	// with nothing drawn between it and the page. The shell draws a hairline
+	// under it so the rail and its divider read as panes that start below a
+	// toolbar; elsewhere the native title bar carries its own edge.
 	$effect(() => {
 		const ua = navigator.userAgent;
-		const platform = /Mac/i.test(ua) ? 'macos' : /Win/i.test(ua) ? 'windows' : 'linux';
-		document.documentElement.dataset.platform = platform;
+		document.documentElement.dataset.platform = /Mac/i.test(ua) ? 'macos' : /Win/i.test(ua) ? 'windows' : 'linux';
 	});
 </script>
 

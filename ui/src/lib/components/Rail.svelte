@@ -4,7 +4,6 @@
 	// active conversation, full-text results while searching, and the footer.
 	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
 	import { groupOf, pad, short, type Group } from '$lib/state/threads';
-	import { titleMouseDown } from '$lib/drag';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
 
@@ -63,7 +62,6 @@
 </script>
 
 <nav class="rail">
-	<div class="drag" onmousedown={titleMouseDown} role="presentation"></div>
 	<button type="button" class="ibtn newchat" onclick={() => app.newChat()}>
 		<Icon name="plus" size={14} /> New chat
 	</button>
@@ -154,16 +152,6 @@
 		flex-direction: column;
 		gap: 10px;
 		height: 100%;
-	}
-	/* Room for the macOS traffic lights; other platforms keep their native title bar. */
-	.drag {
-		display: none;
-		height: 26px;
-		flex: none;
-		margin: -12px -10px 0;
-	}
-	:global([data-platform='macos']) .drag {
-		display: block;
 	}
 	.newchat {
 		width: 100%;

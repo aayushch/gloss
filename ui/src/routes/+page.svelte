@@ -74,6 +74,9 @@
 		background: var(--bg);
 		color: var(--text);
 	}
+	:global([data-platform='macos']) .shell {
+		border-top: 1px solid var(--line);
+	}
 	.conversation {
 		flex: 1;
 		min-width: 0;
