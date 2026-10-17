@@ -2,6 +2,7 @@
 	// Left navigation rail: new chat, search, tag filters, the pinned and
 	// date-grouped conversation list with clarification sub-items under the
 	// active conversation, full-text results while searching, and the footer.
+	import { api } from '$lib/api/client';
 	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
 	import { groupOf, pad, short, type Group } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
@@ -50,9 +51,10 @@
 		return !!app.active?.clarifications.find((c) => c.id === id)?.parentId;
 	}
 
-	function confirmDelete(e: MouseEvent, id: string, title: string) {
+	async function confirmDelete(e: MouseEvent, id: string, title: string) {
 		e.stopPropagation();
-		if (confirm(`Delete “${title}”? The agent's own session files are kept.`)) app.remove(id);
+		const yes = await (await api()).confirm(`Delete “${title}”?`, 'The conversation and its clarifications are removed from Gloss. The agent keeps its own session files.', 'Delete');
+		if (yes) app.remove(id);
 	}
 
 	function pin(e: MouseEvent, id: string) {

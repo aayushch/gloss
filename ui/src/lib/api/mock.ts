@@ -350,6 +350,7 @@ export function mockApi(): Api {
 		},
 		pickFiles: async () => null,
 		pickFolder: async () => '/Users/me/code/demo-project',
+		confirm: async (title, message) => (typeof window === 'undefined' ? true : window.confirm(`${title}\n\n${message}`)),
 		removeAttachment: async (id) => {
 			staged.delete(id);
 		},

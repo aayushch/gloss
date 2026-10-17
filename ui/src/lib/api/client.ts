@@ -47,6 +47,12 @@ export interface Api {
 	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
 	/** Opens the native folder picker; null when nothing was chosen. */
 	pickFolder(): Promise<string | null>;
+	/**
+	 * Asks a yes/no question in a native dialog and resolves true when the
+	 * user chooses `okLabel`. The webview has no dialogs of its own: a plain
+	 * `confirm()` returns false without showing anything.
+	 */
+	confirm(title: string, message: string, okLabel: string): Promise<boolean>;
 	renameConversation(id: string, title: string): Promise<ConversationSummary>;
 	deleteConversation(id: string): Promise<void>;
 	setConversationModel(id: string, model: string): Promise<ConversationSummary>;
@@ -99,6 +105,10 @@ function tauriApi(): Api {
 				filters: [{ name: 'Images and text', extensions: ATTACHMENT_EXTENSIONS }]
 			});
 			return picked ?? [];
+		},
+		confirm: async (title, message, okLabel) => {
+			const { ask } = await import('@tauri-apps/plugin-dialog');
+			return ask(message, { title, kind: 'warning', okLabel, cancelLabel: 'Cancel' });
 		},
 		removeAttachment: (id) => call('remove_attachment', { id }),
 		attachmentUrl: async (att) => {
