@@ -15,14 +15,44 @@ Verified on this machine on 2026-10-13 unless marked otherwise.
   sessions land in one bucket per agent and never show up in a real project's
   resume picker, while project-bound sessions appear in that project's own
   history by design.
-- **Project folders.** A bound conversation gets read-only file tools and the
-  system note names the folder. Claude Code runs with `--restricted` and
-  `--tools Read,Glob,Grep,LS` (plus the web tools), which also confines the
-  file tools to the folder and skips the project's settings files and hooks;
-  Pi gets `--tools read,grep,find,ls`; Codex, Gemini and Cursor already run in
-  read-only modes and simply start reading files once the cwd is real. Gemini
-  gets `--include-directories` with the attachments directory so `@` image
-  references outside the folder still resolve. No agent can edit files.
+- **Project folders.** A bound conversation starts read-only: Claude Code
+  runs with `--restricted` and the Read, Glob, Grep and LS tools pre-approved
+  (plus the web tools), which also confines the file tools to the folder and
+  skips the project's settings files and hooks; Pi gets
+  `--tools read,grep,find,ls`; Codex, Gemini and Cursor use their read-only
+  modes. Gemini gets `--include-directories` with the attachments directory
+  so `@` image references outside the folder still resolve.
+- **Modes.** The user can switch a bound conversation to one of the modes
+  the CLI offers. The list is read from the CLI's own `--help` at detection
+  time, so it tracks the installed version; each adapter maps the chosen id
+  to its flag on every spawn, resumed sessions included, so a switch applies
+  from the next turn. Read-only is Gloss's own mode and is not in the list.
+
+  | Agent | Modes read from | Flag per turn | Prompts reach the user? |
+  | --- | --- | --- | --- |
+  | Claude Code | `--permission-mode` choices (`bypassPermissions` dropped: `--restricted` refuses it) | `--permission-mode <id>`; a chosen mode also adds Edit, Write, MultiEdit, NotebookEdit and Bash to `--tools`, never to `--allowedTools`, so the mode decides whether they prompt | Yes, see below |
+  | Gemini CLI | `--approval-mode` choices (`plan` is read-only) | `--approval-mode <id>` | No: headless runs cannot prompt, so `default` fails on anything needing approval |
+  | Codex CLI | `codex exec --help`, `--sandbox` values (`read-only` is read-only) | `--sandbox <id> --ask-for-approval never` | No: exec never prompts |
+  | Cursor Agent | `--mode` choices (`ask` is read-only) plus `agent` (no `--mode`: edits, commands rejected) and `force` (`--force`: commands allowed) | as named | No: print mode writes without asking and rejects commands |
+  | Pi | the built-in tool list: `edit` (read set + edit, write) and `full` (+ bash) when those tools exist | `--tools <set>` | No in print mode |
+
+- **Requests (Claude Code).** Every Claude run uses `--input-format
+  stream-json` with the prompt as one user message on stdin, and
+  `--permission-prompt-tool stdio --permission-prompts host`. Whenever a tool
+  call needs approval, or Claude calls `AskUserQuestion`, it writes a
+  `control_request` line (`request.subtype == "can_use_tool"`, `tool_name`,
+  `input`, `permission_suggestions`) and waits; Gloss shows it as a card and
+  writes the answer back as a `control_response` (`behavior` allow with
+  `updatedInput`, optionally `updatedPermissions` with a `setMode`
+  suggestion, or deny with `message`; for questions `updatedInput.answers`
+  maps each question to the chosen label). The idle timeout is paused while
+  a request is open. Claude keeps running after its `result` until stdin
+  closes, so the engine closes stdin as soon as the turn is done. The
+  `AskUserQuestion` tool is on in every conversation, project or not, since
+  questions can always be relayed. Verified 2026-10-17 on 2.1.302: manual
+  mode prompts for Write and the file appears only after the allow,
+  `acceptEdits` on a resumed session writes without a prompt, and switching
+  back to read-only makes the next turn refuse.
 - **Environment.** A Tauri app launched from Finder does not inherit the login
   shell's environment. On startup the engine runs `$SHELL -ilc 'env -0'` once
   and uses that environment, with common binary directories appended to PATH,

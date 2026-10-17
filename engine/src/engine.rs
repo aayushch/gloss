@@ -29,7 +29,7 @@ pub struct Engine {
     pub env: ShellEnv,
     pub store: Store,
     /// One cancellation token per conversation with a live agent process.
-    running: Mutex<HashMap<String, CancellationToken>>,
+    running: Mutex<HashMap<String, RunningTurn>>,
     idle_timeout: Duration,
 }
 
@@ -175,6 +175,7 @@ impl Engine {
     pub fn get_conversation(&self, id: &str) -> Result<Conversation> {
         let mut c = self.store.get_conversation(id)?;
         c.running = self.is_running(id);
+        c.pending_request = self.pending_request(id);
         Ok(c)
     }
 
@@ -244,9 +245,71 @@ impl Engine {
 
     /// Stop the agent process for a conversation, if one is running.
     pub fn cancel_turn(&self, conversation_id: &str) {
-        if let Some(token) = self.running.lock().unwrap().get(conversation_id) {
-            token.cancel();
+        if let Some(run) = self.running.lock().unwrap().get(conversation_id) {
+            run.cancel.cancel();
         }
+    }
+
+    /// The request the running turn is waiting on, if any.
+    pub fn pending_request(&self, conversation_id: &str) -> Option<AgentRequest> {
+        self.running
+            .lock()
+            .unwrap()
+            .get(conversation_id)
+            .and_then(|r| r.pending.as_ref().map(|(_, req)| req.clone()))
+    }
+
+    /// Hands the user's answer to the waiting agent. A permission answer
+    /// that accepts a suggested mode also switches the conversation to it,
+    /// so the next turn starts in that mode.
+    pub fn answer_request(&self, conversation_id: &str, request_id: &str, answer: RequestAnswer) -> Result<()> {
+        let (turn_id, request, stdin, waiting, sink) = {
+            let mut running = self.running.lock().unwrap();
+            let run = running
+                .get_mut(conversation_id)
+                .ok_or_else(|| anyhow!("no turn is running in this conversation"))?;
+            match &run.pending {
+                Some((_, req)) if req.id == request_id => {}
+                _ => return Err(anyhow!("the agent is not waiting on request {}", request_id)),
+            }
+            let (turn_id, request) = run.pending.take().expect("checked above");
+            (turn_id, request, run.stdin.clone(), run.waiting.clone(), run.sink.clone())
+        };
+        let agent = self.store.get_summary(conversation_id)?.agent;
+        let bytes = agents::adapter_for(agent)
+            .encode_answer(&request, &answer)
+            .ok_or_else(|| anyhow!("{} cannot take answers", agent))?;
+        if let RequestAnswer::Permission { set_mode: Some(mode), allow: true, .. } = &answer {
+            self.store.set_mode(conversation_id, Some(mode))?;
+        }
+        stdin
+            .ok_or_else(|| anyhow!("the agent's input is closed"))?
+            .send(bytes)
+            .map_err(|_| anyhow!("the agent has already exited"))?;
+        waiting.store(false, std::sync::atomic::Ordering::Relaxed);
+        sink(TurnEventEnvelope {
+            conversation_id: conversation_id.to_string(),
+            turn_id,
+            event: TurnEvent::RequestResolved { request_id: request_id.to_string() },
+        });
+        Ok(())
+    }
+
+    /// Sets the working mode of a project-bound conversation. `None` is
+    /// read-only; anything else must be a mode the agent's CLI offers.
+    pub fn set_conversation_mode(&self, id: &str, mode: Option<String>) -> Result<ConversationSummary> {
+        let summary = self.store.get_summary(id)?;
+        let mode = mode.map(|m| m.trim().to_string()).filter(|m| !m.is_empty() && m != "read-only");
+        if let Some(m) = &mode {
+            if summary.project_dir.is_none() {
+                return Err(anyhow!("only a conversation bound to a project folder has a mode"));
+            }
+            let offered = agents::adapter_for(summary.agent).modes(&self.env);
+            if !offered.iter().any(|o| &o.id == m) {
+                return Err(anyhow!("{} has no mode named {}", summary.agent, m));
+            }
+        }
+        self.store.set_mode(id, mode.as_deref())
     }
 
     // ── turns ───────────────────────────────────────────────────────────
@@ -264,15 +327,21 @@ impl Engine {
         // Reserve the conversation before touching the store so two sends
         // racing each other cannot both start a process.
         let cancel = CancellationToken::new();
+        let (stdin_tx, stdin_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+        let waiting = Arc::new(std::sync::atomic::AtomicBool::new(false));
         {
             let mut running = self.running.lock().unwrap();
             if running.contains_key(&req.conversation_id) {
                 return Err(anyhow!("a turn is already running in this conversation"));
             }
-            running.insert(req.conversation_id.clone(), cancel.clone());
+            running.insert(
+                req.conversation_id.clone(),
+                RunningTurn { cancel: cancel.clone(), stdin: Some(stdin_tx), waiting: waiting.clone(), pending: None, sink: sink.clone() },
+            );
         }
+        let interaction = agents::process::Interaction { input: stdin_rx, waiting };
 
-        let result = self.start_turn(&conv, agent, text, req.clarification, &req.attachments, cancel.clone(), sink);
+        let result = self.start_turn(&conv, agent, text, req.clarification, &req.attachments, cancel.clone(), interaction, sink);
         if result.is_err() {
             self.running.lock().unwrap().remove(&req.conversation_id);
         }
@@ -288,6 +357,7 @@ impl Engine {
         target: Option<ClarificationTarget>,
         attachment_ids: &[String],
         cancel: CancellationToken,
+        interaction: agents::process::Interaction,
         sink: EventSink,
     ) -> Result<SendTurnResult> {
         let conv_id = conv.summary.id.clone();
@@ -373,6 +443,7 @@ impl Engine {
             model: Some(conv.summary.model.clone()).filter(|m| !m.is_empty()),
             web_search: conv.summary.web_search,
             project: project_dir.is_some(),
+            mode: if project_dir.is_some() { conv.summary.mode.clone() } else { None },
             cwd: project_dir.unwrap_or_else(|| self.paths.workspace.clone()),
             pi_session_dir: self.paths.pi_sessions.clone(),
             system_note: note,
@@ -383,7 +454,7 @@ impl Engine {
         let engine = Arc::clone(self);
         let turn_id = assistant_turn.id.clone();
         tokio::spawn(async move {
-            engine.run_turn(conv_id, turn_id, agent, spawn_req, cancel, sink).await;
+            engine.run_turn(conv_id, turn_id, agent, spawn_req, cancel, interaction, sink).await;
         });
 
         Ok(SendTurnResult {
@@ -413,6 +484,7 @@ impl Engine {
         agent: AgentId,
         req: SpawnRequest,
         cancel: CancellationToken,
+        interaction: agents::process::Interaction,
         sink: EventSink,
     ) {
         let emit = |event: TurnEvent| {
@@ -430,13 +502,33 @@ impl Engine {
             Err(e) => Err(e.to_string()),
             Ok(spec) => {
                 info!(agent = %agent, program = %spec.program.display(), "spawning agent");
-                let run = agents::process::run_lines(
+                let waiting = interaction.waiting.clone();
+                let run = agents::process::run_lines_with(
                     &spec,
                     &self.env.vars,
                     self.idle_timeout,
                     cancel.clone(),
+                    Some(interaction),
                     |line| {
                         for ev in adapter.parse_line(line) {
+                            // An agent reading a stream of input only exits
+                            // once that stream ends, so its stdin is closed
+                            // as soon as it reports the turn finished.
+                            if matches!(ev, AgentEvent::Done) {
+                                if let Some(run) = self.running.lock().unwrap().get_mut(&conv_id) {
+                                    run.stdin = None;
+                                }
+                            }
+                            if let AgentEvent::Request(request) = ev {
+                                // Park the request on the running turn so an
+                                // answer can find it, and stop the idle clock.
+                                if let Some(run) = self.running.lock().unwrap().get_mut(&conv_id) {
+                                    run.pending = Some((turn_id.clone(), request.clone()));
+                                }
+                                waiting.store(true, std::sync::atomic::Ordering::Relaxed);
+                                emit(TurnEvent::Request { request });
+                                continue;
+                            }
                             state.apply(ev, &emit);
                         }
                     },
@@ -483,6 +575,16 @@ impl Engine {
             Err(e) => warn!(error = %e, "could not persist final turn state"),
         }
     }
+}
+
+/// A turn in progress: how to stop it, how to reach the agent's stdin, and
+/// the request it is waiting on, if any, with the id of its assistant turn.
+struct RunningTurn {
+    cancel: CancellationToken,
+    stdin: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
+    waiting: Arc<std::sync::atomic::AtomicBool>,
+    pending: Option<(String, AgentRequest)>,
+    sink: EventSink,
 }
 
 /// Mutable state of one running turn: the assembled text and what the agent
@@ -553,6 +655,8 @@ impl<'a> TurnState<'a> {
                 self.dirty = true;
             }
             AgentEvent::Activity { kind, label } => emit(TurnEvent::Activity { kind, label }),
+            // Requests are routed to the running turn by the caller, never applied here.
+            AgentEvent::Request(_) => {}
             AgentEvent::Usage(u) => self.usage = Some(u),
             AgentEvent::Model(m) => self.model = Some(m),
             AgentEvent::Error(msg) => {

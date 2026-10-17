@@ -13,6 +13,10 @@ export interface AgentInfo {
 	version: string | null;
 	supportsModelSelect: boolean;
 	supportsWebSearch: boolean;
+	/** Modes the CLI offers for project-bound conversations; read-only is implied and not listed. */
+	modes: AgentMode[];
+	/** True when the agent's permission prompts and questions reach the user as cards. */
+	supportsRequests: boolean;
 }
 
 export interface ModelInfo {
@@ -110,6 +114,8 @@ export interface ConversationSummary {
 	clarificationCount: number;
 	/** Absolute path of the project folder the agent runs in; null means the Gloss workspace. */
 	projectDir: string | null;
+	/** The agent's working mode inside the folder, an id from AgentInfo.modes; null is read-only. */
+	mode: string | null;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -117,6 +123,8 @@ export interface ConversationSummary {
 export interface Conversation extends ConversationSummary {
 	agentSessionId: string | null;
 	running: boolean;
+	/** The request the running agent is waiting on, if any. */
+	pendingRequest: AgentRequest | null;
 	turns: Turn[];
 	clarifications: Clarification[];
 }
@@ -141,11 +149,49 @@ export interface SendTurnResult {
 
 export type ActivityKind = 'thinking' | 'tool' | 'status';
 
+/** One way of running an agent inside a project folder, as its CLI names it. */
+export interface AgentMode {
+	id: string;
+	label: string;
+	description: string;
+	/** True when the agent may change files in this mode. */
+	writes: boolean;
+}
+
+export interface ModeSuggestion {
+	mode: string;
+	label: string;
+}
+
+export interface QuestionOption {
+	label: string;
+	description: string;
+}
+
+export interface Question {
+	question: string;
+	header: string;
+	options: QuestionOption[];
+	multiSelect: boolean;
+}
+
+/** Something the agent needs from the user before it can go on. */
+export type AgentRequest = { id: string } & (
+	| { kind: 'permission'; tool: string; title: string; detail: string | null; suggestions: ModeSuggestion[] }
+	| { kind: 'question'; questions: Question[] }
+);
+
+export type RequestAnswer =
+	| { kind: 'permission'; allow: boolean; message: string | null; setMode: string | null }
+	| { kind: 'question'; answers: Record<string, string> };
+
 export type TurnEvent =
 	| { type: 'started'; sessionId: string | null; model: string | null }
 	| { type: 'delta'; text: string }
 	| { type: 'replace'; text: string }
 	| { type: 'activity'; kind: ActivityKind; label: string }
+	| { type: 'request'; request: AgentRequest }
+	| { type: 'request_resolved'; requestId: string }
 	| { type: 'done'; turn: Turn }
 	| { type: 'failed'; error: string; turn: Turn }
 	| { type: 'cancelled'; turn: Turn };

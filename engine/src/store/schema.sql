@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     tags TEXT NOT NULL DEFAULT '[]',
     -- Absolute path of the folder the agent runs in; NULL means the Gloss workspace.
     project_dir TEXT,
+    -- The agent's working mode inside project_dir (a CLI mode id); NULL means read-only.
+    mode TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

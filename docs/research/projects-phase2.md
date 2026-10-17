@@ -1,75 +1,56 @@
-# Project folders, phase 2: letting agents edit
+# Project folders, phase 2: modes and the agent's requests
 
-Phase 1 binds a conversation to a folder with read-only file tools. This note
-gathers what phase 2, letting the agent change files, would need. Nothing
-here is implemented.
+Phase 1 binds a conversation to a folder with read-only file tools. Phase 2
+lets the user pick a working mode the CLI offers, and relays the agent's
+permission prompts and questions where the CLI can hand them to a host.
+This note records what each CLI offers and what was built on it; the
+protocol details Gloss relies on are in `docs/agents.md`.
+
+Verified from `--help` and live runs on this machine on 2026-10-17, except
+Codex, which is not installed; its details come from its documentation.
 
 ## What each CLI offers
 
-Verified from `--help` on this machine on 2026-10-17, except Codex, which is
-not installed; its flags come from its documentation.
-
-| Agent | Read-only today | Edit mode | Also runs commands? |
+| Agent | Modes | Can hand prompts to a host headlessly? | Questions to the user |
 | --- | --- | --- | --- |
-| Claude Code | `--restricted --tools Read,Glob,Grep,LS` with `--permission-mode dontAsk --permission-prompts none` | add `Edit,Write,MultiEdit,NotebookEdit` to `--tools`/`--allowedTools` and use `--permission-mode acceptEdits`, which approves edits inside the working directories (`--add-dir` extends them) | Only if `Bash` is added to the tool list; `--restricted` keeps it out otherwise. `bypassPermissions` is refused under `--restricted`. |
-| Pi | `--tools read,grep,find,ls` | `--tools read,grep,find,ls,edit,write` | `bash` is a separate tool name; leave it out. |
-| Codex CLI | `--sandbox read-only --ask-for-approval never` | `--sandbox workspace-write --ask-for-approval never` (`--full-auto` is the same pair); writes are confined to the cwd and its temp dirs, network stays off inside the sandbox | Commands run inside the sandbox in both modes; there is no flag to disable them. |
-| Gemini CLI | `--approval-mode plan` | `--approval-mode auto_edit`, which auto-approves the edit tools and refuses everything else headlessly (no prompt is possible) | `yolo` approves shell too; not wanted. |
-| Cursor Agent | `--mode ask` | no edit-only mode: dropping `--mode` gives the default agent mode, which edits and runs commands subject to its own allowlist; `--force`/`--yolo` lift that | Yes in the default mode; cannot be separated from edits. |
+| Claude Code 2.1.302 | `--permission-mode` manual, acceptEdits, auto, plan, dontAsk (bypassPermissions refused under `--restricted`) | Yes: `--permission-prompt-tool stdio` with stream-json in and out; `control_request` / `control_response` lines, suggestions to switch mode included | Yes: `AskUserQuestion` goes through the same channel with `requires_user_interaction` |
+| Gemini CLI 0.49 | `--approval-mode` default, auto_edit, yolo, plan | Not in `-p` mode. Its ACP mode (`gemini --acp`, JSON-RPC over stdio) does: `session/request_permission` with `allow_once`/`allow_always`/`reject_once`/`reject_always` options, modes advertised in the session with `session/set_mode` to switch | Through ACP only |
+| Codex CLI | `--sandbox` read-only, workspace-write, danger-full-access; `--ask-for-approval never` in exec | Not in `codex exec`, which never prompts. `codex app-server` (JSON-RPC over stdio) does: `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, decisions accept / acceptForSession / decline; `turn/start` takes `approvalPolicy` and `sandboxPolicy` per turn | `tool/requestUserInput` (experimental) in the app server |
+| Cursor Agent 2026.10.16 | `--mode` plan, ask; agent mode without the flag; `--force` for commands | No: print mode writes files without asking and rejects shell commands outright (observed: the agent retries, then gives up) | No |
+| Pi 0.79 | Tool sets only (`--tools`) | Not in print mode. `pi --mode rpc` keeps a process alive with `prompt` commands and `extension_ui_request` / `extension_ui_response` for select, confirm and input dialogs | `ask_question` tool, through RPC mode |
 
-So three agents have a clean "edit files, no shell" mode (Claude, Pi,
-Gemini), Codex always allows sandboxed commands, and Cursor cannot edit
-without also being allowed to run commands. Phase 2 should probably offer
-editing for Claude, Pi and Gemini first, Codex with a note about sandboxed
-commands, and leave Cursor read-only.
+## What was built
 
-## Showing the user what changed
+- Modes are read from each CLI's help output at detection time and shown
+  in a picker in the header of a project-bound conversation; the chosen id
+  is stored on the conversation and mapped to the CLI's flag on every
+  spawn, so switching mid-conversation applies on the next turn, resumed
+  session included.
+- The engine keeps an agent's stdin open and pauses the idle timeout while
+  a request is pending; adapters turn CLI-specific requests into a common
+  card (permission or question) and encode the answer back.
+- Claude Code is wired up on its stdio protocol. The others get modes but
+  no relay: Gemini's `default` mode fails on anything needing approval
+  headlessly, Cursor's print mode never asks, Codex and Pi never prompt in
+  exec/print mode.
 
-The point of a per-conversation edit switch is that the user sees every
-change the agent made, in the app, as it lands.
+## Next steps
 
-- **Git folders.** Record `HEAD` and the working-tree state when the turn
-  starts, then after the turn show `git status --porcelain` plus
-  `git diff` (and `git diff --no-index` against `/dev/null` for new files).
-  Shell out to `git` rather than linking libgit2, since every machine with
-  these CLIs has git. Show the diff in a side pane like the artifact pane,
-  file by file, with the turn that produced it. Offer "revert this turn's
-  changes" through `git checkout -- <files>` and deleting the new files,
-  only when the files were clean before the turn.
-- **Folders without git.** Snapshot the tree cheaply before the turn: path,
-  size and mtime of every file (skip `node_modules`, `target`, `.git` and
-  the like), then compare after. Changed files can be diffed against a copy
-  taken before the turn for files under a size limit; above it, just name
-  them. No revert without git.
-- **Attribution.** Each turn's diff summary (files added, changed, deleted,
-  lines) is stored with the assistant turn so the transcript can show a
-  "changed 3 files" line that opens the pane later.
+1. **Changed-files view.** After an editing turn in a git folder, show
+   `git status --porcelain` and `git diff` for the turn in a side pane, with
+   a revert per turn (`git checkout -- <files>` plus removing new files) when
+   the files were clean before the turn. Folders without git get a snapshot
+   of path, size and mtime before and after the turn and a list of changes.
+2. **Gemini over ACP** for prompts and mode switching in the same session.
+3. **Codex over the app server**, which also gives per-turn mode changes.
+4. **Pi over RPC mode** for its `ask_question` tool and extension dialogs.
+5. **Concurrent edits.** Warn when a second edit-enabled conversation on the
+   same folder starts a turn while another is running.
 
-## Guard rails
-
-- **Per-conversation switch, off by default**, with a confirmation naming
-  the folder the first time it is turned on. Phase 1's read-only bound
-  conversation stays the default.
-- **Never outside the folder.** Claude's `--restricted` already confines its
-  file tools; Codex's sandbox does too; Pi and Gemini rely on the system
-  note and the cwd, so the diff check above is also the safety net: files
-  outside the folder cannot be shown or reverted, so the note must say so.
-- **Project hooks and settings.** `--restricted` makes Claude skip the
-  project's settings files and hooks even in edit mode. Gemini loads the
-  project's `GEMINI.md`; Pi loads its own config. Keep the one-line warning
-  from phase 1 in the folder picker.
-- **Concurrent edits.** One running turn per conversation is already
-  enforced; two conversations bound to the same folder could edit at once.
-  Warn when a second edit-enabled conversation on the same folder starts a
-  turn while another is running.
-- **Dirty trees.** If the folder has uncommitted changes when the switch is
-  turned on, say so, since a later revert could not tell the agent's changes
-  from the user's.
-
-## Open questions for the user
-
-1. Edit mode for Claude, Pi and Gemini only at first, or also Codex with its
-   sandboxed commands?
-2. Should a revert be offered at all in the first version, or only the diff?
-3. Is a folder without git acceptable for editing, or should edit mode
-   require a git repository so every change is revertable?
+Sources: [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes),
+[Gemini CLI ACP mode](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/acp-mode.md),
+[ACP tool calls](https://agentclientprotocol.com/protocol/tool-calls),
+[ACP session modes](https://agentclientprotocol.com/protocol/session-modes),
+[Codex app server](https://learn.chatgpt.com/docs/app-server),
+[Cursor CLI parameters](https://cursor.com/docs/cli/reference/parameters),
+Pi's `docs/rpc.md` in the installed package.

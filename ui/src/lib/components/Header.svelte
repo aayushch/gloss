@@ -52,6 +52,20 @@
 				<button type="button" class="unbind" title="Use the Gloss workspace instead" aria-label="Remove folder" onclick={() => app.clearFolder()}><Icon name="x" size={11} /></button>
 			{/if}
 		</span>
+		{#if app.activeModes.length}
+			<select
+				class="mode"
+				title={app.activeModes.find((m) => m.id === app.activeMode)?.description ?? 'Reads files only; never changes them'}
+				aria-label="Working mode"
+				value={app.activeMode ?? 'read-only'}
+				onchange={(e) => app.setMode(e.currentTarget.value === 'read-only' ? null : e.currentTarget.value)}
+			>
+				<option value="read-only">Read only</option>
+				{#each app.activeModes as m (m.id)}
+					<option value={m.id}>{m.label}</option>
+				{/each}
+			</select>
+		{/if}
 	{:else if app.draft}
 		<button type="button" class="tagbtn" title="Run the agent inside a folder of yours, read-only" onclick={() => app.chooseFolder()}>
 			<Icon name="folder" size={12} />
@@ -230,6 +244,16 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.mode {
+		height: 24px;
+		padding: 0 6px;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		background: var(--surface);
+		color: var(--text-2);
+		font-size: 11.5px;
+		flex: none;
 	}
 	.unbind {
 		display: inline-flex;

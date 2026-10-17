@@ -19,10 +19,12 @@ const conv: Conversation = {
 	tags: [],
 	clarificationCount: 2,
 	projectDir: null,
+	mode: null,
 	createdAt: Date.UTC(2026, 9, 14),
 	updatedAt: 0,
 	agentSessionId: null,
 	running: false,
+	pendingRequest: null,
 	turns: [
 		turn('t1', 'user', 'Question?'),
 		reply,

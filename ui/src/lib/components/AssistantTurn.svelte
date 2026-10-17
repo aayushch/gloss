@@ -10,6 +10,7 @@
 	import BlockView from './BlockView.svelte';
 	import Icon from './Icon.svelte';
 	import Pending from './Pending.svelte';
+	import RequestCard from './RequestCard.svelte';
 	import TurnMeta from './TurnMeta.svelte';
 
 	let { turn, userTurn, conv, threads }: { turn: Turn; userTurn: Turn | undefined; conv: Conversation; threads: Map<string, Thread> } = $props();
@@ -31,8 +32,12 @@
 	{/each}
 
 	{#if running}
-		{#if !turn.text}<Pending />{/if}
-		{#if app.activity[turn.id]}<ActivityLine activity={app.activity[turn.id]} />{/if}
+		{#if app.requests[turn.id]}
+			<RequestCard request={app.requests[turn.id]} onanswer={(a) => app.answer(turn.id, a)} />
+		{:else}
+			{#if !turn.text}<Pending />{/if}
+			{#if app.activity[turn.id]}<ActivityLine activity={app.activity[turn.id]} />{/if}
+		{/if}
 	{:else if turn.status === 'error'}
 		<div class="banner">
 			<div class="msg"><strong>The agent failed.</strong> {turn.error ?? 'No details were reported.'}</div>

@@ -1,4 +1,9 @@
-//! Claude Code adapter (`claude -p --output-format stream-json`).
+//! Claude Code adapter (`claude -p --input-format stream-json --output-format stream-json`).
+//!
+//! The prompt goes in as one stream-json user message on stdin and stdin
+//! stays open: with `--permission-prompt-tool stdio` Claude Code writes a
+//! `control_request` line whenever a tool call needs approval or it asks the
+//! user a question, and waits for the matching `control_response` on stdin.
 
 use std::path::PathBuf;
 
@@ -43,6 +48,25 @@ fn stream_json_message(req: &SpawnRequest) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Tools pre-approved in every conversation: reading inside the folder and
+/// the web tools. Edits and commands are never pre-approved; the permission
+/// mode decides whether they run, prompt, or are refused.
+const READ_TOOLS: &[&str] = &["Read", "Glob", "Grep", "LS"];
+const EDIT_TOOLS: &[&str] = &["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+const WEB_TOOLS: &[&str] = &["WebSearch", "WebFetch"];
+
+/// What each permission mode lets Claude do without asking, for the mode
+/// picker. The list of modes itself comes from `claude --help`; a mode the
+/// table does not know is shown by its id.
+const MODE_NOTES: &[(&str, &str, &str, bool)] = &[
+    ("manual", "Manual", "Asks before every edit and command", true),
+    ("default", "Manual", "Asks before every edit and command", true),
+    ("acceptEdits", "Accept edits", "Edits files without asking; asks before commands", true),
+    ("auto", "Auto", "A safety classifier approves actions instead of you", true),
+    ("plan", "Plan", "Reads and plans only; no edits", false),
+    ("dontAsk", "Don't ask", "Refuses anything that would need approval", false),
+];
+
 /// Aliases Claude Code accepts for `--model`. The settings file's `model`
 /// value picks the default when it names one of them.
 const MODELS: &[(&str, &str, &str)] = &[
@@ -73,6 +97,8 @@ impl AgentAdapter for Claude {
             version,
             supports_model_select: true,
             supports_web_search: true,
+            modes: self.modes(env),
+            supports_requests: self.supports_requests(),
         }
     }
 
@@ -98,29 +124,80 @@ impl AgentAdapter for Claude {
             .collect()
     }
 
+    fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
+        let Some(path) = resolve(env) else { return Vec::new() };
+        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        flag_choices(&help, "--permission-mode")
+            .into_iter()
+            // Every run is `--restricted`, which refuses bypassPermissions.
+            .filter(|id| id != "bypassPermissions")
+            .map(|id| {
+                let note = MODE_NOTES.iter().find(|(m, ..)| *m == id);
+                AgentMode {
+                    label: note.map(|n| n.1.to_string()).unwrap_or_else(|| id.clone()),
+                    description: note.map(|n| n.2.to_string()).unwrap_or_default(),
+                    writes: note.map(|n| n.3).unwrap_or(true),
+                    id,
+                }
+            })
+            .collect()
+    }
+
+    fn supports_requests(&self) -> bool {
+        true
+    }
+
+    fn encode_answer(&self, request: &AgentRequest, answer: &RequestAnswer) -> Option<Vec<u8>> {
+        let input = request.raw.get("input").cloned().unwrap_or_else(|| serde_json::json!({}));
+        let response = match answer {
+            RequestAnswer::Permission { allow: true, set_mode, .. } => {
+                let mut r = serde_json::json!({ "behavior": "allow", "updatedInput": input });
+                if let Some(mode) = set_mode {
+                    r["updatedPermissions"] = serde_json::json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
+                }
+                r
+            }
+            RequestAnswer::Permission { allow: false, message, .. } => serde_json::json!({
+                "behavior": "deny",
+                "message": message.clone().filter(|m| !m.trim().is_empty()).unwrap_or_else(|| "The user declined this action.".into()),
+            }),
+            RequestAnswer::Question { answers } => {
+                let mut updated = input;
+                updated["answers"] = serde_json::to_value(answers).ok()?;
+                serde_json::json!({ "behavior": "allow", "updatedInput": updated })
+            }
+        };
+        let line = serde_json::json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": request.id, "response": response }
+        });
+        let mut out = serde_json::to_vec(&line).ok()?;
+        out.push(b'\n');
+        Some(out)
+    }
+
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Claude, resolve)?;
-        // Images travel as a stream-json user message on stdin, the only
-        // headless route Claude Code offers for image content; text-only
-        // turns pass the prompt as an argument.
-        let stdin = if req.images.is_empty() { None } else { Some(stream_json_message(req)?) };
-        let mut args: Vec<String> = vec!["-p".into()];
-        if stdin.is_some() {
-            args.extend(["--input-format".into(), "stream-json".into()]);
-        } else {
-            args.push(req.prompt.clone());
-        }
-        args.extend([
+        let stdin = Some(stream_json_message(req)?);
+        let mut args: Vec<String> = vec![
+            "-p".into(),
+            "--input-format".into(),
+            "stream-json".into(),
             "--output-format".into(),
             "stream-json".into(),
             "--verbose".into(),
             "--include-partial-messages".into(),
-            "--permission-mode".into(),
-            "dontAsk".into(),
-            "--permission-prompts".into(),
-            "none".into(),
             "--strict-mcp-config".into(),
-        ]);
+            "--permission-prompt-tool".into(),
+            "stdio".into(),
+            "--permission-prompts".into(),
+            "host".into(),
+        ];
+        // Read-only (no mode) runs as manual: nothing but reads is
+        // pre-approved and no edit tool exists, so the only prompt that can
+        // reach the user is a question.
+        let mode = req.mode.as_deref().filter(|_| req.project).unwrap_or("default");
+        args.extend(["--permission-mode".into(), mode.into()]);
         match &req.agent_session_id {
             Some(sid) => args.extend(["--resume".into(), sid.clone()]),
             None => args.extend(["--session-id".into(), req.new_session_id.clone()]),
@@ -128,22 +205,29 @@ impl AgentAdapter for Claude {
         if let Some(model) = req.model.as_deref().filter(|m| !m.is_empty()) {
             args.extend(["--model".into(), model.to_string()]);
         }
-        // Tool policy: web tools when the toggle is on, the read-only file
-        // tools inside a project folder, nothing otherwise. `--restricted`
-        // confines the file tools to the cwd, drops the command-running tools
-        // and skips the project's own settings files and hooks.
-        let mut tools: Vec<&str> = Vec::new();
+        // Tool policy. Questions are always possible. Inside a project
+        // folder `--restricted` confines the file tools to the folder and
+        // skips the project's own settings files and hooks; the read tools
+        // are pre-approved, and the edit tools exist only once a mode is
+        // chosen, with the mode deciding whether they prompt.
+        let mut tools: Vec<&str> = vec!["AskUserQuestion"];
+        let mut allowed: Vec<&str> = Vec::new();
         if req.project {
             args.push("--restricted".into());
-            tools.extend(["Read", "Glob", "Grep", "LS"]);
+            tools.extend(READ_TOOLS);
+            allowed.extend(READ_TOOLS);
+            if req.mode.is_some() {
+                tools.extend(EDIT_TOOLS);
+            }
         }
         if req.web_search {
-            tools.extend(["WebSearch", "WebFetch"]);
+            tools.extend(WEB_TOOLS);
+            allowed.extend(WEB_TOOLS);
         }
         args.extend(["--tools".into(), tools.join(",")]);
-        if !tools.is_empty() {
+        if !allowed.is_empty() {
             args.push("--allowedTools".into());
-            args.extend(tools.iter().map(|t| t.to_string()));
+            args.extend(allowed.iter().map(|t| t.to_string()));
         }
         if !req.system_note.is_empty() {
             args.extend(["--append-system-prompt".into(), req.system_note.clone()]);
@@ -159,6 +243,7 @@ impl AgentAdapter for Claude {
             env: vec![],
             cwd: req.cwd.clone(),
             stdin,
+            interactive: true,
         })
     }
 
@@ -180,10 +265,96 @@ impl AgentAdapter for Claude {
             }
             "stream_event" => self.stream_event(v.get("event").unwrap_or(&Value::Null)),
             "assistant" => self.assistant_message(&v),
+            "control_request" => control_request(&v).into_iter().map(AgentEvent::Request).collect(),
             "result" => self.result(&v),
             _ => vec![],
         }
     }
+}
+
+/// A `control_request` line turned into something the user can answer. A
+/// question tool call becomes a question card; any other tool call becomes
+/// a permission card with the call described in words.
+fn control_request(v: &Value) -> Option<AgentRequest> {
+    let id = str_of(v, "request_id")?.to_string();
+    let request = v.get("request")?;
+    let input = request.get("input").cloned().unwrap_or(Value::Null);
+    let tool = str_of(request, "tool_name").unwrap_or_else(|| str_of(request, "subtype").unwrap_or("request"));
+    let kind = if tool == "AskUserQuestion" {
+        let questions = input
+            .get("questions")
+            .and_then(Value::as_array)
+            .map(|qs| {
+                qs.iter()
+                    .map(|q| Question {
+                        question: str_of(q, "question").unwrap_or("").to_string(),
+                        header: str_of(q, "header").unwrap_or("").to_string(),
+                        multi_select: q.get("multiSelect").and_then(Value::as_bool).unwrap_or(false),
+                        options: q
+                            .get("options")
+                            .and_then(Value::as_array)
+                            .map(|os| {
+                                os.iter()
+                                    .map(|o| QuestionOption {
+                                        label: str_of(o, "label").unwrap_or("").to_string(),
+                                        description: str_of(o, "description").unwrap_or("").to_string(),
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        RequestKind::Question { questions }
+    } else {
+        let suggestions = request
+            .get("permission_suggestions")
+            .and_then(Value::as_array)
+            .map(|ss| {
+                ss.iter()
+                    .filter(|s| str_of(s, "type") == Some("setMode"))
+                    .filter_map(|s| str_of(s, "mode"))
+                    .map(|m| ModeSuggestion {
+                        mode: m.to_string(),
+                        label: MODE_NOTES.iter().find(|(id, ..)| *id == m).map(|n| n.1.to_string()).unwrap_or_else(|| m.to_string()),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        RequestKind::Permission {
+            tool: tool.to_string(),
+            title: tool_label(tool, Some(&input)),
+            detail: permission_detail(tool, &input),
+            suggestions,
+        }
+    };
+    Some(AgentRequest { id, kind, raw: request.clone() })
+}
+
+/// The part of a tool call worth showing before approving it: the content
+/// to write, the replacement for an edit, the command to run.
+fn permission_detail(tool: &str, input: &Value) -> Option<String> {
+    let cut = |s: &str| crate::prompt::truncate(s, 2000);
+    let text = match tool {
+        "Write" => str_of(input, "content").map(cut),
+        "Edit" | "MultiEdit" => {
+            let old = str_of(input, "old_string").unwrap_or("");
+            let new = str_of(input, "new_string").unwrap_or("");
+            if old.is_empty() && new.is_empty() {
+                None
+            } else {
+                Some(cut(&format!("- {}\n+ {}", old, new)))
+            }
+        }
+        "Bash" => {
+            let cmd = str_of(input, "command").unwrap_or("");
+            let desc = str_of(input, "description").unwrap_or("");
+            Some(cut(&if desc.is_empty() { cmd.to_string() } else { format!("{}\n{}", cmd, desc) }))
+        }
+        _ => serde_json::to_string_pretty(input).ok().map(|s| cut(&s)),
+    };
+    text.filter(|t| !t.trim().is_empty())
 }
 
 impl Claude {
@@ -352,18 +523,72 @@ mod tests {
         let spec = a.build_command(&req("hi"), &env).unwrap();
         let args = spec.args.join(" ");
         assert!(args.contains("--session-id 11111111-2222-3333-4444-555555555555"));
-        assert!(args.contains("--tools WebSearch,WebFetch --allowedTools WebSearch WebFetch"));
-        assert!(args.contains("--permission-mode dontAsk --permission-prompts none --strict-mcp-config"));
+        assert!(args.contains("--tools AskUserQuestion,WebSearch,WebFetch --allowedTools WebSearch WebFetch"));
+        assert!(args.contains("--permission-prompt-tool stdio --permission-prompts host --permission-mode default"));
+        assert!(args.contains("--input-format stream-json"));
         assert!(args.contains("-n Title"));
+        assert!(spec.interactive);
+        let prompt = String::from_utf8(spec.stdin.clone().unwrap()).unwrap();
+        assert!(prompt.contains("\"hi\""));
+        assert!(!spec.args.contains(&"hi".to_string()));
         let mut r = req("again");
         r.agent_session_id = Some("abc".into());
         r.web_search = false;
         r.model = Some("haiku".into());
         let spec = a.build_command(&r, &env).unwrap();
         assert!(spec.args.windows(2).any(|w| w == ["--resume", "abc"]));
-        assert!(spec.args.windows(2).any(|w| w == ["--tools", ""]));
+        assert!(spec.args.windows(2).any(|w| w == ["--tools", "AskUserQuestion"]));
+        assert!(!spec.args.contains(&"--allowedTools".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--model", "haiku"]));
         assert!(!spec.args.contains(&"-n".to_string()));
+    }
+
+    #[test]
+    fn control_requests_become_cards_and_answers_go_back_as_control_responses() {
+        let line = r#"{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"/p/a.txt","content":"hi"},"permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]}}"#;
+        let mut a = Claude::default();
+        let ev = a.parse_line(line);
+        let AgentEvent::Request(req) = &ev[0] else { panic!("expected a request") };
+        assert_eq!(req.id, "r1");
+        let RequestKind::Permission { tool, detail, suggestions, .. } = &req.kind else { panic!() };
+        assert_eq!(tool, "Write");
+        assert_eq!(detail.as_deref(), Some("hi"));
+        assert_eq!(suggestions[0].mode, "acceptEdits");
+        let bytes = a
+            .encode_answer(req, &RequestAnswer::Permission { allow: true, message: None, set_mode: Some("acceptEdits".into()) })
+            .unwrap();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["type"], "control_response");
+        assert_eq!(v["response"]["request_id"], "r1");
+        assert_eq!(v["response"]["response"]["behavior"], "allow");
+        assert_eq!(v["response"]["response"]["updatedInput"]["content"], "hi");
+        assert_eq!(v["response"]["response"]["updatedPermissions"][0]["mode"], "acceptEdits");
+        let bytes = a.encode_answer(req, &RequestAnswer::Permission { allow: false, message: Some("no".into()), set_mode: None }).unwrap();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["response"]["response"]["behavior"], "deny");
+        assert_eq!(v["response"]["response"]["message"], "no");
+
+        let line = r#"{"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[{"question":"Which?","header":"Pick","options":[{"label":"A","description":"a"},{"label":"B","description":"b"}],"multiSelect":false}]}}}"#;
+        let ev = a.parse_line(line);
+        let AgentEvent::Request(req) = &ev[0] else { panic!() };
+        let RequestKind::Question { questions } = &req.kind else { panic!() };
+        assert_eq!(questions[0].options.len(), 2);
+        let answers = std::collections::HashMap::from([("Which?".to_string(), "B".to_string())]);
+        let bytes = a.encode_answer(req, &RequestAnswer::Question { answers }).unwrap();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["response"]["response"]["updatedInput"]["answers"]["Which?"], "B");
+        assert_eq!(v["response"]["response"]["updatedInput"]["questions"][0]["question"], "Which?");
+    }
+
+    #[test]
+    fn modes_come_from_the_help_text() {
+        let env = ShellEnv::from_process();
+        if resolve(&env).is_none() {
+            return;
+        }
+        let modes = Claude::default().modes(&env);
+        assert!(modes.iter().any(|m| m.id == "acceptEdits"));
+        assert!(!modes.iter().any(|m| m.id == "bypassPermissions"));
     }
 
     #[test]
@@ -377,9 +602,17 @@ mod tests {
         let spec = Claude::default().build_command(&r, &env).unwrap();
         let args = spec.args.join(" ");
         assert!(args.contains("--restricted"));
-        assert!(args.contains("--tools Read,Glob,Grep,LS,WebSearch,WebFetch --allowedTools Read Glob Grep LS WebSearch WebFetch"));
+        assert!(args.contains("--permission-mode default"));
+        assert!(args.contains("--tools AskUserQuestion,Read,Glob,Grep,LS,WebSearch,WebFetch --allowedTools Read Glob Grep LS WebSearch WebFetch"));
         assert!(!args.contains("Bash"));
         assert!(!args.contains("Edit"));
+        r.mode = Some("acceptEdits".into());
+        let spec = Claude::default().build_command(&r, &env).unwrap();
+        let args = spec.args.join(" ");
+        assert!(args.contains("--permission-mode acceptEdits"));
+        assert!(args.contains("--tools AskUserQuestion,Read,Glob,Grep,LS,Edit,Write,MultiEdit,NotebookEdit,Bash,WebSearch,WebFetch"));
+        assert!(args.contains("--allowedTools Read Glob Grep LS WebSearch WebFetch"));
+        assert!(!args.contains("--allowedTools Read Glob Grep LS Edit"));
     }
 
     #[test]

@@ -20,6 +20,18 @@ pub struct CommandSpec {
     pub env: Vec<(String, String)>,
     pub cwd: PathBuf,
     pub stdin: Option<Vec<u8>>,
+    /// Keep stdin open after the initial bytes so answers to the agent's
+    /// requests can be written while it runs.
+    pub interactive: bool,
+}
+
+/// What `run_lines` needs beyond the spec when the process talks back:
+/// answers arrive on `input` and are written to stdin in order, and the
+/// idle timer stops counting while `waiting` is set, because an agent that
+/// is waiting for the user prints nothing.
+pub struct Interaction {
+    pub input: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+    pub waiting: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Why and how the process ended.
@@ -71,6 +83,22 @@ pub async fn run_lines<F>(
     base_env: &HashMap<String, String>,
     idle_timeout: Duration,
     cancel: CancellationToken,
+    on_line: F,
+) -> std::io::Result<ProcessOutcome>
+where
+    F: FnMut(&str),
+{
+    run_lines_with(spec, base_env, idle_timeout, cancel, None, on_line).await
+}
+
+/// `run_lines` for a process that may ask the user something: `interaction`
+/// carries the answers and the waiting flag.
+pub async fn run_lines_with<F>(
+    spec: &CommandSpec,
+    base_env: &HashMap<String, String>,
+    idle_timeout: Duration,
+    cancel: CancellationToken,
+    interaction: Option<Interaction>,
     mut on_line: F,
 ) -> std::io::Result<ProcessOutcome>
 where
@@ -82,17 +110,33 @@ where
         .env_clear()
         .envs(base_env)
         .envs(spec.env.iter().cloned())
-        .stdin(if spec.stdin.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdin(if spec.stdin.is_some() || spec.interactive { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
     let mut child = cmd.spawn()?;
-    if let (Some(bytes), Some(mut stdin)) = (spec.stdin.clone(), child.stdin.take()) {
+    let (answers, waiting) = match interaction {
+        Some(i) => (Some(i.input), Some(i.waiting)),
+        None => (None, None),
+    };
+    if let Some(mut stdin) = child.stdin.take() {
         // Written on its own task so a large payload cannot deadlock against
         // a child that starts producing output before it has read it all.
+        // An interactive stdin then stays open and forwards every answer
+        // until the sender side is dropped when the turn ends.
+        let initial = spec.stdin.clone();
         tokio::spawn(async move {
-            let _ = stdin.write_all(&bytes).await;
+            if let Some(bytes) = initial {
+                let _ = stdin.write_all(&bytes).await;
+            }
+            if let Some(mut rx) = answers {
+                while let Some(bytes) = rx.recv().await {
+                    if stdin.write_all(&bytes).await.is_err() {
+                        break;
+                    }
+                }
+            }
             let _ = stdin.shutdown().await;
         });
     }
@@ -130,13 +174,18 @@ where
 
     loop {
         buf.clear();
+        // While the agent waits for the user there is nothing to time out.
+        let timeout = match &waiting {
+            Some(w) if w.load(std::sync::atomic::Ordering::Relaxed) => Duration::from_secs(24 * 3600),
+            _ => idle_timeout,
+        };
         let read = tokio::select! {
             _ = cancel.cancelled() => {
                 outcome.cancelled = true;
                 terminate(&mut child).await;
                 break;
             }
-            res = tokio::time::timeout(idle_timeout, read_line_bounded(&mut reader, &mut buf, &mut over_limit)) => res,
+            res = tokio::time::timeout(timeout, read_line_bounded(&mut reader, &mut buf, &mut over_limit)) => res,
         };
         match read {
             Err(_elapsed) => {
@@ -238,6 +287,7 @@ mod tests {
             env: vec![],
             cwd: std::env::temp_dir(),
             stdin: None,
+            interactive: false,
         }
     }
 

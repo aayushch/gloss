@@ -69,6 +69,98 @@ pub struct AgentInfo {
     pub supports_model_select: bool,
     /// False when the CLI has no web search tool at all (Pi).
     pub supports_web_search: bool,
+    /// Working modes the CLI offers for a project-bound conversation, read
+    /// from its own help output. Empty when the CLI is missing or has none;
+    /// read-only is always available and is not listed here.
+    pub modes: Vec<AgentMode>,
+    /// True when the adapter relays the agent's permission prompts and
+    /// questions to the user instead of answering them itself.
+    pub supports_requests: bool,
+}
+
+/// One way of running an agent inside a project folder, as the CLI names it.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentMode {
+    /// Value passed to the CLI's mode flag.
+    pub id: String,
+    pub label: String,
+    /// What the mode lets the agent do without asking, in the CLI's own words where it has them.
+    pub description: String,
+    /// True when the agent may change files in this mode.
+    pub writes: bool,
+}
+
+/// Something the agent needs from the user before it can go on: approval for
+/// a tool call, or answers to questions it asked.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRequest {
+    pub id: String,
+    #[serde(flatten)]
+    pub kind: RequestKind,
+    /// The CLI's own payload for the request, kept to build the answer; the
+    /// frontend does not need it.
+    #[serde(skip)]
+    pub raw: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RequestKind {
+    /// The agent wants to run a tool the current mode does not pre-approve.
+    Permission {
+        /// Tool name as the CLI reports it, e.g. "Write" or "Bash".
+        tool: String,
+        /// Short line for the card, e.g. the file or the command.
+        title: String,
+        /// Longer preview, e.g. the content to be written.
+        detail: Option<String>,
+        /// Modes the CLI suggests switching to so this kind of call stops prompting.
+        suggestions: Vec<ModeSuggestion>,
+    },
+    /// The agent asked the user one or more questions.
+    Question { questions: Vec<Question> },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModeSuggestion {
+    pub mode: String,
+    pub label: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    pub question: String,
+    /// Short chip the agent gave the question, if any.
+    pub header: String,
+    pub options: Vec<QuestionOption>,
+    pub multi_select: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    pub description: String,
+}
+
+/// The user's reply to an `AgentRequest`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RequestAnswer {
+    Permission {
+        allow: bool,
+        /// Why the call was refused, passed to the agent.
+        message: Option<String>,
+        /// A suggested mode the user accepted along with the call; the
+        /// conversation switches to it for later turns too.
+        set_mode: Option<String>,
+    },
+    /// Chosen labels (or typed text) per question, keyed by the question text.
+    Question { answers: std::collections::HashMap<String, String> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -248,6 +340,9 @@ pub struct ConversationSummary {
     /// Absolute path of the folder the agent runs in, with read-only file
     /// tools; None means the private Gloss workspace with no file tools.
     pub project_dir: Option<String>,
+    /// The agent's working mode inside the project folder, one of the ids in
+    /// `AgentInfo::modes`; None is read-only. Ignored without a project folder.
+    pub mode: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -321,6 +416,9 @@ pub struct Conversation {
     pub agent_session_id: Option<String>,
     /// True while an agent process is running for this conversation.
     pub running: bool,
+    /// The request the running agent is waiting on, so a reopened
+    /// conversation shows the card again.
+    pub pending_request: Option<AgentRequest>,
     pub turns: Vec<Turn>,
     pub clarifications: Vec<Clarification>,
 }
@@ -390,6 +488,14 @@ pub enum TurnEvent {
     Replace { text: String },
     /// Something the agent is doing besides writing text, for the activity line.
     Activity { kind: ActivityKind, label: String },
+    /// The agent is waiting for the user: approval for a tool call or answers
+    /// to questions. The turn stays running until `answer_request` is called.
+    Request { request: AgentRequest },
+    /// The request was answered (or the turn ended); the card goes away.
+    RequestResolved {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
     /// Final row for the turn with status Done.
     Done { turn: Turn },
     /// Final row with status Error; `error` repeats `turn.error` for convenience.

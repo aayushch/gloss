@@ -39,6 +39,9 @@ pub struct SpawnRequest {
     /// their read-only file tools. False means no file tools at all.
     pub project: bool,
     pub pi_session_dir: PathBuf,
+    /// The CLI's working mode inside the project folder (an id from the
+    /// adapter's `modes`); None is read-only. Only meaningful with `project`.
+    pub mode: Option<String>,
     /// Short note added to the agent's system prompt where the CLI allows it.
     pub system_note: String,
     /// Conversation title, for agents that can name their session.
@@ -81,6 +84,9 @@ pub enum AgentEvent {
     Model(String),
     /// The agent reported a failure; the turn ends as an error with this message.
     Error(String),
+    /// The agent is waiting for the user; the answer goes back through
+    /// `AgentAdapter::encode_answer` on the process's stdin.
+    Request(AgentRequest),
     /// The agent signalled the end of the turn.
     Done,
 }
@@ -90,6 +96,21 @@ pub trait AgentAdapter: Send {
     fn info(&self, env: &ShellEnv) -> AgentInfo;
     fn models(&self, env: &ShellEnv) -> Vec<ModelInfo>;
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec>;
+    /// Working modes for project folders, read from the CLI's help output.
+    /// Empty means only read-only is offered.
+    fn modes(&self, _env: &ShellEnv) -> Vec<AgentMode> {
+        Vec::new()
+    }
+    /// True when permission prompts and questions reach the user as
+    /// `AgentEvent::Request`s instead of being refused by the CLI.
+    fn supports_requests(&self) -> bool {
+        false
+    }
+    /// The bytes to write to the process's stdin so it continues after the
+    /// user answered `request`. None when the adapter has no request channel.
+    fn encode_answer(&self, _request: &AgentRequest, _answer: &RequestAnswer) -> Option<Vec<u8>> {
+        None
+    }
     /// Translate one stdout line. Unknown JSON is ignored (empty vec).
     fn parse_line(&mut self, line: &str) -> Vec<AgentEvent>;
     /// Called once stdout is exhausted, for buffered state.
@@ -189,6 +210,54 @@ pub(crate) fn capture_text(env: &ShellEnv, path: &Path, args: &[&str], timeout: 
         .map(|b| String::from_utf8_lossy(&b).to_string())
 }
 
+/// The CLI's help text, cached per binary like the version string. Mode
+/// lists are read from it so Gloss offers exactly what the installed
+/// version supports.
+pub(crate) fn help_text(env: &ShellEnv, path: &Path, args: &[&str]) -> Option<String> {
+    static HELP_CACHE: Mutex<Option<HashMap<(PathBuf, Option<std::time::SystemTime>, Vec<String>), Option<String>>>> =
+        Mutex::new(None);
+    let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    let key = (path.to_path_buf(), mtime, args.iter().map(|a| a.to_string()).collect::<Vec<_>>());
+    if let Some(cache) = HELP_CACHE.lock().unwrap().as_ref() {
+        if let Some(v) = cache.get(&key) {
+            return v.clone();
+        }
+    }
+    let out = capture_text(env, path, args, Duration::from_secs(5)).filter(|s| !s.trim().is_empty());
+    HELP_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, out.clone());
+    out
+}
+
+/// The values a flag accepts, read from help text in either of the two
+/// common layouts: `(choices: "a", "b")` after the flag's description, or
+/// `[possible values: a, b]`. Empty when the flag is not documented.
+pub(crate) fn flag_choices(help: &str, flag: &str) -> Vec<String> {
+    let Some(start) = help.find(flag) else { return Vec::new() };
+    let rest = &help[start..];
+    // The description of one flag ends where the next flag starts.
+    let end = rest[flag.len()..]
+        .find("\n  -")
+        .map(|i| i + flag.len())
+        .unwrap_or(rest.len());
+    let section = &rest[..end];
+    let list = if let Some(i) = section.find("choices:") {
+        let tail = &section[i + "choices:".len()..];
+        let tail = &tail[..tail.find(']').or_else(|| tail.find(')')).unwrap_or(tail.len())];
+        tail.split(',').map(|p| p.trim().trim_matches('"').to_string()).collect::<Vec<_>>()
+    } else if let Some(i) = section.find("possible values:") {
+        let tail = &section[i + "possible values:".len()..];
+        let tail = &tail[..tail.find(']').unwrap_or(tail.len())];
+        tail.split(',').map(|p| p.trim().to_string()).collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    // A trailing `default: "x"` in the commander layout is not a choice.
+    list.into_iter()
+        .filter(|v| !v.is_empty() && !v.contains(':'))
+        .map(|v| v.trim_end_matches(']').trim_end_matches(')').to_string())
+        .collect()
+}
+
 pub(crate) fn parse_json(line: &str) -> Option<Value> {
     let t = line.trim();
     if !t.starts_with('{') {
@@ -278,11 +347,23 @@ pub(crate) mod testutil {
             web_search: true,
             cwd: std::env::temp_dir(),
             project: false,
+            mode: None,
             pi_session_dir: std::env::temp_dir(),
             system_note: "note".into(),
             title: Some("Title".into()),
             images: vec![],
         }
+    }
+
+    #[test]
+    fn flag_choices_reads_both_help_layouts() {
+        let commander = "  --permission-mode <mode>  Permission mode to use\n                            (choices: \"acceptEdits\", \"auto\", \"plan\")\n  --other  x";
+        assert_eq!(flag_choices(commander, "--permission-mode"), vec!["acceptEdits", "auto", "plan"]);
+        let yargs = "      --approval-mode  Set the approval mode: default (prompt), plan (read-only)  [string] [choices: \"default\", \"plan\"]\n";
+        assert_eq!(flag_choices(yargs, "--approval-mode"), vec!["default", "plan"]);
+        let clap = "  -s, --sandbox <MODE>  [possible values: read-only, workspace-write, danger-full-access]\n  -h, --help";
+        assert_eq!(flag_choices(clap, "--sandbox"), vec!["read-only", "workspace-write", "danger-full-access"]);
+        assert!(flag_choices("nothing here", "--mode").is_empty());
     }
 
     /// A request carrying one image stored at `<cwd>/attachments/att_1/red.png`.

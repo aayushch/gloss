@@ -18,6 +18,15 @@ pub struct Cursor {
 /// Cursor installs `cursor-agent` and also a generic `agent` symlink. The
 /// generic name is only accepted when it resolves into a cursor-agent install
 /// or prints Cursor's date-stamped build id for `--version`.
+/// The words that follow `key` in the help text, up to the end of that
+/// sentence, with the line-wrapping whitespace collapsed.
+fn help_sentence(help: &str, key: &str) -> String {
+    let Some(i) = help.find(key) else { return String::new() };
+    let rest: String = help[i + key.len()..].split_whitespace().collect::<Vec<_>>().join(" ");
+    let end = rest.find(". ").or_else(|| rest.find(" (default")).or_else(|| rest.find(" --")).unwrap_or(rest.len().min(140));
+    rest[..end].trim().trim_end_matches('.').to_string()
+}
+
 fn resolve(env: &ShellEnv) -> Option<PathBuf> {
     if let Some(p) = env.path_lookup("cursor-agent") {
         return Some(p);
@@ -66,6 +75,8 @@ impl AgentAdapter for Cursor {
             // Passing --model rewrites the user's default in ~/.cursor/cli-config.json.
             supports_model_select: false,
             supports_web_search: false,
+            modes: self.modes(env),
+            supports_requests: self.supports_requests(),
         }
     }
 
@@ -79,6 +90,38 @@ impl AgentAdapter for Cursor {
         parse_cursor_models(&out)
     }
 
+    fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
+        let Some(path) = resolve(env) else { return Vec::new() };
+        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let mut out: Vec<AgentMode> = flag_choices(&help, "--mode")
+            .into_iter()
+            .filter(|id| id != "ask")
+            .map(|id| AgentMode {
+                label: id.clone(),
+                description: help_sentence(&help, &format!("{}:", id)),
+                writes: false,
+                id,
+            })
+            .collect();
+        if help.contains("--mode") {
+            out.push(AgentMode {
+                id: "agent".into(),
+                label: "Agent".into(),
+                description: "Edits files without asking; commands are rejected".into(),
+                writes: true,
+            });
+        }
+        if help.contains("--force") {
+            out.push(AgentMode {
+                id: "force".into(),
+                label: "Agent, run commands".into(),
+                description: help_sentence(&help, "--force"),
+                writes: true,
+            });
+        }
+        out
+    }
+
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Cursor, resolve)?;
         let mut args: Vec<String> = vec![
@@ -87,9 +130,16 @@ impl AgentAdapter for Cursor {
             "--output-format".into(),
             "stream-json".into(),
             "--stream-partial-output".into(),
-            "--mode".into(),
-            "ask".into(),
         ];
+        // Ask mode is read-only. The agent mode has no flag of its own: it is
+        // what runs without `--mode`, and `--force` on top lets it run
+        // commands, which print mode otherwise rejects.
+        match req.mode.as_deref().filter(|_| req.project) {
+            None => args.extend(["--mode".into(), "ask".into()]),
+            Some("agent") => {}
+            Some("force") => args.push("--force".into()),
+            Some(other) => args.extend(["--mode".into(), other.into()]),
+        }
         if let Some(sid) = &req.agent_session_id {
             args.push(format!("--resume={}", sid));
         }
@@ -110,6 +160,7 @@ impl AgentAdapter for Cursor {
             env: vec![],
             cwd: req.cwd.clone(),
             stdin: None,
+            interactive: false,
         })
     }
 
@@ -280,5 +331,11 @@ mod tests {
         assert!(!spec.args.iter().any(|a| a.contains("--model")));
         assert!(spec.args.contains(&"--resume=c1".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--mode", "ask"]));
+        let mut r = req("hi");
+        r.project = true;
+        r.mode = Some("force".into());
+        let spec = Cursor::default().build_command(&r, &env).unwrap();
+        assert!(spec.args.contains(&"--force".to_string()));
+        assert!(!spec.args.contains(&"--mode".to_string()));
     }
 }

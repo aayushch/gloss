@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -25,6 +25,12 @@ const MIGRATE_V1_TO_V2: &str = "
 const MIGRATE_V2_TO_V3: &str = "
     ALTER TABLE conversations ADD COLUMN project_dir TEXT;
     UPDATE schema_version SET version = 3;
+";
+
+/// Version 4 adds the agent's working mode inside that folder.
+const MIGRATE_V3_TO_V4: &str = "
+    ALTER TABLE conversations ADD COLUMN mode TEXT;
+    UPDATE schema_version SET version = 4;
 ";
 
 pub struct Store {
@@ -60,8 +66,13 @@ impl Store {
             Some(1) => {
                 conn.execute_batch(MIGRATE_V1_TO_V2)?;
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
+                conn.execute_batch(MIGRATE_V3_TO_V4)?;
             }
-            Some(2) => conn.execute_batch(MIGRATE_V2_TO_V3)?,
+            Some(2) => {
+                conn.execute_batch(MIGRATE_V2_TO_V3)?;
+                conn.execute_batch(MIGRATE_V3_TO_V4)?;
+            }
+            Some(3) => conn.execute_batch(MIGRATE_V3_TO_V4)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -290,6 +301,7 @@ impl Store {
                 summary,
                 agent_session_id,
                 running: false,
+                pending_request: None,
                 turns,
                 clarifications,
             })
@@ -342,6 +354,15 @@ impl Store {
     pub fn set_model(&self, id: &str, model: &str) -> Result<ConversationSummary> {
         self.with(|c| {
             c.execute("UPDATE conversations SET model = ?2 WHERE id = ?1", params![id, model])?;
+            Ok(())
+        })?;
+        self.get_summary(id)
+    }
+
+    /// Sets the working mode; None means read-only.
+    pub fn set_mode(&self, id: &str, mode: Option<&str>) -> Result<ConversationSummary> {
+        self.with(|c| {
+            c.execute("UPDATE conversations SET mode = ?2 WHERE id = ?1", params![id, mode])?;
             Ok(())
         })?;
         self.get_summary(id)
@@ -618,7 +639,7 @@ impl Store {
 }
 
 const SUMMARY_SELECT: &str = "SELECT c.id, c.title, c.agent, c.model, c.web_search, c.created_at, c.updated_at,
-        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags, c.project_dir
+        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags, c.project_dir, c.mode
      FROM conversations c";
 
 const ATTACHMENT_SELECT: &str =
@@ -639,6 +660,7 @@ fn row_summary(r: &Row<'_>) -> rusqlite::Result<ConversationSummary> {
         pinned: r.get::<_, i64>(8)? != 0,
         tags: serde_json::from_str(&tags).unwrap_or_default(),
         project_dir: r.get(10)?,
+        mode: r.get(11)?,
     })
 }
 

@@ -44,6 +44,8 @@ impl AgentAdapter for Codex {
             version,
             supports_model_select: true,
             supports_web_search: true,
+            modes: self.modes(env),
+            supports_requests: self.supports_requests(),
         }
     }
 
@@ -101,16 +103,38 @@ impl AgentAdapter for Codex {
         out
     }
 
+    fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
+        let Some(path) = resolve(env) else { return Vec::new() };
+        let Some(help) = help_text(env, &path, &["exec", "--help"]) else { return Vec::new() };
+        flag_choices(&help, "--sandbox")
+            .into_iter()
+            .filter(|id| id != "read-only")
+            .map(|id| AgentMode {
+                label: id.replace('-', " "),
+                description: match id.as_str() {
+                    "workspace-write" => "Edits files inside the folder; commands run in the sandbox".into(),
+                    "danger-full-access" => "No sandbox at all".into(),
+                    _ => String::new(),
+                },
+                writes: true,
+                id,
+            })
+            .collect()
+    }
+
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Codex, resolve)?;
         let mut args: Vec<String> = vec!["exec".into()];
         if let Some(tid) = &req.agent_session_id {
             args.extend(["resume".into(), tid.clone()]);
         }
+        // The sandbox level is the mode; headless runs never prompt, so a
+        // chosen level decides what Codex may touch on its own.
+        let sandbox = req.mode.as_deref().filter(|_| req.project).unwrap_or("read-only");
         args.extend([
             "--json".into(),
             "--sandbox".into(),
-            "read-only".into(),
+            sandbox.into(),
             "--ask-for-approval".into(),
             "never".into(),
         ]);
@@ -130,6 +154,7 @@ impl AgentAdapter for Codex {
             env: vec![],
             cwd: req.cwd.clone(),
             stdin: None,
+            interactive: false,
         })
     }
 

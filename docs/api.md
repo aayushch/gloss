@@ -28,6 +28,8 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `rename_conversation` | `id: string, title: string` | `ConversationSummary` | |
 | `delete_conversation` | `id: string` | – | Cancels a running turn first. Agent-side session files are left alone. |
 | `set_conversation_model` | `id: string, model: string` | `ConversationSummary` | Applies to the next turn. |
+| `set_conversation_mode` | `id: string, mode?: string` | `ConversationSummary` | Working mode of a project-bound conversation, one of the ids in `AgentInfo.modes`; omitted or `"read-only"` is read-only. Takes effect on the next turn, including a resumed session. |
+| `answer_request` | `conversationId: string, requestId: string, answer: RequestAnswer` | – | Answers the request the running agent is waiting on (see Events). A permission answer with `setMode` also switches the conversation to that mode. |
 | `set_conversation_web_search` | `id: string, enabled: boolean` | `ConversationSummary` | Applies to the next turn. |
 | `send_turn` | `req: SendTurnRequest` | `SendTurnResult` | Returns as soon as both turn rows exist; progress arrives as `turn-event`s. Errors if a turn is already running in that conversation. `req.attachments` lists staged attachment ids; they are bound to the user turn. |
 | `cancel_turn` | `conversationId: string` | – | Kills the agent process; the turn ends with a `cancelled` event. |
@@ -39,8 +41,20 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 Payload: `TurnEventEnvelope { conversationId, turnId, event }`. Order for one turn:
 
 1. `started` once the agent process reports its session (may carry the model).
-2. Any number of `delta`, `replace`, `activity`.
+2. Any number of `delta`, `replace`, `activity`, and `request` / `request_resolved` pairs.
 3. Exactly one of `done`, `failed`, `cancelled`, each carrying the final `Turn` row.
+
+`request` means the agent is waiting for the user and carries an
+`AgentRequest`: `id` plus `kind`, which is `permission` (`tool`, `title`,
+`detail`, `suggestions[]` of modes the CLI proposes switching to) or
+`question` (`questions[]` with `question`, `header`, `options[]` of
+`label`/`description`, `multiSelect`). The turn stays running until
+`answer_request` is called; `request_resolved` (`requestId`) follows. A
+reopened conversation carries the open request as
+`Conversation.pendingRequest`. `AgentInfo.modes` lists the working modes a
+CLI offers for project-bound conversations, read from its own help output
+(`id`, `label`, `description`, `writes`), and `AgentInfo.supportsRequests`
+says whether its prompts reach the user.
 
 `delta` appends; `replace` swaps the whole text. The frontend must tolerate a
 `replace` after deltas: some agents re-send a full message that does not

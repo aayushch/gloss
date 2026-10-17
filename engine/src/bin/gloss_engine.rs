@@ -34,7 +34,12 @@ enum Cmd {
         /// Run the agent inside this folder with read-only file tools.
         #[arg(long)]
         project: Option<String>,
+        /// Working mode inside the project folder (an id from `agents`); read-only when omitted.
+        #[arg(long)]
+        mode: Option<String>,
     },
+    /// Change the working mode of a project-bound conversation (`read-only` to go back).
+    Mode { conversation: String, mode: String },
     /// Send a turn and stream the reply.
     Send {
         conversation: String,
@@ -51,6 +56,10 @@ enum Cmd {
         /// Attach a file (image or text); repeatable.
         #[arg(long = "attach")]
         attach: Vec<std::path::PathBuf>,
+        /// Answer the agent's requests without asking: allow every tool call
+        /// and pick the first option of every question.
+        #[arg(long)]
+        auto_answer: bool,
     },
     /// Full-text search across every conversation.
     Search { query: String },
@@ -119,10 +128,17 @@ async fn main() -> Result<()> {
                 println!("{:<8} {}", id, info.path.unwrap_or_else(|| "(not found)".into()));
             }
         }
-        Cmd::New { agent, model, no_web, project } => {
+        Cmd::New { agent, model, no_web, project, mode } => {
             let id = AgentId::parse(&agent).ok_or_else(|| anyhow!("unknown agent {}", agent))?;
             let conv = engine.create_conversation(id, model, Some(!no_web), project)?;
+            if mode.is_some() {
+                engine.set_conversation_mode(&conv.summary.id, mode)?;
+            }
             println!("{}", conv.summary.id);
+        }
+        Cmd::Mode { conversation, mode } => {
+            let s = engine.set_conversation_mode(&conversation, Some(mode))?;
+            println!("{} mode={}", s.id, s.mode.unwrap_or_else(|| "read-only".into()));
         }
         Cmd::Search { query } => {
             for h in engine.search(&query)? {
@@ -138,7 +154,7 @@ async fn main() -> Result<()> {
             let s = engine.set_tags(&conversation, &tags)?;
             println!("{} tags={}", s.id, s.tags.join(","));
         }
-        Cmd::Send { conversation, text, quote, block, clarification, attach } => {
+        Cmd::Send { conversation, text, quote, block, clarification, attach, auto_answer } => {
             let mut attachments = Vec::new();
             for path in attach {
                 let bytes = std::fs::read(&path)?;
@@ -180,6 +196,24 @@ async fn main() -> Result<()> {
                         out.flush()?;
                     }
                     TurnEvent::Activity { kind, label } => eprintln!("[{:?}] {}", kind, label),
+                    TurnEvent::Request { request } => {
+                        eprintln!("[request] {}", serde_json::to_string(&request).unwrap_or_default());
+                        if !auto_answer {
+                            eprintln!("[request] waiting; rerun with --auto-answer or answer from the app");
+                            continue;
+                        }
+                        let answer = match &request.kind {
+                            RequestKind::Permission { .. } => RequestAnswer::Permission { allow: true, message: None, set_mode: None },
+                            RequestKind::Question { questions } => RequestAnswer::Question {
+                                answers: questions
+                                    .iter()
+                                    .map(|q| (q.question.clone(), q.options.first().map(|o| o.label.clone()).unwrap_or_else(|| "yes".into())))
+                                    .collect(),
+                            },
+                        };
+                        engine.answer_request(&env.conversation_id, &request.id, answer)?;
+                    }
+                    TurnEvent::RequestResolved { request_id } => eprintln!("[request] {} answered", request_id),
                     TurnEvent::Done { turn } => {
                         println!();
                         eprintln!(

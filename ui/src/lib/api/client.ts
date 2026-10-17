@@ -9,6 +9,7 @@ import type {
 	Conversation,
 	ConversationSummary,
 	ModelInfo,
+	RequestAnswer,
 	SearchHit,
 	SendTurnRequest,
 	SendTurnResult,
@@ -57,6 +58,10 @@ export interface Api {
 	deleteConversation(id: string): Promise<void>;
 	setConversationModel(id: string, model: string): Promise<ConversationSummary>;
 	setConversationWebSearch(id: string, enabled: boolean): Promise<ConversationSummary>;
+	/** Sets the working mode of a project-bound conversation; null is read-only. */
+	setConversationMode(id: string, mode: string | null): Promise<ConversationSummary>;
+	/** Answers the request the running agent is waiting on. */
+	answerRequest(conversationId: string, requestId: string, answer: RequestAnswer): Promise<void>;
 	sendTurn(req: SendTurnRequest): Promise<SendTurnResult>;
 	cancelTurn(conversationId: string): Promise<void>;
 	setClarificationOpen(id: string, open: boolean): Promise<void>;
@@ -129,6 +134,8 @@ function tauriApi(): Api {
 		deleteConversation: (id) => call('delete_conversation', { id }),
 		setConversationModel: (id, model) => call('set_conversation_model', { id, model }),
 		setConversationWebSearch: (id, enabled) => call('set_conversation_web_search', { id, enabled }),
+		setConversationMode: (id, mode) => call('set_conversation_mode', { id, mode }),
+		answerRequest: (conversationId, requestId, answer) => call('answer_request', { conversationId, requestId, answer }),
 		sendTurn: (req) => call('send_turn', { req }),
 		cancelTurn: (conversationId) => call('cancel_turn', { conversationId }),
 		setClarificationOpen: (id, open) => call('set_clarification_open', { id, open }),

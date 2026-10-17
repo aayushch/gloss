@@ -8,6 +8,9 @@ import type {
 	AgentId,
 	AgentInfo,
 	Attachment,
+	AgentMode,
+	AgentRequest,
+	RequestAnswer,
 	Clarification,
 	Conversation,
 	ConversationSummary,
@@ -51,6 +54,8 @@ export interface Draft {
 	webSearch: boolean;
 	/** Folder the agent will run in; null means the Gloss workspace. Fixed once the conversation exists. */
 	projectDir: string | null;
+	/** Working mode inside that folder; null is read-only. */
+	mode: string | null;
 }
 
 /** Last path segment of a folder path, for labels. */
@@ -82,6 +87,8 @@ class AppState {
 	/** Every tag in use, for the rail's filter chips. */
 	tags = $state<string[]>([]);
 	/** Files picked for the next main-column message, in order. */
+	/** What the agent is waiting on, by assistant turn id, while a turn runs. */
+	requests = $state<Record<string, AgentRequest>>({});
 	staged = $state<Attachment[]>([]);
 	attachError = $state<string | null>(null);
 	/** Object URLs for image attachments, by attachment id. */
@@ -384,6 +391,10 @@ class AppState {
 		this.artifactView = null;
 		this.active = await (await api()).getConversation(id);
 		for (const t of this.active.turns) t.attachments.forEach((att) => this.loadThumb(att));
+		this.requests = {};
+		const pending = this.active.pendingRequest;
+		const waiting = pending && this.active.turns.find((t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming'));
+		if (pending && waiting) this.requests = { [waiting.id]: pending };
 	}
 
 	newChat(): void {
@@ -393,7 +404,46 @@ class AppState {
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir: null };
+		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir: null, mode: null };
+	}
+
+	/** The working mode of the active conversation or draft; null is read-only. */
+	get activeMode(): string | null {
+		return this.active?.mode ?? this.draft?.mode ?? null;
+	}
+
+	/** Modes the active agent's CLI offers, for the picker. */
+	get activeModes(): AgentMode[] {
+		return this.activeAgent?.modes ?? [];
+	}
+
+	/** Changes the working mode; the next turn starts the agent in it. */
+	async setMode(mode: string | null): Promise<void> {
+		if (this.draft) {
+			this.draft.mode = mode;
+			return;
+		}
+		if (!this.active) return;
+		try {
+			const s = await (await api()).setConversationMode(this.active.id, mode);
+			this.active.mode = s.mode;
+			this.patchSummary(s);
+		} catch (e) {
+			this.flash(`Could not change mode: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	/** Answers the request a running turn is waiting on. */
+	async answer(turnId: string, answer: RequestAnswer): Promise<void> {
+		const conv = this.active;
+		const request = this.requests[turnId];
+		if (!conv || !request) return;
+		try {
+			await (await api()).answerRequest(conv.id, request.id, answer);
+			if (answer.kind === 'permission' && answer.allow && answer.setMode) conv.mode = answer.setMode;
+		} catch (e) {
+			this.flash(`Could not answer: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
 	}
 
 	/** The folder the active conversation or draft runs in, if any. */
@@ -487,6 +537,13 @@ class AppState {
 		if (this.draft) {
 			const d = this.draft;
 			const conv = await a.createConversation(d.agent, d.model || undefined, d.webSearch, d.projectDir);
+			if (d.projectDir && d.mode) {
+				try {
+					conv.mode = (await a.setConversationMode(conv.id, d.mode)).mode;
+				} catch (e) {
+					this.flash(`Could not set the mode: ${String(e).replace(/^Error:\s*/, '')}`);
+				}
+			}
 			this.draft = null;
 			this.active = conv;
 			this.conversations = [summaryOf(conv), ...this.conversations];
@@ -620,6 +677,17 @@ class AppState {
 				turn.text = e.event.text;
 				this.autoOpenArtifact(turn);
 				break;
+			case 'request':
+				turn.status = 'streaming';
+				this.requests = { ...this.requests, [turn.id]: e.event.request };
+				delete this.activity[turn.id];
+				break;
+			case 'request_resolved': {
+				const rest = { ...this.requests };
+				delete rest[turn.id];
+				this.requests = rest;
+				break;
+			}
 			case 'activity':
 				this.activity[turn.id] = { kind: e.event.kind, label: e.event.label };
 				break;
@@ -653,6 +721,7 @@ function summaryOf(c: Conversation): ConversationSummary {
 		tags: c.tags,
 		clarificationCount: c.clarifications.length,
 		projectDir: c.projectDir,
+		mode: c.mode,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	};

@@ -10,6 +10,7 @@
 	import BlockView from './BlockView.svelte';
 	import Icon from './Icon.svelte';
 	import Pending from './Pending.svelte';
+	import RequestCard from './RequestCard.svelte';
 	import TurnMeta from './TurnMeta.svelte';
 
 	let { thread, conv, threads, depth = 1 }: { thread: Thread; conv: Conversation; threads: Map<string, Thread>; depth?: number } = $props();
@@ -59,8 +60,12 @@
 							<BlockView {block} {conv} {threads} {depth} parentId={cl.id} />
 						{/each}
 						{#if isRunning(row.reply)}
-							{#if !row.reply.text}<Pending />{/if}
-							{#if app.activity[row.reply.id]}<ActivityLine activity={app.activity[row.reply.id]} />{/if}
+							{#if app.requests[row.reply.id]}
+								<RequestCard request={app.requests[row.reply.id]} onanswer={(a) => app.answer(row.reply!.id, a)} />
+							{:else}
+								{#if !row.reply.text}<Pending />{/if}
+								{#if app.activity[row.reply.id]}<ActivityLine activity={app.activity[row.reply.id]} />{/if}
+							{/if}
 						{:else}
 							<TurnMeta turn={row.reply} />
 						{/if}

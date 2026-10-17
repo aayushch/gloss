@@ -72,13 +72,24 @@ in their own homes, keyed by the Gloss cwd, so nothing Gloss does shows up in
 a real project's history. `docs/agents.md` lists what each CLI stores and where.
 
 A conversation can instead be bound to a project folder when it is created:
-the agent then starts in that folder with read-only file tools and is told it
-may read files but not change them. The folder is fixed for the life of the
+the agent then starts in that folder, read-only unless the user picks one of
+the working modes its CLI offers. The folder is fixed for the life of the
 conversation because the agent's session is keyed to it, and those sessions
-do appear in the project's own history, which is the point. Attachments still
-live under `~/.gloss`. A folder picked under Desktop, Documents or Downloads
-on macOS triggers the system's file-access prompt for Gloss, and the agent
+do appear in the project's own history, which is the point; the mode can
+change at any time and applies from the next turn. Attachments still live
+under `~/.gloss`. A folder picked under Desktop, Documents or Downloads on
+macOS triggers the system's file-access prompt for Gloss, and the agent
 processes inherit the answer.
+
+Modes are not hard-coded: each adapter reads them from the CLI's own help
+output when agents are detected, and maps the chosen id to the CLI's flag on
+every spawn. Where the CLI can hand a decision to its host, the engine keeps
+the agent's stdin open and relays it: a tool call that needs approval or a
+question the agent asks arrives as a `request` event, the transcript shows a
+card under the pending reply, and the answer is written back to the process.
+Today Claude Code is the agent with such a channel (`docs/agents.md` has the
+protocol); the others either never prompt headlessly or refuse what their
+mode does not allow.
 
 `turns_fts` is an FTS5 index over finished turns, kept current by triggers on
 `turns`; the rail's search box queries it. Picking a hit opens its
@@ -134,7 +145,7 @@ app's own read-only renderer.
 
 ## Later
 
-Let a project-bound conversation edit files, as a per-conversation switch
-with the project's diff shown in the app; import an existing agent session
-into Gloss; branch at a turn; ask another agent the same question side by
-side.
+Show the project's diff after an editing turn, with a revert per turn;
+relay prompts for Gemini (ACP), Codex (app server) and Pi (RPC mode); import
+an existing agent session into Gloss; branch at a turn; ask another agent
+the same question side by side.

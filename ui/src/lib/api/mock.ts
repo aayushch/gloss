@@ -6,6 +6,7 @@ import type { Api } from './client';
 import type {
 	AgentId,
 	AgentInfo,
+	AgentRequest,
 	Attachment,
 	Clarification,
 	Conversation,
@@ -17,11 +18,11 @@ import type {
 } from './types';
 
 const AGENTS: AgentInfo[] = [
-	{ id: 'claude', name: 'Claude Code', command: 'claude', monogram: 'cc', available: true, path: '/usr/local/bin/claude', version: '2.1.296', supportsModelSelect: true, supportsWebSearch: true },
-	{ id: 'codex', name: 'Codex CLI', command: 'codex', monogram: 'cx', available: true, path: '/usr/local/bin/codex', version: '0.118.0', supportsModelSelect: true, supportsWebSearch: true },
-	{ id: 'gemini', name: 'Gemini CLI', command: 'gemini', monogram: 'gm', available: false, path: null, version: null, supportsModelSelect: true, supportsWebSearch: true },
-	{ id: 'pi', name: 'Pi', command: 'pi', monogram: 'pi', available: true, path: '/opt/homebrew/bin/pi', version: '0.79.6', supportsModelSelect: true, supportsWebSearch: false },
-	{ id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent', monogram: 'cu', available: false, path: null, version: null, supportsModelSelect: false, supportsWebSearch: true }
+	{ id: 'claude', name: 'Claude Code', command: 'claude', monogram: 'cc', available: true, path: '/usr/local/bin/claude', version: '2.1.296', supportsModelSelect: true, supportsWebSearch: true, modes: [{ id: 'manual', label: 'Manual', description: 'Asks before every edit and command', writes: true }, { id: 'acceptEdits', label: 'Accept edits', description: 'Edits files without asking; asks before commands', writes: true }, { id: 'plan', label: 'Plan', description: 'Reads and plans only; no edits', writes: false }], supportsRequests: true },
+	{ id: 'codex', name: 'Codex CLI', command: 'codex', monogram: 'cx', available: true, path: '/usr/local/bin/codex', version: '0.118.0', supportsModelSelect: true, supportsWebSearch: true, modes: [], supportsRequests: false },
+	{ id: 'gemini', name: 'Gemini CLI', command: 'gemini', monogram: 'gm', available: false, path: null, version: null, supportsModelSelect: true, supportsWebSearch: true, modes: [], supportsRequests: false },
+	{ id: 'pi', name: 'Pi', command: 'pi', monogram: 'pi', available: true, path: '/opt/homebrew/bin/pi', version: '0.79.6', supportsModelSelect: true, supportsWebSearch: false, modes: [], supportsRequests: false },
+	{ id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent', monogram: 'cu', available: false, path: null, version: null, supportsModelSelect: false, supportsWebSearch: true, modes: [], supportsRequests: false }
 ];
 
 const MODELS: Record<AgentId, ModelInfo[]> = {
@@ -168,6 +169,7 @@ function seed(): Conv[] {
 		tags: ['cpu', 'concurrency'],
 		clarificationCount: 0,
 		projectDir: null,
+		mode: null,
 		createdAt: now() - 3600_000,
 		updatedAt: now() - 1800_000,
 		agentSessionId: '32bead75-3df0-42d1-a069-faae5a2370fe',
@@ -203,6 +205,7 @@ function seed(): Conv[] {
 		tags: ['rust'],
 		clarificationCount: 0,
 		projectDir: null,
+		mode: null,
 		createdAt: now() - DAY - 3600_000,
 		updatedAt: now() - DAY,
 		agentSessionId: null,
@@ -223,6 +226,7 @@ function seed(): Conv[] {
 		tags: [],
 		clarificationCount: 0,
 		projectDir: null,
+		mode: null,
 		createdAt: now() - 2 * DAY,
 		updatedAt: now() - 2 * DAY + 60_000,
 		agentSessionId: null,
@@ -253,17 +257,21 @@ export function mockApi(): Api {
 		tags: c.tags,
 		clarificationCount: c.clarifications.length,
 		projectDir: c.projectDir,
+		mode: c.mode,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	});
 	const staged = new Map<string, { att: Attachment; url: string }>();
-	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, running: c.running, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
+	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, running: c.running, pendingRequest: pending.get(c.id)?.request ?? null, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
 	const find = (id: string): Conv => {
 		const c = convs.find((x) => x.id === id);
 		if (!c) throw new Error(`No conversation ${id}`);
 		return c;
 	};
 	const emit = (e: TurnEventEnvelope) => listeners.forEach((l) => l(e));
+
+	// A request the mock agent is waiting on, with what to do once answered.
+	const pending = new Map<string, { request: AgentRequest; turnId: string; resume: () => void }>();
 
 	function stream(conv: Conv, turn: Turn, text: string) {
 		conv.running = true;
@@ -379,6 +387,7 @@ export function mockApi(): Api {
 				tags: [],
 				clarificationCount: 0,
 				projectDir: projectDir ?? null,
+				mode: null,
 				createdAt: now(),
 				updatedAt: now(),
 				agentSessionId: null,
@@ -407,6 +416,21 @@ export function mockApi(): Api {
 			const c = find(id);
 			c.webSearch = enabled;
 			return summary(c);
+		},
+		setConversationMode: async (id, mode) => {
+			const c = find(id);
+			if (mode && !c.projectDir) throw new Error('only a conversation bound to a project folder has a mode');
+			c.mode = mode;
+			return summary(c);
+		},
+		answerRequest: async (conversationId, requestId, answer) => {
+			const p = pending.get(conversationId);
+			if (!p || p.request.id !== requestId) throw new Error(`the agent is not waiting on request ${requestId}`);
+			pending.delete(conversationId);
+			const c = find(conversationId);
+			if (answer.kind === 'permission' && answer.allow && answer.setMode) c.mode = answer.setMode;
+			emit({ conversationId, turnId: p.turnId, event: { type: 'request_resolved', requestId } });
+			p.resume();
 		},
 		sendTurn: async (req) => {
 			const c = find(req.conversationId);
@@ -441,11 +465,27 @@ export function mockApi(): Api {
 			c.updatedAt = now();
 			c.agentSessionId ??= nextId('sess');
 			const reply = clarificationId ? CANNED_REPLY : req.text.toLowerCase().includes('rust') ? RUST_ANSWER : CAS_ANSWER;
-			stream(c, assistantTurn, reply);
+			// "[ask]" or "[write]" in the message makes the mock agent stop
+			// and wait for an answer, the way a real agent does.
+			const ask = req.text.includes('[ask]');
+			const write = req.text.includes('[write]');
+			if (ask || write) {
+				c.running = true;
+				assistantTurn.status = 'streaming';
+				const request: AgentRequest = ask
+					? { id: nextId('req'), kind: 'question', questions: [{ question: 'Which style do you prefer?', header: 'Style', options: [{ label: 'Tabs', description: 'Indent with tabs' }, { label: 'Spaces', description: 'Indent with spaces' }], multiSelect: false }] }
+					: { id: nextId('req'), kind: 'permission', tool: 'Write', title: 'Write: NOTES.md', detail: 'hello from gloss\n', suggestions: [{ mode: 'acceptEdits', label: 'Accept edits' }] };
+				pending.set(c.id, { request, turnId: assistantTurn.id, resume: () => stream(c, assistantTurn, reply) });
+				setTimeout(() => emit({ conversationId: c.id, turnId: assistantTurn.id, event: { type: 'started', sessionId: c.agentSessionId, model: c.model || 'sonnet' } }), 40);
+				setTimeout(() => emit({ conversationId: c.id, turnId: assistantTurn.id, event: { type: 'request', request } }), 80);
+			} else {
+				stream(c, assistantTurn, reply);
+			}
 			return { userTurn: { ...userTurn }, assistantTurn: { ...assistantTurn }, clarification };
 		},
 		cancelTurn: async (conversationId) => {
 			const c = find(conversationId);
+			pending.delete(c.id);
 			const list = timers.get(c.id) ?? [];
 			list.forEach(clearTimeout);
 			timers.delete(c.id);

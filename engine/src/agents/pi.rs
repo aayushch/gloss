@@ -38,6 +38,8 @@ impl AgentAdapter for Pi {
             version,
             supports_model_select: true,
             supports_web_search: false,
+            modes: self.modes(env),
+            supports_requests: self.supports_requests(),
         }
     }
 
@@ -55,12 +57,43 @@ impl AgentAdapter for Pi {
         parse_pi_models(&out, default_id.as_deref())
     }
 
+    fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
+        // Pi has no modes of its own, only tools to enable. The help lists
+        // the built-in tools; the modes offered are the write set and the
+        // write-plus-shell set, when those tools exist in this version.
+        let Some(path) = resolve(env) else { return Vec::new() };
+        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let tools: Vec<String> = help
+            .split("Built-in Tool Names:")
+            .nth(1)
+            .unwrap_or("")
+            .lines()
+            .take_while(|l| l.starts_with("  ") || l.trim().is_empty())
+            .filter_map(|l| l.split_whitespace().next().map(str::to_string))
+            .collect();
+        let has = |t: &str| tools.iter().any(|x| x == t);
+        let mut out = Vec::new();
+        if has("edit") && has("write") {
+            out.push(AgentMode { id: "edit".into(), label: "Edit files".into(), description: "Reads and edits files; no shell".into(), writes: true });
+        }
+        if has("edit") && has("write") && has("bash") {
+            out.push(AgentMode { id: "full".into(), label: "Edit and run commands".into(), description: "Reads, edits files and runs shell commands".into(), writes: true });
+        }
+        out
+    }
+
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Pi, resolve)?;
         let mut args: Vec<String> = vec!["-p".into(), "--mode".into(), "json".into()];
-        // Inside a project folder Pi gets its read-only file tools; elsewhere none.
+        // Inside a project folder Pi gets its read-only file tools, or the
+        // set its chosen mode names; elsewhere none.
         if req.project {
-            args.extend(["--tools".into(), "read,grep,find,ls".into()]);
+            let tools = match req.mode.as_deref() {
+                Some("edit") => "read,grep,find,ls,edit,write",
+                Some("full") => "read,grep,find,ls,edit,write,bash",
+                _ => "read,grep,find,ls",
+            };
+            args.extend(["--tools".into(), tools.into()]);
         } else {
             args.push("--no-tools".into());
         }
@@ -92,6 +125,7 @@ impl AgentAdapter for Pi {
             env: vec![],
             cwd: req.cwd.clone(),
             stdin: None,
+            interactive: false,
         })
     }
 

@@ -76,6 +76,40 @@ describe('app state against the mock api', () => {
 		await settle(20);
 	});
 
+	it('shows the agent\'s question as a request and resumes once answered', async () => {
+		app.newChat();
+		await app.send('[ask] Which style?');
+		await settle(150);
+		const turn = app.active!.turns.find((t) => t.role === 'assistant')!;
+		expect(app.requests[turn.id]?.kind).toBe('question');
+		await app.answer(turn.id, { kind: 'question', answers: { 'Which style do you prefer?': 'Tabs' } });
+		await settle(50);
+		expect(app.requests[turn.id]).toBeUndefined();
+		expect(app.running).toBe(true);
+		await settle(1900);
+		expect(app.running).toBe(false);
+		// The done event replaces the turn row, so look it up again.
+		expect(app.active!.turns.find((t) => t.id === turn.id)?.status).toBe('done');
+	});
+
+	it('a permission answer can switch the mode of a project-bound conversation', async () => {
+		app.newChat();
+		await app.chooseFolder();
+		await app.setMode('manual');
+		expect(app.draft?.mode).toBe('manual');
+		await app.send('[write] Create NOTES.md');
+		expect(app.active?.mode).toBe('manual');
+		await settle(150);
+		const turn = app.active!.turns.find((t) => t.role === 'assistant')!;
+		expect(app.requests[turn.id]?.kind).toBe('permission');
+		await app.answer(turn.id, { kind: 'permission', allow: true, message: null, setMode: 'acceptEdits' });
+		await settle(50);
+		expect(app.active?.mode).toBe('acceptEdits');
+		await settle(1900);
+		await app.setMode(null);
+		expect(app.active?.mode).toBeNull();
+	});
+
 	it('creates a conversation from a draft on first send and cancels', async () => {
 		app.newChat();
 		expect(app.draft).not.toBeNull();

@@ -55,6 +55,8 @@ impl AgentAdapter for Gemini {
             // Search is built in and always on in plan mode; there is no flag to
             // turn it off, so the toggle would be a lie.
             supports_web_search: false,
+            modes: self.modes(env),
+            supports_requests: self.supports_requests(),
         }
     }
 
@@ -93,6 +95,27 @@ impl AgentAdapter for Gemini {
         out
     }
 
+    fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
+        let Some(path) = resolve(env) else { return Vec::new() };
+        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        // The help line reads "...: default (prompt for approval), auto_edit
+        // (auto-approve edit tools), ..."; each mode's own words become its
+        // description. Plan mode is the read-only default and is not listed.
+        let line = help.lines().find(|l| l.contains("--approval-mode")).unwrap_or("");
+        flag_choices(&help, "--approval-mode")
+            .into_iter()
+            .filter(|id| id != "plan")
+            .map(|id| {
+                let description = line
+                    .find(&format!("{} (", id))
+                    .map(|i| &line[i + id.len() + 2..])
+                    .and_then(|r| r.find(')').map(|j| r[..j].to_string()))
+                    .unwrap_or_default();
+                AgentMode { label: id.replace('_', " "), description, writes: true, id }
+            })
+            .collect()
+    }
+
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Gemini, resolve)?;
         // Gemini's headless runner expands `@path` references in the prompt
@@ -103,13 +126,16 @@ impl AgentAdapter for Gemini {
             prompt.push_str("\n\n@");
             prompt.push_str(&req.relative_image_path(img));
         }
+        // Plan mode is Gemini's read-only mode; a chosen mode replaces it
+        // inside a project folder.
+        let mode = req.mode.as_deref().filter(|_| req.project).unwrap_or("plan");
         let mut args: Vec<String> = vec![
             "-p".into(),
             prompt,
             "-o".into(),
             "stream-json".into(),
             "--approval-mode".into(),
-            "plan".into(),
+            mode.into(),
         ];
         match &req.agent_session_id {
             Some(sid) => args.extend(["--resume".into(), sid.clone()]),
@@ -140,6 +166,7 @@ impl AgentAdapter for Gemini {
             env: vec![("GEMINI_CLI_TRUST_WORKSPACE".into(), "true".into())],
             cwd: req.cwd.clone(),
             stdin: None,
+            interactive: false,
         })
     }
 

@@ -215,6 +215,23 @@ fn cancel_turn(engine: State<'_, Eng>, conversation_id: String) {
     engine.cancel_turn(&conversation_id)
 }
 
+/// Sets the working mode of a project-bound conversation; `None` is read-only.
+#[tauri::command]
+fn set_conversation_mode(engine: State<'_, Eng>, id: String, mode: Option<String>) -> Result<ConversationSummary, String> {
+    engine.set_conversation_mode(&id, mode).map_err(err)
+}
+
+/// Hands the user's answer to the agent waiting on `request_id`.
+#[tauri::command]
+fn answer_request(
+    engine: State<'_, Eng>,
+    conversation_id: String,
+    request_id: String,
+    answer: RequestAnswer,
+) -> Result<(), String> {
+    engine.answer_request(&conversation_id, &request_id, answer).map_err(err)
+}
+
 #[tauri::command]
 fn set_clarification_open(engine: State<'_, Eng>, id: String, open: bool) -> Result<(), String> {
     engine.set_clarification_open(&id, open).map_err(err)
@@ -277,6 +294,8 @@ pub fn run() {
             delete_conversation,
             set_conversation_model,
             set_conversation_web_search,
+            set_conversation_mode,
+            answer_request,
             send_turn,
             cancel_turn,
             set_clarification_open,

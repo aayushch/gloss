@@ -22,8 +22,11 @@ To change an artifact later, send the whole artifact again with the same id; Glo
 Never put an artifact inside a code fence.";
 
 /// The system note for a conversation. Bound to a project folder, the agent
-/// is told where it runs and that it may read but not change files; the rest
-/// of the note is the same.
+/// is told where it runs and that the user decides, through Gloss, what it
+/// may change: the note itself says nothing about editing, because Claude
+/// Code keeps the system prompt from the first turn of a session and the
+/// mode can change on any later turn. The tools on offer and the permission
+/// mode carry that decision instead.
 pub fn system_note(project_dir: Option<&str>) -> String {
     match project_dir {
         None => SYSTEM_NOTE.to_string(),
@@ -33,7 +36,9 @@ do not offer to read, edit or create files, and do not propose running commands.
             &format!(
                 "You are working inside the user's project folder {}, which is your working directory. \
 Read its files whenever that helps answer the question, and say which files you looked at. \
-Do not edit or create files, and do not propose running commands. ",
+The user chooses in Gloss what you may change: when a tool is unavailable or a call is refused, \
+you cannot do that right now, so say so briefly instead of trying another way. \
+When a call needs approval, the user sees it and decides; when you need a decision from the user, ask. ",
                 dir
             ),
         ),
