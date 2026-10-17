@@ -71,6 +71,15 @@ Gloss owns the canonical transcript. The agents keep their own session files
 in their own homes, keyed by the Gloss cwd, so nothing Gloss does shows up in
 a real project's history. `docs/agents.md` lists what each CLI stores and where.
 
+A conversation can instead be bound to a project folder when it is created:
+the agent then starts in that folder with read-only file tools and is told it
+may read files but not change them. The folder is fixed for the life of the
+conversation because the agent's session is keyed to it, and those sessions
+do appear in the project's own history, which is the point. Attachments still
+live under `~/.gloss`. A folder picked under Desktop, Documents or Downloads
+on macOS triggers the system's file-access prompt for Gloss, and the agent
+processes inherit the answer.
+
 `turns_fts` is an FTS5 index over finished turns, kept current by triggers on
 `turns`; the rail's search box queries it. Picking a hit opens its
 conversation, expands the well if the hit is inside one, and hands the search
@@ -125,6 +134,7 @@ app's own read-only renderer.
 
 ## Later
 
-Bind a conversation to a project folder (read-only tools, lives in that
-project's agent history by design); import an existing agent session into
-Gloss; branch at a turn; ask another agent the same question side by side.
+Let a project-bound conversation edit files, as a per-conversation switch
+with the project's diff shown in the app; import an existing agent session
+into Gloss; branch at a turn; ask another agent the same question side by
+side.

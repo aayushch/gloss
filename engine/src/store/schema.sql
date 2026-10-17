@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     pinned INTEGER NOT NULL DEFAULT 0,
     -- JSON array of lower-cased tag strings.
     tags TEXT NOT NULL DEFAULT '[]',
+    -- Absolute path of the folder the agent runs in; NULL means the Gloss workspace.
+    project_dir TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

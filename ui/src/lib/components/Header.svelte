@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Conversation header: title, tags, pin, web-search toggle, model pill,
 	// clarification count and the export menu.
-	import { app } from '$lib/state/app.svelte';
+	import { app, folderName } from '$lib/state/app.svelte';
 	import Icon from './Icon.svelte';
 	import ModelMenu from './ModelMenu.svelte';
 
@@ -44,6 +44,20 @@
 
 <header data-tauri-drag-region>
 	<h1 title={title}>{title}</h1>
+	{#if app.activeProjectDir}
+		<span class="folder" title="Agent runs in {app.activeProjectDir} (read-only)">
+			<Icon name="folder" size={12} />
+			<span class="fname">{folderName(app.activeProjectDir)}</span>
+			{#if app.draft}
+				<button type="button" class="unbind" title="Use the Gloss workspace instead" aria-label="Remove folder" onclick={() => app.clearFolder()}><Icon name="x" size={11} /></button>
+			{/if}
+		</span>
+	{:else if app.draft}
+		<button type="button" class="tagbtn" title="Run the agent inside a folder of yours, read-only" onclick={() => app.chooseFolder()}>
+			<Icon name="folder" size={12} />
+			<span class="addtag">Choose folder</span>
+		</button>
+	{/if}
 	{#if app.active}
 		{#if editingTags}
 			<input
@@ -199,6 +213,37 @@
 	}
 	.addtag {
 		font-style: italic;
+	}
+	.folder {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 3px 4px 3px 7px;
+		border-radius: 999px;
+		background: var(--accent-tint);
+		color: var(--accent-text);
+		font-size: 11.5px;
+		flex: none;
+		max-width: 220px;
+	}
+	.fname {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.unbind {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		color: inherit;
+		opacity: 0.7;
+	}
+	.unbind:hover {
+		opacity: 1;
+		background: var(--surface);
 	}
 	.tagedit {
 		height: 26px;

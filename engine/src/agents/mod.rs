@@ -33,7 +33,11 @@ pub struct SpawnRequest {
     /// Model id for this turn; None means the agent's default.
     pub model: Option<String>,
     pub web_search: bool,
+    /// Directory the CLI starts in: the user's project folder or the Gloss workspace.
     pub cwd: PathBuf,
+    /// True when `cwd` is a project folder of the user's; adapters then enable
+    /// their read-only file tools. False means no file tools at all.
+    pub project: bool,
     pub pi_session_dir: PathBuf,
     /// Short note added to the agent's system prompt where the CLI allows it.
     pub system_note: String,
@@ -273,6 +277,7 @@ pub(crate) mod testutil {
             model: None,
             web_search: true,
             cwd: std::env::temp_dir(),
+            project: false,
             pi_session_dir: std::env::temp_dir(),
             system_note: "note".into(),
             title: Some("Title".into()),

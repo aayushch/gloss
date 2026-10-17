@@ -21,6 +21,25 @@ Keep short snippets, examples and explanations in ordinary markdown. \
 To change an artifact later, send the whole artifact again with the same id; Gloss records it as a new version. \
 Never put an artifact inside a code fence.";
 
+/// The system note for a conversation. Bound to a project folder, the agent
+/// is told where it runs and that it may read but not change files; the rest
+/// of the note is the same.
+pub fn system_note(project_dir: Option<&str>) -> String {
+    match project_dir {
+        None => SYSTEM_NOTE.to_string(),
+        Some(dir) => SYSTEM_NOTE.replace(
+            "You have no project or filesystem to work on: \
+do not offer to read, edit or create files, and do not propose running commands. ",
+            &format!(
+                "You are working inside the user's project folder {}, which is your working directory. \
+Read its files whenever that helps answer the question, and say which files you looked at. \
+Do not edit or create files, and do not propose running commands. ",
+                dir
+            ),
+        ),
+    }
+}
+
 /// The parts of the artifact convention the UI parser depends on, kept here so
 /// a test fails if the note stops mentioning them.
 pub const ARTIFACT_TAG: &str = "<artifact id=";
@@ -53,9 +72,9 @@ pub fn follow_up_prompt(quote: &str, question: &str) -> String {
 
 /// Final prompt for one turn: the body, with the system note prepended on the
 /// first turn for agents that have no system prompt flag.
-pub fn compose_prompt(agent: AgentId, is_first_turn: bool, body: &str) -> String {
+pub fn compose_prompt(agent: AgentId, is_first_turn: bool, body: &str, note: &str) -> String {
     if is_first_turn && !has_system_prompt_flag(agent) {
-        format!("{}\n\n{}", SYSTEM_NOTE, body)
+        format!("{}\n\n{}", note, body)
     } else {
         body.to_string()
     }
@@ -108,9 +127,9 @@ mod tests {
 
     #[test]
     fn system_note_only_on_first_turn_without_flag() {
-        assert!(compose_prompt(AgentId::Codex, true, "hi").starts_with(SYSTEM_NOTE));
-        assert_eq!(compose_prompt(AgentId::Codex, false, "hi"), "hi");
-        assert_eq!(compose_prompt(AgentId::Claude, true, "hi"), "hi");
+        assert!(compose_prompt(AgentId::Codex, true, "hi", SYSTEM_NOTE).starts_with(SYSTEM_NOTE));
+        assert_eq!(compose_prompt(AgentId::Codex, false, "hi", SYSTEM_NOTE), "hi");
+        assert_eq!(compose_prompt(AgentId::Claude, true, "hi", SYSTEM_NOTE), "hi");
     }
 
     #[test]
@@ -120,6 +139,15 @@ mod tests {
         for ty in ["text/html", "image/svg+xml", "text/mermaid", "text/markdown", "text/plain", "text/code"] {
             assert!(SYSTEM_NOTE.contains(ty), "{} missing", ty);
         }
+    }
+
+    #[test]
+    fn project_note_names_the_folder_and_keeps_artifacts() {
+        let note = system_note(Some("/home/me/app"));
+        assert!(note.contains("/home/me/app"));
+        assert!(!note.contains("no project or filesystem"));
+        assert!(note.contains(ARTIFACT_TAG));
+        assert_eq!(system_note(None), SYSTEM_NOTE);
     }
 
     #[test]

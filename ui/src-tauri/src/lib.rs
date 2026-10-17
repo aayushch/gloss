@@ -88,6 +88,17 @@ fn add_attachment(engine: State<'_, Eng>, request: Request<'_>) -> Result<Attach
     engine.add_attachment(&name, &mime, bytes).map_err(err)
 }
 
+/// Stores a file that the native file picker or a drop on the window named
+/// by path. The engine classifies it by extension and content, as it does for
+/// bytes sent from the page.
+#[tauri::command]
+fn add_attachment_path(engine: State<'_, Eng>, path: String) -> Result<Attachment, String> {
+    let file = std::path::Path::new(&path);
+    let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+    let bytes = std::fs::read(file).map_err(|e| format!("could not read {}: {}", name, e))?;
+    engine.add_attachment(&name, "", &bytes).map_err(err)
+}
+
 #[tauri::command]
 fn remove_attachment(engine: State<'_, Eng>, id: String) -> Result<(), String> {
     engine.remove_attachment(&id).map_err(err)
@@ -160,8 +171,9 @@ fn create_conversation(
     agent: AgentId,
     model: Option<String>,
     web_search: Option<bool>,
+    project_dir: Option<String>,
 ) -> Result<Conversation, String> {
-    engine.create_conversation(agent, model, web_search).map_err(err)
+    engine.create_conversation(agent, model, web_search, project_dir).map_err(err)
 }
 
 #[tauri::command]
@@ -274,6 +286,7 @@ pub fn run() {
             set_tags,
             list_tags,
             add_attachment,
+            add_attachment_path,
             remove_attachment,
             attachment_bytes,
             save_text_file,

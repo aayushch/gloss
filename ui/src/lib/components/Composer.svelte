@@ -1,7 +1,12 @@
 <script lang="ts">
 	// Main message box at the bottom of the conversation column. Files can be
-	// attached with the paperclip, by dropping them on the box, or by pasting;
-	// staged files show as chips above the text until the message is sent.
+	// attached with the paperclip, by dropping them on the window, or by
+	// pasting; staged files show as chips above the text until the message is
+	// sent. Inside Tauri the paperclip opens the native file picker and drops
+	// arrive through Tauri's drag-drop events, which give file paths: the
+	// webview never sees a dropped file as an HTML drop, so the HTML handlers
+	// below only serve the browser build with the mock API.
+	import { api, inTauri } from '$lib/api/client';
 	import { app, formatSize } from '$lib/state/app.svelte';
 	import Icon from './Icon.svelte';
 
@@ -30,11 +35,47 @@
 		if (ta) ta.style.height = 'auto';
 	}
 
+	async function pick() {
+		const paths = await (await api()).pickFiles();
+		if (paths === null) {
+			picker?.click();
+			return;
+		}
+		if (paths.length) app.attachPaths(paths);
+	}
+
 	function onPick(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		if (input.files?.length) app.attach(input.files);
 		input.value = '';
 	}
+
+	// Native drops anywhere on the window stage the files; the box lights up
+	// while a drag is over the window.
+	$effect(() => {
+		if (!inTauri()) return;
+		let unlisten: (() => void) | undefined;
+		let gone = false;
+		(async () => {
+			const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+			const stop = await getCurrentWebview().onDragDropEvent((e) => {
+				if (e.payload.type === 'enter' || e.payload.type === 'over') {
+					dragging = !disabled && !running;
+				} else if (e.payload.type === 'leave') {
+					dragging = false;
+				} else if (e.payload.type === 'drop') {
+					dragging = false;
+					if (!disabled && !running && e.payload.paths.length) app.attachPaths(e.payload.paths);
+				}
+			});
+			if (gone) stop();
+			else unlisten = stop;
+		})();
+		return () => {
+			gone = true;
+			unlisten?.();
+		};
+	});
 
 	function onDrop(e: DragEvent) {
 		e.preventDefault();
@@ -83,7 +124,7 @@
 	{/if}
 	<div class="rowbox">
 		<input bind:this={picker} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,text/*,.md,.txt,.json,.csv,.xml,.yaml,.yml,.toml,.ini,.log,.rs,.ts,.js,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.rb,.sh,.sql,.html,.css,.svelte" hidden onchange={onPick} />
-		<button type="button" class="attach" title="Attach an image or text file" aria-label="Attach a file" disabled={disabled || running} onclick={() => picker?.click()}>
+		<button type="button" class="attach" title="Attach an image or text file" aria-label="Attach a file" disabled={disabled || running} onclick={pick}>
 			<Icon name="paperclip" size={15} />
 		</button>
 		<textarea

@@ -128,16 +128,22 @@ impl AgentAdapter for Claude {
         if let Some(model) = req.model.as_deref().filter(|m| !m.is_empty()) {
             args.extend(["--model".into(), model.to_string()]);
         }
+        // Tool policy: web tools when the toggle is on, the read-only file
+        // tools inside a project folder, nothing otherwise. `--restricted`
+        // confines the file tools to the cwd, drops the command-running tools
+        // and skips the project's own settings files and hooks.
+        let mut tools: Vec<&str> = Vec::new();
+        if req.project {
+            args.push("--restricted".into());
+            tools.extend(["Read", "Glob", "Grep", "LS"]);
+        }
         if req.web_search {
-            args.extend([
-                "--tools".into(),
-                "WebSearch,WebFetch".into(),
-                "--allowedTools".into(),
-                "WebSearch".into(),
-                "WebFetch".into(),
-            ]);
-        } else {
-            args.extend(["--tools".into(), "".into()]);
+            tools.extend(["WebSearch", "WebFetch"]);
+        }
+        args.extend(["--tools".into(), tools.join(",")]);
+        if !tools.is_empty() {
+            args.push("--allowedTools".into());
+            args.extend(tools.iter().map(|t| t.to_string()));
         }
         if !req.system_note.is_empty() {
             args.extend(["--append-system-prompt".into(), req.system_note.clone()]);
@@ -358,6 +364,22 @@ mod tests {
         assert!(spec.args.windows(2).any(|w| w == ["--tools", ""]));
         assert!(spec.args.windows(2).any(|w| w == ["--model", "haiku"]));
         assert!(!spec.args.contains(&"-n".to_string()));
+    }
+
+    #[test]
+    fn command_line_in_a_project_folder_has_read_only_file_tools() {
+        let env = ShellEnv::from_process();
+        if resolve(&env).is_none() {
+            return;
+        }
+        let mut r = req("hi");
+        r.project = true;
+        let spec = Claude::default().build_command(&r, &env).unwrap();
+        let args = spec.args.join(" ");
+        assert!(args.contains("--restricted"));
+        assert!(args.contains("--tools Read,Glob,Grep,LS,WebSearch,WebFetch --allowedTools Read Glob Grep LS WebSearch WebFetch"));
+        assert!(!args.contains("Bash"));
+        assert!(!args.contains("Edit"));
     }
 
     #[test]

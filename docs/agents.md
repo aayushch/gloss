@@ -9,9 +9,20 @@ Verified on this machine on 2026-10-13 unless marked otherwise.
 
 ## Common rules
 
-- **Working directory.** Always `~/.gloss/workspace` (empty, created on first
-  run). Every agent keys its history by cwd, so all Gloss sessions land in one
-  bucket per agent and never show up in a real project's resume picker.
+- **Working directory.** `~/.gloss/workspace` (empty, created on first run)
+  unless the conversation is bound to a project folder, in which case the CLI
+  starts in that folder. Every agent keys its history by cwd, so workspace
+  sessions land in one bucket per agent and never show up in a real project's
+  resume picker, while project-bound sessions appear in that project's own
+  history by design.
+- **Project folders.** A bound conversation gets read-only file tools and the
+  system note names the folder. Claude Code runs with `--restricted` and
+  `--tools Read,Glob,Grep,LS` (plus the web tools), which also confines the
+  file tools to the folder and skips the project's settings files and hooks;
+  Pi gets `--tools read,grep,find,ls`; Codex, Gemini and Cursor already run in
+  read-only modes and simply start reading files once the cwd is real. Gemini
+  gets `--include-directories` with the attachments directory so `@` image
+  references outside the folder still resolve. No agent can edit files.
 - **Environment.** A Tauri app launched from Finder does not inherit the login
   shell's environment. On startup the engine runs `$SHELL -ilc 'env -0'` once
   and uses that environment, with common binary directories appended to PATH,

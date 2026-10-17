@@ -18,12 +18,13 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `set_tags` | `id: string, tags: string[]` | `ConversationSummary` | Tags are trimmed, lower-cased and de-duplicated. |
 | `list_tags` | – | `string[]` | Every tag in use, most used first. |
 | `add_attachment` | raw body = file bytes; headers `x-name` (percent-encoded), `x-mime` | `Attachment` | Stores the file under `~/.gloss/workspace/attachments/<id>/`. Images (png, jpeg, gif, webp, ≤ 20 MB) and UTF-8 text (≤ 512 KB) only; anything else is an error. |
+| `add_attachment_path` | `path: string` | `Attachment` | Same as `add_attachment` for a file already on disk, named by the native file picker or a drop on the window. The name comes from the path and the type from its extension and content. |
 | `remove_attachment` | `id: string` | – | Only for attachments not yet sent. |
 | `attachment_bytes` | `id: string` | raw bytes | For image previews. |
 | `save_text_file` | `defaultName: string, contents: string` | `string \| null` | Native save dialog filtered by the default name's extension; the chosen path, or null when dismissed. |
 | `open_artifact` | `name: string, contents: string` | `string` | Writes the content under `~/.gloss/artifacts/<id>/` and opens it with the system's default app (the browser for `.html`). Returns the path. |
 | `get_conversation` | `id: string` | `Conversation` | Turns in `seq` order, clarifications in `number` order. |
-| `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. |
+| `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. `projectDir` must be an existing absolute directory; it is stored canonicalised and cannot change later. The agent then runs inside it with read-only file tools (see `docs/agents.md`). |
 | `rename_conversation` | `id: string, title: string` | `ConversationSummary` | |
 | `delete_conversation` | `id: string` | – | Cancels a running turn first. Agent-side session files are left alone. |
 | `set_conversation_model` | `id: string, model: string` | `ConversationSummary` | Applies to the next turn. |

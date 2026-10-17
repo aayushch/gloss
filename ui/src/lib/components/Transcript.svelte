@@ -147,6 +147,11 @@
 		<div class="empty">
 			<div class="big">New conversation</div>
 			<div>Via {app.activeAgent?.name ?? app.draft.agent}{app.activeModelId ? ` · ${app.modelName(app.draft.agent, app.activeModelId)}` : ''}. Select any part of a reply to ask about it inline.</div>
+			{#if app.draft.projectDir}
+				<div>The agent runs inside <strong>{app.draft.projectDir}</strong> and can read its files, not change them.</div>
+			{:else}
+				<div>Choose a folder in the header to let the agent read a project of yours.</div>
+			{/if}
 		</div>
 	{:else if app.loadError}
 		<div class="empty error">Could not reach the engine: {app.loadError}</div>

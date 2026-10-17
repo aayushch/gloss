@@ -31,6 +31,9 @@ enum Cmd {
         model: Option<String>,
         #[arg(long)]
         no_web: bool,
+        /// Run the agent inside this folder with read-only file tools.
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Send a turn and stream the reply.
     Send {
@@ -116,9 +119,9 @@ async fn main() -> Result<()> {
                 println!("{:<8} {}", id, info.path.unwrap_or_else(|| "(not found)".into()));
             }
         }
-        Cmd::New { agent, model, no_web } => {
+        Cmd::New { agent, model, no_web, project } => {
             let id = AgentId::parse(&agent).ok_or_else(|| anyhow!("unknown agent {}", agent))?;
-            let conv = engine.create_conversation(id, model, Some(!no_web))?;
+            let conv = engine.create_conversation(id, model, Some(!no_web), project)?;
             println!("{}", conv.summary.id);
         }
         Cmd::Search { query } => {

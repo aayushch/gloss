@@ -18,6 +18,7 @@ const conv: Conversation = {
 	pinned: false,
 	tags: [],
 	clarificationCount: 2,
+	projectDir: null,
 	createdAt: Date.UTC(2026, 9, 14),
 	updatedAt: 0,
 	agentSessionId: null,

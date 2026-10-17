@@ -57,14 +57,14 @@ impl AgentAdapter for Pi {
 
     fn build_command(&self, req: &SpawnRequest, env: &ShellEnv) -> Result<CommandSpec> {
         let program = require_binary(env, AgentId::Pi, resolve)?;
-        let mut args: Vec<String> = vec![
-            "-p".into(),
-            "--mode".into(),
-            "json".into(),
-            "--no-tools".into(),
-            "--session-dir".into(),
-            req.pi_session_dir.to_string_lossy().to_string(),
-        ];
+        let mut args: Vec<String> = vec!["-p".into(), "--mode".into(), "json".into()];
+        // Inside a project folder Pi gets its read-only file tools; elsewhere none.
+        if req.project {
+            args.extend(["--tools".into(), "read,grep,find,ls".into()]);
+        } else {
+            args.push("--no-tools".into());
+        }
+        args.extend(["--session-dir".into(), req.pi_session_dir.to_string_lossy().to_string()]);
         match &req.agent_session_id {
             Some(sid) => args.extend(["--session".into(), sid.clone()]),
             None => args.extend(["--session-id".into(), req.new_session_id.clone()]),
@@ -245,6 +245,11 @@ mod tests {
         let spec = Pi::default().build_command(&req("hi"), &env).unwrap();
         assert!(spec.args.contains(&"--session-dir".to_string()));
         assert!(spec.args.contains(&"--no-tools".to_string()));
+        let mut r = req("hi");
+        r.project = true;
+        let spec = Pi::default().build_command(&r, &env).unwrap();
+        assert!(spec.args.windows(2).any(|w| w == ["--tools", "read,grep,find,ls"]));
+        assert!(!spec.args.contains(&"--no-tools".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--session-id", "11111111-2222-3333-4444-555555555555"]));
         assert_eq!(spec.args.last().unwrap(), "hi");
         let spec = Pi::default().build_command(&req_with_image("hi"), &env).unwrap();

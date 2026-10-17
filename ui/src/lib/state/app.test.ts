@@ -47,6 +47,35 @@ describe('app state against the mock api', () => {
 		expect(app.running).toBe(false);
 	});
 
+	it('stages files named by path and reports the kind from the name', async () => {
+		await app.init();
+		app.staged = [];
+		await app.attachPaths(['/tmp/shot.png', '/tmp/notes.md']);
+		expect(app.staged.map((a) => [a.name, a.kind])).toEqual([
+			['shot.png', 'image'],
+			['notes.md', 'text']
+		]);
+		expect(app.attachError).toBeNull();
+		for (const a of [...app.staged]) await app.unstage(a.id);
+	});
+
+	it('binds a draft to a folder and keeps it on the created conversation', async () => {
+		app.newChat();
+		expect(app.activeProjectDir).toBeNull();
+		await app.chooseFolder();
+		expect(app.draft?.projectDir).toBe('/Users/me/code/demo-project');
+		app.clearFolder();
+		expect(app.draft?.projectDir).toBeNull();
+		await app.chooseFolder();
+		await app.send('What does this project do?');
+		expect(app.draft).toBeNull();
+		expect(app.active?.projectDir).toBe('/Users/me/code/demo-project');
+		expect(app.conversations[0].projectDir).toBe('/Users/me/code/demo-project');
+		await settle(100);
+		await app.cancel();
+		await settle(20);
+	});
+
 	it('creates a conversation from a draft on first send and cancels', async () => {
 		app.newChat();
 		expect(app.draft).not.toBeNull();

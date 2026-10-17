@@ -118,6 +118,22 @@ impl AgentAdapter for Gemini {
         if let Some(model) = req.model.as_deref().filter(|m| !m.is_empty()) {
             args.extend(["-m".into(), model.to_string()]);
         }
+        // `@` references only resolve inside the workspace. In a project
+        // folder the attachment copies are elsewhere, so their directory is
+        // added to the workspace for this run.
+        if req.project {
+            let dirs: Vec<String> = req
+                .images
+                .iter()
+                .filter_map(|img| img.path.parent().and_then(|p| p.parent()))
+                .map(|d| d.to_string_lossy().to_string())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            if !dirs.is_empty() {
+                args.extend(["--include-directories".into(), dirs.join(",")]);
+            }
+        }
         Ok(CommandSpec {
             program,
             args,

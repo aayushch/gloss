@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -19,6 +19,12 @@ const MIGRATE_V1_TO_V2: &str = "
     INSERT INTO turns_fts (turn_id, conversation_id, text)
         SELECT id, conversation_id, text FROM turns WHERE status IN ('done', 'error', 'cancelled');
     UPDATE schema_version SET version = 2;
+";
+
+/// Version 3 adds the project folder a conversation is bound to.
+const MIGRATE_V2_TO_V3: &str = "
+    ALTER TABLE conversations ADD COLUMN project_dir TEXT;
+    UPDATE schema_version SET version = 3;
 ";
 
 pub struct Store {
@@ -51,7 +57,11 @@ impl Store {
             None => {
                 conn.execute("INSERT INTO schema_version (version) VALUES (?1)", params![SCHEMA_VERSION])?;
             }
-            Some(1) => conn.execute_batch(MIGRATE_V1_TO_V2)?,
+            Some(1) => {
+                conn.execute_batch(MIGRATE_V1_TO_V2)?;
+                conn.execute_batch(MIGRATE_V2_TO_V3)?;
+            }
+            Some(2) => conn.execute_batch(MIGRATE_V2_TO_V3)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -104,14 +114,14 @@ impl Store {
 
     // ── conversations ───────────────────────────────────────────────────
 
-    pub fn create_conversation(&self, agent: AgentId, model: &str, web_search: bool) -> Result<Conversation> {
+    pub fn create_conversation(&self, agent: AgentId, model: &str, web_search: bool, project_dir: Option<&str>) -> Result<Conversation> {
         let id = new_id("conv");
         let now = now_ms();
         self.with(|c| {
             c.execute(
-                "INSERT INTO conversations (id, title, agent, model, web_search, created_at, updated_at)
-                 VALUES (?1, 'New conversation', ?2, ?3, ?4, ?5, ?5)",
-                params![id, agent.as_str(), model, web_search as i64, now],
+                "INSERT INTO conversations (id, title, agent, model, web_search, project_dir, created_at, updated_at)
+                 VALUES (?1, 'New conversation', ?2, ?3, ?4, ?5, ?6, ?6)",
+                params![id, agent.as_str(), model, web_search as i64, project_dir, now],
             )?;
             Ok(())
         })?;
@@ -608,7 +618,7 @@ impl Store {
 }
 
 const SUMMARY_SELECT: &str = "SELECT c.id, c.title, c.agent, c.model, c.web_search, c.created_at, c.updated_at,
-        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags
+        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags, c.project_dir
      FROM conversations c";
 
 const ATTACHMENT_SELECT: &str =
@@ -628,6 +638,7 @@ fn row_summary(r: &Row<'_>) -> rusqlite::Result<ConversationSummary> {
         clarification_count: r.get::<_, i64>(7)? as u32,
         pinned: r.get::<_, i64>(8)? != 0,
         tags: serde_json::from_str(&tags).unwrap_or_default(),
+        project_dir: r.get(10)?,
     })
 }
 
@@ -716,7 +727,7 @@ mod tests {
     #[test]
     fn conversation_turn_clarification_roundtrip() {
         let s = Store::in_memory().unwrap();
-        let conv = s.create_conversation(AgentId::Pi, "", true).unwrap();
+        let conv = s.create_conversation(AgentId::Pi, "", true, None).unwrap();
         assert_eq!(conv.summary.title, "New conversation");
         let u = s
             .create_turn(&conv.summary.id, Role::User, "hello", None, TurnStatus::Done, None, None)
@@ -765,7 +776,8 @@ mod tests {
         assert_eq!(back.theme, Theme::Dark);
         assert_eq!(back.default_model[&AgentId::Claude], "haiku");
 
-        let conv = s.create_conversation(AgentId::Claude, "haiku", false).unwrap();
+        let conv = s.create_conversation(AgentId::Claude, "haiku", false, Some("/tmp/proj")).unwrap();
+        assert_eq!(conv.summary.project_dir.as_deref(), Some("/tmp/proj"));
         s.create_turn(&conv.summary.id, Role::Assistant, "", None, TurnStatus::Streaming, None, None).unwrap();
         assert_eq!(s.fail_unfinished_turns("closed").unwrap(), 1);
         let t = &s.get_conversation(&conv.summary.id).unwrap().turns[0];
@@ -787,8 +799,8 @@ mod search_tests {
     #[test]
     fn search_pins_tags_and_snippets() {
         let s = Store::in_memory().unwrap();
-        let a = s.create_conversation(AgentId::Claude, "", true).unwrap();
-        let b = s.create_conversation(AgentId::Pi, "", true).unwrap();
+        let a = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
+        let b = s.create_conversation(AgentId::Pi, "", true, None).unwrap();
         s.create_turn(&a.summary.id, Role::User, "Explain the store buffer", None, TurnStatus::Done, None, None).unwrap();
         let reply = s.create_turn(&a.summary.id, Role::Assistant, "", None, TurnStatus::Pending, None, None).unwrap();
         // Streaming text is not indexed until the turn finishes.
@@ -860,6 +872,7 @@ mod search_tests {
         let list = s.list_conversations(None, None).unwrap();
         assert_eq!(list[0].title, "Old chat");
         assert!(!list[0].pinned);
+        assert!(list[0].project_dir.is_none());
         assert_eq!(s.search("migrated", 10).unwrap().len(), 1);
         // Reopening a migrated file is a no-op.
         drop(s);

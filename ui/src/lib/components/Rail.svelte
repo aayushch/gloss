@@ -105,6 +105,9 @@
 				{#each g.items as c (c.id)}
 					{@const current = app.active?.id === c.id}
 					<div class="navitem" class:on={current} aria-current={current ? 'page' : undefined} role="button" tabindex="0" onclick={() => app.open(c.id)} onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}>
+						{#if c.projectDir}
+							<span class="fmark" title={c.projectDir}><Icon name="folder" size={11} /></span>
+						{/if}
 						<span class="title">{c.title}</span>
 						{#if c.clarificationCount > 0}
 							<span class="countpill">{c.clarificationCount}</span>
@@ -203,6 +206,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.fmark {
+		display: inline-flex;
+		color: var(--accent-text);
+		flex: none;
 	}
 	.countpill {
 		font-size: 10.5px;

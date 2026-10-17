@@ -245,6 +245,9 @@ pub struct ConversationSummary {
     /// User-assigned labels, lower-cased and unique, in the order they were given.
     pub tags: Vec<String>,
     pub clarification_count: u32,
+    /// Absolute path of the folder the agent runs in, with read-only file
+    /// tools; None means the private Gloss workspace with no file tools.
+    pub project_dir: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }

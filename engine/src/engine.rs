@@ -178,18 +178,36 @@ impl Engine {
         Ok(c)
     }
 
+    /// `project_dir`, when given, must be an existing directory; it is stored
+    /// in canonical form and the agent runs inside it with read-only file
+    /// tools for every turn of the conversation.
     pub fn create_conversation(
         &self,
         agent: AgentId,
         model: Option<String>,
         web_search: Option<bool>,
+        project_dir: Option<String>,
     ) -> Result<Conversation> {
         let settings = self.store.settings()?;
         let model = model
             .or_else(|| settings.default_model.get(&agent).cloned())
             .unwrap_or_default();
         let web = web_search.unwrap_or(settings.web_search);
-        self.store.create_conversation(agent, &model, web)
+        let project = match project_dir.map(|d| d.trim().to_string()).filter(|d| !d.is_empty()) {
+            None => None,
+            Some(dir) => {
+                let path = std::path::Path::new(&dir);
+                if !path.is_absolute() {
+                    return Err(anyhow!("project folder must be an absolute path: {}", dir));
+                }
+                if !path.is_dir() {
+                    return Err(anyhow!("project folder does not exist or is not a directory: {}", dir));
+                }
+                let canonical = std::fs::canonicalize(path).with_context(|| format!("resolve {}", dir))?;
+                Some(canonical.to_string_lossy().to_string())
+            }
+        };
+        self.store.create_conversation(agent, &model, web, project.as_deref())
     }
 
     pub fn rename_conversation(&self, id: &str, title: &str) -> Result<ConversationSummary> {
@@ -273,6 +291,15 @@ impl Engine {
         sink: EventSink,
     ) -> Result<SendTurnResult> {
         let conv_id = conv.summary.id.clone();
+        // A bound folder that has gone missing is reported before anything is
+        // recorded, so the user can act on it rather than get a failed turn.
+        let project_dir = conv.summary.project_dir.as_deref().map(std::path::PathBuf::from);
+        if let Some(dir) = &project_dir {
+            if !dir.is_dir() {
+                return Err(anyhow!("the project folder {} is missing; it may have been moved or deleted", dir.display()));
+            }
+        }
+        let note = prompt::system_note(conv.summary.project_dir.as_deref());
         let attachments = self.staged_attachments(attachment_ids)?;
         // No agent session yet means this spawn starts the agent's conversation,
         // even when an earlier attempt failed before the agent reported one.
@@ -308,7 +335,7 @@ impl Engine {
                 }),
             }
         }
-        let full_prompt = prompt::compose_prompt(agent, is_first_turn, &body);
+        let full_prompt = prompt::compose_prompt(agent, is_first_turn, &body, &note);
         let prompt_text = (full_prompt != text).then(|| full_prompt.clone());
 
         let mut user_turn = self.store.create_turn(
@@ -345,9 +372,10 @@ impl Engine {
             new_session_id: uuid::Uuid::new_v4().to_string(),
             model: Some(conv.summary.model.clone()).filter(|m| !m.is_empty()),
             web_search: conv.summary.web_search,
-            cwd: self.paths.workspace.clone(),
+            project: project_dir.is_some(),
+            cwd: project_dir.unwrap_or_else(|| self.paths.workspace.clone()),
             pi_session_dir: self.paths.pi_sessions.clone(),
-            system_note: prompt::SYSTEM_NOTE.to_string(),
+            system_note: note,
             title: Some(title),
             images,
         };
@@ -589,7 +617,7 @@ mod tests {
     #[test]
     fn set_full_reconciles_with_streamed_text() {
         let store = Store::in_memory().unwrap();
-        let conv = store.create_conversation(AgentId::Pi, "", false).unwrap();
+        let conv = store.create_conversation(AgentId::Pi, "", false, None).unwrap();
         let turn = store.create_turn(&conv.summary.id, Role::Assistant, "", None, TurnStatus::Pending, None, None).unwrap();
         let (sink, events) = collect();
         let emit = |e: TurnEvent| sink(TurnEventEnvelope { conversation_id: "c".into(), turn_id: "t".into(), event: e });
@@ -612,7 +640,7 @@ mod tests {
         let mut env = ShellEnv::from_process();
         env.vars.insert("PATH".into(), "/nonexistent".into());
         let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), env).unwrap());
-        let conv = engine.create_conversation(AgentId::Codex, None, None).unwrap();
+        let conv = engine.create_conversation(AgentId::Codex, None, None, None).unwrap();
         let (sink, events) = collect();
         let res = engine
             .send_turn(
@@ -643,7 +671,7 @@ mod tests {
         let mut env = ShellEnv::from_process();
         env.vars.insert("PATH".into(), "/nonexistent".into());
         let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), env).unwrap());
-        let conv = engine.create_conversation(AgentId::Claude, Some("haiku".into()), Some(false)).unwrap();
+        let conv = engine.create_conversation(AgentId::Claude, Some("haiku".into()), Some(false), None).unwrap();
         let (sink, _) = collect();
         let res = engine
             .send_turn(
@@ -670,6 +698,27 @@ mod tests {
     }
 
     #[test]
+    fn project_folder_must_exist_and_is_stored_canonical() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::open_with_env(GlossPaths::at(dir.path()), ShellEnv::from_process()).unwrap();
+        let project = dir.path().join("proj");
+        std::fs::create_dir(&project).unwrap();
+        let err = engine.create_conversation(AgentId::Pi, None, None, Some("proj".into())).unwrap_err();
+        assert!(err.to_string().contains("absolute"));
+        let missing = dir.path().join("nope").to_string_lossy().to_string();
+        let err = engine.create_conversation(AgentId::Pi, None, None, Some(missing)).unwrap_err();
+        assert!(err.to_string().contains("does not exist"));
+        let dotted = format!("{}/./proj/", dir.path().display());
+        let conv = engine.create_conversation(AgentId::Pi, None, None, Some(dotted)).unwrap();
+        assert_eq!(
+            conv.summary.project_dir.as_deref(),
+            Some(std::fs::canonicalize(&project).unwrap().to_string_lossy().as_ref())
+        );
+        let plain = engine.create_conversation(AgentId::Pi, None, None, Some("  ".into())).unwrap();
+        assert!(plain.summary.project_dir.is_none());
+    }
+
+    #[test]
     fn artifact_files_are_written_and_purged() {
         let dir = tempfile::tempdir().unwrap();
         let engine = Engine::open_with_env(GlossPaths::at(dir.path()), ShellEnv::from_process()).unwrap();
@@ -689,7 +738,7 @@ mod tests {
         let mut env = ShellEnv::from_process();
         env.vars.insert("PATH".into(), "/nonexistent".into());
         let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), env).unwrap());
-        let conv = engine.create_conversation(AgentId::Pi, None, Some(false)).unwrap();
+        let conv = engine.create_conversation(AgentId::Pi, None, Some(false), None).unwrap();
         let txt = engine.add_attachment("notes (draft).md", "", b"# Notes\nline\n").unwrap();
         assert_eq!(txt.kind, AttachmentKind::Text);
         assert!(txt.path.ends_with("notes__draft_.md"));

@@ -8,6 +8,7 @@
     "core:window:allow-set-theme",
     "core:window:allow-start-dragging",
     "opener:default",
+    "dialog:allow-open",
     "updater:default",
     "process:default"
   ]

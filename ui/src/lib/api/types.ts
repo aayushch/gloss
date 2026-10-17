@@ -108,6 +108,8 @@ export interface ConversationSummary {
 	pinned: boolean;
 	tags: string[];
 	clarificationCount: number;
+	/** Absolute path of the project folder the agent runs in; null means the Gloss workspace. */
+	projectDir: string | null;
 	createdAt: number;
 	updatedAt: number;
 }

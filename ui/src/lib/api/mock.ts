@@ -167,6 +167,7 @@ function seed(): Conv[] {
 		pinned: true,
 		tags: ['cpu', 'concurrency'],
 		clarificationCount: 0,
+		projectDir: null,
 		createdAt: now() - 3600_000,
 		updatedAt: now() - 1800_000,
 		agentSessionId: '32bead75-3df0-42d1-a069-faae5a2370fe',
@@ -201,6 +202,7 @@ function seed(): Conv[] {
 		pinned: false,
 		tags: ['rust'],
 		clarificationCount: 0,
+		projectDir: null,
 		createdAt: now() - DAY - 3600_000,
 		updatedAt: now() - DAY,
 		agentSessionId: null,
@@ -220,6 +222,7 @@ function seed(): Conv[] {
 		pinned: false,
 		tags: [],
 		clarificationCount: 0,
+		projectDir: null,
 		createdAt: now() - 2 * DAY,
 		updatedAt: now() - 2 * DAY + 60_000,
 		agentSessionId: null,
@@ -249,6 +252,7 @@ export function mockApi(): Api {
 		pinned: c.pinned,
 		tags: c.tags,
 		clarificationCount: c.clarifications.length,
+		projectDir: c.projectDir,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	});
@@ -337,6 +341,15 @@ export function mockApi(): Api {
 			staged.set(att.id, { att, url: URL.createObjectURL(new Blob([bytes.slice()], { type: att.mime })) });
 			return att;
 		},
+		addAttachmentPath: async (path) => {
+			const name = path.split(/[\\/]/).pop() || 'file';
+			const isImage = /\.(png|jpe?g|gif|webp)$/i.test(name);
+			const att: Attachment = { id: nextId('att'), name, mime: isImage ? 'image/png' : 'text/plain', kind: isImage ? 'image' : 'text', size: 0, path, turnId: null, createdAt: now() };
+			staged.set(att.id, { att, url: '' });
+			return att;
+		},
+		pickFiles: async () => null,
+		pickFolder: async () => '/Users/me/code/demo-project',
 		removeAttachment: async (id) => {
 			staged.delete(id);
 		},
@@ -354,7 +367,7 @@ export function mockApi(): Api {
 			return name;
 		},
 		getConversation: async (id) => full(find(id)),
-		createConversation: async (agent, model, webSearch) => {
+		createConversation: async (agent, model, webSearch, projectDir) => {
 			const c: Conv = {
 				id: nextId('conv'),
 				title: 'New conversation',
@@ -364,6 +377,7 @@ export function mockApi(): Api {
 				pinned: false,
 				tags: [],
 				clarificationCount: 0,
+				projectDir: projectDir ?? null,
 				createdAt: now(),
 				updatedAt: now(),
 				agentSessionId: null,

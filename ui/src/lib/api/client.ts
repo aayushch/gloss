@@ -29,6 +29,13 @@ export interface Api {
 	listTags(): Promise<string[]>;
 	/** Stores a file for a later turn and returns its record. */
 	addAttachment(name: string, mime: string, bytes: Uint8Array): Promise<Attachment>;
+	/** Stores a file already on disk, named by the picker or a drop. */
+	addAttachmentPath(path: string): Promise<Attachment>;
+	/**
+	 * Opens the native file picker and returns the chosen paths, or null when
+	 * the page has to use its own file input instead (outside Tauri).
+	 */
+	pickFiles(): Promise<string[] | null>;
 	removeAttachment(id: string): Promise<void>;
 	/** A URL the webview can show the attachment from (object URL). */
 	attachmentUrl(att: Attachment): Promise<string>;
@@ -37,7 +44,9 @@ export interface Api {
 	/** Writes an artifact to the artifacts folder and opens it with the system's default app. */
 	openArtifact(name: string, contents: string): Promise<string>;
 	getConversation(id: string): Promise<Conversation>;
-	createConversation(agent: AgentId, model?: string, webSearch?: boolean): Promise<Conversation>;
+	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
+	/** Opens the native folder picker; null when nothing was chosen. */
+	pickFolder(): Promise<string | null>;
 	renameConversation(id: string, title: string): Promise<ConversationSummary>;
 	deleteConversation(id: string): Promise<void>;
 	setConversationModel(id: string, model: string): Promise<ConversationSummary>;
@@ -48,6 +57,13 @@ export interface Api {
 	setTheme(theme: Theme): Promise<void>;
 	onTurnEvent(cb: (e: TurnEventEnvelope) => void): Promise<() => void>;
 }
+
+/** File types the picker offers; the engine still checks the content. */
+export const ATTACHMENT_EXTENSIONS = [
+	'png', 'jpg', 'jpeg', 'gif', 'webp',
+	'md', 'txt', 'json', 'csv', 'xml', 'yaml', 'yml', 'toml', 'ini', 'log',
+	'rs', 'ts', 'js', 'py', 'go', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'rb', 'sh', 'sql', 'html', 'css', 'svelte'
+];
 
 export function inTauri(): boolean {
 	return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -74,6 +90,16 @@ function tauriApi(): Api {
 			// name fits in a header.
 			return invoke<Attachment>('add_attachment', bytes, { headers: { 'x-name': encodeURIComponent(name), 'x-mime': mime } });
 		},
+		addAttachmentPath: (path) => call('add_attachment_path', { path }),
+		pickFiles: async () => {
+			const { open } = await import('@tauri-apps/plugin-dialog');
+			const picked = await open({
+				multiple: true,
+				title: 'Attach images or text files',
+				filters: [{ name: 'Images and text', extensions: ATTACHMENT_EXTENSIONS }]
+			});
+			return picked ?? [];
+		},
 		removeAttachment: (id) => call('remove_attachment', { id }),
 		attachmentUrl: async (att) => {
 			const buf = await call<ArrayBuffer>('attachment_bytes', { id: att.id });
@@ -82,8 +108,13 @@ function tauriApi(): Api {
 		saveTextFile: (defaultName, contents) => call('save_text_file', { defaultName, contents }),
 		openArtifact: (name, contents) => call('open_artifact', { name, contents }),
 		getConversation: (id) => call('get_conversation', { id }),
-		createConversation: (agent, model, webSearch) =>
-			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null }),
+		createConversation: (agent, model, webSearch, projectDir) =>
+			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null, projectDir: projectDir ?? null }),
+		pickFolder: async () => {
+			const { open } = await import('@tauri-apps/plugin-dialog');
+			const picked = await open({ directory: true, multiple: false, title: 'Choose the project folder' });
+			return typeof picked === 'string' ? picked : null;
+		},
 		renameConversation: (id, title) => call('rename_conversation', { id, title }),
 		deleteConversation: (id) => call('delete_conversation', { id }),
 		setConversationModel: (id, model) => call('set_conversation_model', { id, model }),

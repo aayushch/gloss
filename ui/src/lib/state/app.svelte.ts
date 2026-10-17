@@ -49,6 +49,13 @@ export interface Draft {
 	agent: AgentId;
 	model: string;
 	webSearch: boolean;
+	/** Folder the agent will run in; null means the Gloss workspace. Fixed once the conversation exists. */
+	projectDir: string | null;
+}
+
+/** Last path segment of a folder path, for labels. */
+export function folderName(path: string): string {
+	return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
 }
 
 export const AGENT_NAMES: Record<AgentId, string> = {
@@ -241,6 +248,21 @@ class AppState {
 		}
 	}
 
+	/** Stages files already on disk, from the native picker or a drop on the window. */
+	async attachPaths(paths: Iterable<string>): Promise<void> {
+		const a = await api();
+		this.attachError = null;
+		for (const path of paths) {
+			try {
+				const att = await a.addAttachmentPath(path);
+				this.staged = [...this.staged, att];
+				this.loadThumb(att);
+			} catch (e) {
+				this.attachError = String(e).replace(/^Error:\s*/, '');
+			}
+		}
+	}
+
 	async unstage(id: string): Promise<void> {
 		this.staged = this.staged.filter((s) => s.id !== id);
 		(await api()).removeAttachment(id).catch(() => {});
@@ -371,7 +393,23 @@ class AppState {
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch };
+		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir: null };
+	}
+
+	/** The folder the active conversation or draft runs in, if any. */
+	get activeProjectDir(): string | null {
+		return this.active?.projectDir ?? this.draft?.projectDir ?? null;
+	}
+
+	/** Binds the draft to a folder chosen in the native picker. Only a draft can change folder. */
+	async chooseFolder(): Promise<void> {
+		if (!this.draft) return;
+		const dir = await (await api()).pickFolder();
+		if (dir && this.draft) this.draft.projectDir = dir;
+	}
+
+	clearFolder(): void {
+		if (this.draft) this.draft.projectDir = null;
 	}
 
 	async setModel(model: string): Promise<void> {
@@ -448,7 +486,7 @@ class AppState {
 		const a = await api();
 		if (this.draft) {
 			const d = this.draft;
-			const conv = await a.createConversation(d.agent, d.model || undefined, d.webSearch);
+			const conv = await a.createConversation(d.agent, d.model || undefined, d.webSearch, d.projectDir);
 			this.draft = null;
 			this.active = conv;
 			this.conversations = [summaryOf(conv), ...this.conversations];
@@ -483,7 +521,11 @@ class AppState {
 	}
 
 	private async dispatch(text: string, clarification: Parameters<typeof this.sendRaw>[1], attachments: string[] = []): Promise<void> {
-		await this.sendRaw(text, clarification, attachments);
+		try {
+			await this.sendRaw(text, clarification, attachments);
+		} catch (e) {
+			this.flash(`Could not send: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
 	}
 
 	private async sendRaw(
@@ -610,6 +652,7 @@ function summaryOf(c: Conversation): ConversationSummary {
 		pinned: c.pinned,
 		tags: c.tags,
 		clarificationCount: c.clarifications.length,
+		projectDir: c.projectDir,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	};
