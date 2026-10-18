@@ -214,8 +214,9 @@ pub(crate) fn capture_text(env: &ShellEnv, path: &Path, args: &[&str], timeout: 
 /// lists are read from it so Gloss offers exactly what the installed
 /// version supports.
 pub(crate) fn help_text(env: &ShellEnv, path: &Path, args: &[&str]) -> Option<String> {
-    static HELP_CACHE: Mutex<Option<HashMap<(PathBuf, Option<std::time::SystemTime>, Vec<String>), Option<String>>>> =
-        Mutex::new(None);
+    /// Binary path, its modification time, and the arguments used to print help.
+    type HelpKey = (PathBuf, Option<SystemTime>, Vec<String>);
+    static HELP_CACHE: Mutex<Option<HashMap<HelpKey, Option<String>>>> = Mutex::new(None);
     let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
     let key = (path.to_path_buf(), mtime, args.iter().map(|a| a.to_string()).collect::<Vec<_>>());
     if let Some(cache) = HELP_CACHE.lock().unwrap().as_ref() {
