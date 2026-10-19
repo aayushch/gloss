@@ -1,6 +1,7 @@
 <script lang="ts">
-	// Conversation header: title, tags, pin, web-search toggle, model pill,
-	// clarification count and the export menu.
+	// Conversation header: title, project (a picker while the chat is a
+	// draft), tags, pin, web-search toggle, model pill, clarification count
+	// and the export menu.
 	import { app, folderName } from '$lib/state/app.svelte';
 	import Icon from './Icon.svelte';
 	import ModelMenu from './ModelMenu.svelte';
@@ -9,6 +10,7 @@
 	let tagText = $state('');
 	let tagInput: HTMLInputElement | undefined = $state();
 	let exportOpen = $state(false);
+	let projectMenuOpen = $state(false);
 
 	function startTags() {
 		tagText = (app.active?.tags ?? []).join(', ');
@@ -32,6 +34,20 @@
 		return () => document.removeEventListener('mousedown', close);
 	});
 
+	$effect(() => {
+		if (!projectMenuOpen) return;
+		const close = (e: MouseEvent) => {
+			if (!(e.target as HTMLElement).closest('[data-project-menu]')) projectMenuOpen = false;
+		};
+		document.addEventListener('mousedown', close);
+		return () => document.removeEventListener('mousedown', close);
+	});
+
+	function pickProject(path: string | null) {
+		projectMenuOpen = false;
+		app.chooseProject(path);
+	}
+
 	const title = $derived(app.active?.title ?? 'New conversation');
 	const count = $derived(app.active?.clarifications.length ?? 0);
 	const agent = $derived(app.activeAgent);
@@ -44,33 +60,60 @@
 
 <header data-tauri-drag-region>
 	<h1 title={title}>{title}</h1>
-	{#if app.activeProjectDir}
-		<span class="folder" title="Agent runs in {app.activeProjectDir} (read-only)">
+	{#if app.draft}
+		<div class="project-wrap" data-project-menu>
+			<span class="folder" class:none={!app.activeProjectDir}>
+				<button
+					type="button"
+					class="pick"
+					title={app.activeProjectDir ? `Agent runs in ${app.activeProjectDir}` : 'Run the agent inside one of your projects'}
+					aria-haspopup="menu"
+					aria-expanded={projectMenuOpen}
+					onclick={() => (projectMenuOpen = !projectMenuOpen)}
+				>
+					<Icon name="folder" size={12} />
+					<span class="fname">{app.activeProjectDir ? folderName(app.activeProjectDir) : 'No project'}</span>
+					<Icon name="chevron-down" size={11} />
+				</button>
+				{#if app.activeProjectDir}
+					<button type="button" class="unbind" title="Start this chat outside any project" aria-label="Remove project" onclick={() => pickProject(null)}><Icon name="x" size={11} /></button>
+				{/if}
+			</span>
+			{#if projectMenuOpen}
+				<div class="menu left" role="menu">
+					{#each app.projects as p (p.path)}
+						<button type="button" role="menuitemradio" aria-checked={app.activeProjectDir === p.path} class:on={app.activeProjectDir === p.path} title={p.path} onclick={() => pickProject(p.path)}>
+							<Icon name="folder" size={12} />
+							<span class="fname">{p.name}</span>
+						</button>
+					{/each}
+					{#if app.projects.length}<div class="sep"></div>{/if}
+					<button type="button" role="menuitem" onclick={() => { projectMenuOpen = false; app.addProjectToDraft(); }}>
+						<Icon name="plus" size={12} />
+						<span>Add project…</span>
+					</button>
+				</div>
+			{/if}
+		</div>
+	{:else if app.activeProjectDir}
+		<span class="folder" title="Agent runs in {app.activeProjectDir}">
 			<Icon name="folder" size={12} />
 			<span class="fname">{folderName(app.activeProjectDir)}</span>
-			{#if app.draft}
-				<button type="button" class="unbind" title="Use the Gloss workspace instead" aria-label="Remove folder" onclick={() => app.clearFolder()}><Icon name="x" size={11} /></button>
-			{/if}
 		</span>
-		{#if app.activeModes.length}
-			<select
-				class="mode"
-				title={app.activeModes.find((m) => m.id === app.activeMode)?.description ?? 'Reads files only; never changes them'}
-				aria-label="Working mode"
-				value={app.activeMode ?? 'read-only'}
-				onchange={(e) => app.setMode(e.currentTarget.value === 'read-only' ? null : e.currentTarget.value)}
-			>
-				<option value="read-only">Read only</option>
-				{#each app.activeModes as m (m.id)}
-					<option value={m.id}>{m.label}</option>
-				{/each}
-			</select>
-		{/if}
-	{:else if app.draft}
-		<button type="button" class="tagbtn" title="Run the agent inside a folder of yours, read-only" onclick={() => app.chooseFolder()}>
-			<Icon name="folder" size={12} />
-			<span class="addtag">Choose folder</span>
-		</button>
+	{/if}
+	{#if app.activeProjectDir && app.activeModes.length}
+		<select
+			class="mode"
+			title={app.activeModes.find((m) => m.id === app.activeMode)?.description ?? 'Reads files only; never changes them'}
+			aria-label="Working mode"
+			value={app.activeMode ?? 'read-only'}
+			onchange={(e) => app.setMode(e.currentTarget.value === 'read-only' ? null : e.currentTarget.value)}
+		>
+			<option value="read-only">Read only</option>
+			{#each app.activeModes as m (m.id)}
+				<option value={m.id}>{m.label}</option>
+			{/each}
+		</select>
 	{/if}
 	{#if app.active}
 		{#if editingTags}
@@ -239,6 +282,48 @@
 		font-size: 11.5px;
 		flex: none;
 		max-width: 220px;
+	}
+	.folder.none {
+		background: transparent;
+		color: var(--text-3);
+	}
+	.folder.none:hover {
+		background: var(--surface);
+		color: var(--text);
+	}
+	.pick {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+		color: inherit;
+		font-size: inherit;
+	}
+	.project-wrap {
+		position: relative;
+		flex: none;
+	}
+	.menu.left {
+		left: 0;
+		right: auto;
+		top: 30px;
+		max-height: 320px;
+		overflow-y: auto;
+	}
+	.menu button {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		min-width: 0;
+	}
+	.menu button.on {
+		color: var(--accent-text);
+		font-weight: 500;
+	}
+	.sep {
+		height: 1px;
+		background: var(--line);
+		margin: 4px 6px;
 	}
 	.fname {
 		overflow: hidden;

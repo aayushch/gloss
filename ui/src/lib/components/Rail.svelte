@@ -1,18 +1,28 @@
 <script lang="ts">
-	// Left navigation rail: new chat, search, tag filters, the pinned and
-	// date-grouped conversation list with clarification sub-items under the
-	// active conversation, full-text results while searching, and the footer.
+	// Left navigation rail: new chat, search, tag filters, the projects with
+	// their own conversations, the pinned and date-grouped list of the other
+	// conversations, clarification sub-items under the active conversation,
+	// full-text results while searching, and the footer.
 	import { api } from '$lib/api/client';
 	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
-	import { groupOf, pad, short, type Group } from '$lib/state/threads';
+	import type { ConversationSummary, Project } from '$lib/api/types';
+	import { groupOf, pad, short, splitByProject, type Group } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
 
 	const GROUPS: Group[] = ['Today', 'Yesterday', 'Last week', 'Older'];
 
+	const split = $derived(splitByProject(app.conversations, app.projects));
+
+	/** Projects the rail lists. A tag filter hides those with no matching conversation. */
+	const shownProjects = $derived(app.tagFilter ? app.projects.filter((p) => split.byProject.get(p.path)?.length) : app.projects);
+
+	/** The draft goes under its project when that project is listed, otherwise under Today. */
+	const draftProject = $derived(app.draft?.projectDir && app.projects.some((p) => p.path === app.draft!.projectDir) ? app.draft.projectDir : null);
+
 	const grouped = $derived.by(() => {
-		const out = new Map<string, typeof app.conversations>();
-		for (const c of app.conversations) {
+		const out = new Map<string, ConversationSummary[]>();
+		for (const c of split.rest) {
 			const g = c.pinned ? 'Pinned' : groupOf(c.updatedAt);
 			if (!out.has(g)) out.set(g, []);
 			out.get(g)!.push(c);
@@ -57,11 +67,45 @@
 		if (yes) app.remove(id);
 	}
 
+	async function confirmRemoveProject(e: MouseEvent, p: Project) {
+		e.stopPropagation();
+		const yes = await (await api()).confirm(`Remove “${p.name}” from projects?`, 'Its conversations stay in Gloss and are listed by date. Nothing in the folder is changed.', 'Remove');
+		if (yes) app.removeProject(p.path);
+	}
+
+	function newChatIn(e: MouseEvent, path: string) {
+		e.stopPropagation();
+		app.newChat(path);
+	}
+
 	function pin(e: MouseEvent, id: string) {
 		e.stopPropagation();
 		app.togglePin(id);
 	}
 </script>
+
+{#snippet row(c: ConversationSummary, inProject = false)}
+	{@const current = app.active?.id === c.id}
+	<div class="navitem" class:on={current} aria-current={current ? 'page' : undefined} role="button" tabindex="0" onclick={() => app.open(c.id)} onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}>
+		{#if c.projectDir && !inProject}
+			<span class="fmark" title={c.projectDir}><Icon name="folder" size={11} /></span>
+		{/if}
+		<span class="title">{c.title}</span>
+		{#if c.clarificationCount > 0}
+			<span class="countpill">{c.clarificationCount}</span>
+		{/if}
+		<button type="button" class="act" class:pinned={c.pinned} title={c.pinned ? 'Unpin' : 'Pin'} aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button>
+		<button type="button" class="act" title="Delete conversation" aria-label="Delete conversation" onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button>
+	</div>
+	{#if current && app.active}
+		{#each app.active.clarifications as cl, i (cl.id)}
+			<button type="button" class="navsub" class:nested={isNested(cl.id)} onclick={() => app.jumpTo(cl.id)}>
+				<span class="dot"></span>
+				<span class="sub">Clarification {pad(i + 1)} · {short(cl.quote, 26)}</span>
+			</button>
+		{/each}
+	{/if}
+{/snippet}
 
 <nav class="rail">
 	<button type="button" class="ibtn newchat" onclick={() => app.newChat()}>
@@ -95,7 +139,40 @@
 				</div>
 			{/each}
 		{:else}
-		{#if app.draft}
+		<div class="group">
+			<div class="glabel prow">
+				<span>Projects</span>
+				<button type="button" class="act always" title="Add project" aria-label="Add project" onclick={() => app.addProject()}><Icon name="plus" size={12} /></button>
+			</div>
+			{#if !app.projects.length}
+				<button type="button" class="navsub addproj" onclick={() => app.addProject()}>Add a folder to keep its chats together</button>
+			{/if}
+			{#each shownProjects as p (p.path)}
+				{@const open = !!app.expanded[p.path]}
+				<div class="navitem project" role="button" tabindex="0" title={p.path} aria-expanded={open} onclick={() => app.toggleProject(p.path)} onkeydown={(e) => e.key === 'Enter' && app.toggleProject(p.path)}>
+					<span class="chev"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
+					<span class="pmark"><Icon name="folder" size={12} /></span>
+					<span class="title">{p.name}</span>
+					<button type="button" class="act" title="Remove project" aria-label="Remove project" onclick={(e) => confirmRemoveProject(e, p)}><Icon name="x" size={12} /></button>
+					<button type="button" class="act always" title="New chat in {p.name}" aria-label="New chat in {p.name}" onclick={(e) => newChatIn(e, p.path)}><Icon name="plus" size={12} /></button>
+				</div>
+				{#if open}
+					<div class="pchats">
+						{#if draftProject === p.path}
+							<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
+						{:else}
+							<button type="button" class="navitem newin" onclick={() => app.newChat(p.path)}>
+								<Icon name="plus" size={12} /><span class="title">New chat</span>
+							</button>
+						{/if}
+						{#each split.byProject.get(p.path) ?? [] as c (c.id)}
+							{@render row(c, true)}
+						{/each}
+					</div>
+				{/if}
+			{/each}
+		</div>
+		{#if app.draft && !draftProject}
 			<div class="group">
 				<div class="glabel">Today</div>
 				<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
@@ -105,26 +182,7 @@
 			<div class="group">
 				<div class="glabel">{g.label}</div>
 				{#each g.items as c (c.id)}
-					{@const current = app.active?.id === c.id}
-					<div class="navitem" class:on={current} aria-current={current ? 'page' : undefined} role="button" tabindex="0" onclick={() => app.open(c.id)} onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}>
-						{#if c.projectDir}
-							<span class="fmark" title={c.projectDir}><Icon name="folder" size={11} /></span>
-						{/if}
-						<span class="title">{c.title}</span>
-						{#if c.clarificationCount > 0}
-							<span class="countpill">{c.clarificationCount}</span>
-						{/if}
-						<button type="button" class="act" class:pinned={c.pinned} title={c.pinned ? 'Unpin' : 'Pin'} aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button>
-						<button type="button" class="act" title="Delete conversation" aria-label="Delete conversation" onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button>
-					</div>
-					{#if current && app.active}
-						{#each app.active.clarifications as cl, i (cl.id)}
-							<button type="button" class="navsub" class:nested={isNested(cl.id)} onclick={() => app.jumpTo(cl.id)}>
-								<span class="dot"></span>
-								<span class="sub">Clarification {pad(i + 1)} · {short(cl.quote, 26)}</span>
-							</button>
-						{/each}
-					{/if}
+					{@render row(c)}
 				{/each}
 			</div>
 		{/each}
@@ -209,6 +267,32 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.prow {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-right: 6px;
+	}
+	.chev,
+	.pmark {
+		display: inline-flex;
+		flex: none;
+		color: var(--text-3);
+	}
+	.project .title {
+		color: var(--text);
+	}
+	.pchats {
+		padding-left: 14px;
+	}
+	.newin {
+		color: var(--text-3);
+		font-size: 12.5px;
+	}
+	.addproj {
+		color: var(--text-3);
+		padding-left: 10px;
+	}
 	.fmark {
 		display: inline-flex;
 		color: var(--accent-text);
@@ -229,6 +313,7 @@
 		border-radius: 4px;
 	}
 	.navitem:hover .act,
+	.act.always,
 	.act.pinned {
 		display: inline-flex;
 	}

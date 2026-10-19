@@ -120,6 +120,17 @@ export interface ConversationSummary {
 	updatedAt: number;
 }
 
+/** A folder the user added as a project; conversations whose projectDir equals path belong to it. */
+export interface Project {
+	/** Canonical absolute path of the folder. */
+	path: string;
+	/** The folder's last path segment. */
+	name: string;
+	createdAt: number;
+	/** The later of createdAt and the newest update to one of its conversations. */
+	lastActiveAt: number;
+}
+
 export interface Conversation extends ConversationSummary {
 	agentSessionId: string | null;
 	running: boolean;

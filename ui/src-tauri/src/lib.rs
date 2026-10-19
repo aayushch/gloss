@@ -161,6 +161,22 @@ fn percent_decode(s: &str) -> String {
 }
 
 #[tauri::command]
+fn list_projects(engine: State<'_, Eng>) -> Result<Vec<Project>, String> {
+    engine.list_projects().map_err(err)
+}
+
+#[tauri::command]
+fn add_project(engine: State<'_, Eng>, path: String) -> Result<Project, String> {
+    engine.add_project(&path).map_err(err)
+}
+
+/// Removes the project from the list; its conversations are kept.
+#[tauri::command]
+fn remove_project(engine: State<'_, Eng>, path: String) -> Result<(), String> {
+    engine.remove_project(&path).map_err(err)
+}
+
+#[tauri::command]
 fn get_conversation(engine: State<'_, Eng>, id: String) -> Result<Conversation, String> {
     engine.get_conversation(&id).map_err(err)
 }
@@ -288,6 +304,9 @@ pub fn run() {
             get_settings,
             update_settings,
             list_conversations,
+            list_projects,
+            add_project,
+            remove_project,
             get_conversation,
             create_conversation,
             rename_conversation,

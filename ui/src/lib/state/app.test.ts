@@ -59,14 +59,16 @@ describe('app state against the mock api', () => {
 		for (const a of [...app.staged]) await app.unstage(a.id);
 	});
 
-	it('binds a draft to a folder and keeps it on the created conversation', async () => {
+	it('adds a project from the draft picker and keeps it on the created conversation', async () => {
 		app.newChat();
 		expect(app.activeProjectDir).toBeNull();
-		await app.chooseFolder();
+		await app.addProjectToDraft();
 		expect(app.draft?.projectDir).toBe('/Users/me/code/demo-project');
-		app.clearFolder();
+		expect(app.projects.map((p) => p.path)).toContain('/Users/me/code/demo-project');
+		expect(app.expanded['/Users/me/code/demo-project']).toBe(true);
+		app.chooseProject(null);
 		expect(app.draft?.projectDir).toBeNull();
-		await app.chooseFolder();
+		app.chooseProject('/Users/me/code/demo-project');
 		await app.send('What does this project do?');
 		expect(app.draft).toBeNull();
 		expect(app.active?.projectDir).toBe('/Users/me/code/demo-project');
@@ -74,6 +76,15 @@ describe('app state against the mock api', () => {
 		await settle(100);
 		await app.cancel();
 		await settle(20);
+	});
+
+	it('starts a chat inside a project or outside any project', async () => {
+		app.newChat('/Users/me/code/demo-project');
+		expect(app.draft?.projectDir).toBe('/Users/me/code/demo-project');
+		app.newChat();
+		expect(app.draft?.projectDir).toBeNull();
+		await app.removeProject('/Users/me/code/demo-project');
+		expect(app.projects.find((p) => p.path === '/Users/me/code/demo-project')).toBeUndefined();
 	});
 
 	it('shows the agent\'s question as a request and resumes once answered', async () => {
@@ -94,7 +105,7 @@ describe('app state against the mock api', () => {
 
 	it('a permission answer can switch the mode of a project-bound conversation', async () => {
 		app.newChat();
-		await app.chooseFolder();
+		await app.addProjectToDraft();
 		await app.setMode('manual');
 		expect(app.draft?.mode).toBe('manual');
 		await app.send('[write] Create NOTES.md');

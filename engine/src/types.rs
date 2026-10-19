@@ -347,6 +347,20 @@ pub struct ConversationSummary {
     pub updated_at: i64,
 }
 
+/// A folder the user added as a project. Conversations whose `project_dir`
+/// equals `path` belong to it.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    /// Canonical absolute path of the folder.
+    pub path: String,
+    /// The folder's last path segment.
+    pub name: String,
+    pub created_at: i64,
+    /// The later of `created_at` and the newest update to one of its conversations.
+    pub last_active_at: i64,
+}
+
 /// What kind of file an attachment is, which decides how it reaches the agent:
 /// images go through each CLI's image route, text is inlined into the prompt.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]

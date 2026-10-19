@@ -71,8 +71,16 @@ Gloss owns the canonical transcript. The agents keep their own session files
 in their own homes, keyed by the Gloss cwd, so nothing Gloss does shows up in
 a real project's history. `docs/agents.md` lists what each CLI stores and where.
 
-A conversation can instead be bound to a project folder when it is created:
-the agent then starts in that folder, read-only unless the user picks one of
+The user can add folders as projects (the `projects` table). The rail lists
+each project with its own conversations and its own "New chat"; the global
+"New chat" always starts a chat outside any project. Removing a project only
+takes it off the list: its conversations keep their folder and are listed by
+date.
+
+A conversation can instead be bound to a project folder when it is created,
+by starting it from the project or picking the project in the draft's header
+(binding a folder that is not yet a project adds it). The agent then starts
+in that folder, read-only unless the user picks one of
 the working modes its CLI offers. The folder is fixed for the life of the
 conversation because the agent's session is keyed to it, and those sessions
 do appear in the project's own history, which is the point; the mode can

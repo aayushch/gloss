@@ -150,7 +150,7 @@
 			{#if app.draft.projectDir}
 				<div>The agent runs inside <strong>{app.draft.projectDir}</strong> and can read its files, not change them.</div>
 			{:else}
-				<div>Choose a folder in the header to let the agent read a project of yours.</div>
+				<div>Pick a project in the header to let the agent read one of your folders.</div>
 			{/if}
 		</div>
 	{:else if app.loadError}

@@ -24,7 +24,10 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `save_text_file` | `defaultName: string, contents: string` | `string \| null` | Native save dialog filtered by the default name's extension; the chosen path, or null when dismissed. |
 | `open_artifact` | `name: string, contents: string` | `string` | Writes the content under `~/.gloss/artifacts/<id>/` and opens it with the system's default app (the browser for `.html`). Returns the path. |
 | `get_conversation` | `id: string` | `Conversation` | Turns in `seq` order, clarifications in `number` order. |
-| `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. `projectDir` must be an existing absolute directory; it is stored canonicalised and cannot change later. The agent then runs inside it with read-only file tools (see `docs/agents.md`). |
+| `list_projects` | – | `Project[]` | Folders the user added as projects, most recently active first (added, or one of their conversations updated). |
+| `add_project` | `path: string` | `Project` | `path` must be an existing absolute directory; it is stored canonicalised. Adding a project that exists returns it unchanged. |
+| `remove_project` | `path: string` | – | Removes the project from the list only. Its conversations keep their `projectDir` and are listed outside any project. |
+| `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. `projectDir` must be an existing absolute directory; it is stored canonicalised, added as a project if it is not one, and cannot change later. The agent then runs inside it with read-only file tools (see `docs/agents.md`). |
 | `rename_conversation` | `id: string, title: string` | `ConversationSummary` | |
 | `delete_conversation` | `id: string` | – | Cancels a running turn first. Agent-side session files are left alone. |
 | `set_conversation_model` | `id: string, model: string` | `ConversationSummary` | Applies to the next turn. |

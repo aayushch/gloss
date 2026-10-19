@@ -9,6 +9,7 @@ import type {
 	Conversation,
 	ConversationSummary,
 	ModelInfo,
+	Project,
 	RequestAnswer,
 	SearchHit,
 	SendTurnRequest,
@@ -44,6 +45,12 @@ export interface Api {
 	saveTextFile(defaultName: string, contents: string): Promise<string | null>;
 	/** Writes an artifact to the artifacts folder and opens it with the system's default app. */
 	openArtifact(name: string, contents: string): Promise<string>;
+	/** Projects, most recently active first. */
+	listProjects(): Promise<Project[]>;
+	/** Adds an existing folder as a project; adding one twice returns the existing project. */
+	addProject(path: string): Promise<Project>;
+	/** Removes a project from the list; its conversations are kept. */
+	removeProject(path: string): Promise<void>;
 	getConversation(id: string): Promise<Conversation>;
 	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
 	/** Opens the native folder picker; null when nothing was chosen. */
@@ -122,12 +129,15 @@ function tauriApi(): Api {
 		},
 		saveTextFile: (defaultName, contents) => call('save_text_file', { defaultName, contents }),
 		openArtifact: (name, contents) => call('open_artifact', { name, contents }),
+		listProjects: () => call('list_projects'),
+		addProject: (path) => call('add_project', { path }),
+		removeProject: (path) => call('remove_project', { path }),
 		getConversation: (id) => call('get_conversation', { id }),
 		createConversation: (agent, model, webSearch, projectDir) =>
 			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null, projectDir: projectDir ?? null }),
 		pickFolder: async () => {
 			const { open } = await import('@tauri-apps/plugin-dialog');
-			const picked = await open({ directory: true, multiple: false, title: 'Choose the project folder' });
+			const picked = await open({ directory: true, multiple: false, title: 'Add a project folder' });
 			return typeof picked === 'string' ? picked : null;
 		},
 		renameConversation: (id, title) => call('rename_conversation', { id, title }),

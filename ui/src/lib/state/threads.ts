@@ -2,7 +2,7 @@
 // list, and provides the small formatting helpers the transcript and rail
 // share.
 
-import type { Clarification, Conversation, Turn } from '$lib/api/types';
+import type { Clarification, Conversation, ConversationSummary, Project, Turn } from '$lib/api/types';
 
 export interface ThreadTurn {
 	question: Turn;
@@ -100,4 +100,22 @@ export function wellsContaining(conv: Conversation, query: string): string[] {
 	for (const cl of conv.clarifications) if (flat(cl.quote).includes(q)) hit.add(cl.id);
 	for (const t of conv.turns) if (t.clarificationId && flat(t.text).includes(q)) hit.add(t.clarificationId);
 	return [...hit];
+}
+
+/** Conversations split for the rail: those bound to one of `projects`, by
+ * project path, and the rest. A conversation whose folder is not a project
+ * (the project was removed) goes with the rest. Order within each list is
+ * kept. */
+export function splitByProject(
+	conversations: ConversationSummary[],
+	projects: Project[]
+): { byProject: Map<string, ConversationSummary[]>; rest: ConversationSummary[] } {
+	const byProject = new Map<string, ConversationSummary[]>(projects.map((p) => [p.path, []]));
+	const rest: ConversationSummary[] = [];
+	for (const c of conversations) {
+		const list = c.projectDir ? byProject.get(c.projectDir) : undefined;
+		if (list) list.push(c);
+		else rest.push(c);
+	}
+	return { byProject, rest };
 }

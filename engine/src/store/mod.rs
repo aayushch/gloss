@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -31,6 +31,16 @@ const MIGRATE_V2_TO_V3: &str = "
 const MIGRATE_V3_TO_V4: &str = "
     ALTER TABLE conversations ADD COLUMN mode TEXT;
     UPDATE schema_version SET version = 4;
+";
+
+/// Version 5 adds projects. The `projects` table itself comes from the
+/// schema; this makes every folder an existing conversation is bound to a
+/// project, dated by its first conversation.
+const MIGRATE_V4_TO_V5: &str = "
+    INSERT OR IGNORE INTO projects (path, created_at)
+        SELECT project_dir, MIN(created_at) FROM conversations
+        WHERE project_dir IS NOT NULL GROUP BY project_dir;
+    UPDATE schema_version SET version = 5;
 ";
 
 pub struct Store {
@@ -67,12 +77,18 @@ impl Store {
                 conn.execute_batch(MIGRATE_V1_TO_V2)?;
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
+                conn.execute_batch(MIGRATE_V4_TO_V5)?;
             }
             Some(2) => {
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
+                conn.execute_batch(MIGRATE_V4_TO_V5)?;
             }
-            Some(3) => conn.execute_batch(MIGRATE_V3_TO_V4)?,
+            Some(3) => {
+                conn.execute_batch(MIGRATE_V3_TO_V4)?;
+                conn.execute_batch(MIGRATE_V4_TO_V5)?;
+            }
+            Some(4) => conn.execute_batch(MIGRATE_V4_TO_V5)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -119,6 +135,54 @@ impl Store {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![json],
             )?;
+            Ok(())
+        })
+    }
+
+    // ── projects ────────────────────────────────────────────────────────
+
+    /// Adds `path` as a project; adding one that exists already returns it unchanged.
+    pub fn add_project(&self, path: &str) -> Result<Project> {
+        self.with(|c| {
+            c.execute(
+                "INSERT OR IGNORE INTO projects (path, created_at) VALUES (?1, ?2)",
+                params![path, now_ms()],
+            )?;
+            Ok(())
+        })?;
+        self.list_projects()?
+            .into_iter()
+            .find(|p| p.path == path)
+            .ok_or_else(|| anyhow!("no project {}", path))
+    }
+
+    /// Projects, most recently active first. A project is active when it is
+    /// added and whenever one of its conversations is updated.
+    pub fn list_projects(&self) -> Result<Vec<Project>> {
+        self.with(|c| {
+            let mut stmt = c.prepare(
+                "SELECT p.path, p.created_at,
+                        MAX(p.created_at, COALESCE((SELECT MAX(updated_at) FROM conversations WHERE project_dir = p.path), 0)) AS active
+                 FROM projects p ORDER BY active DESC, p.path",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                let path: String = r.get(0)?;
+                Ok(Project {
+                    name: project_name(&path),
+                    path,
+                    created_at: r.get(1)?,
+                    last_active_at: r.get(2)?,
+                })
+            })?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// Removes the project only. Its conversations keep their folder and are
+    /// still listed, outside any project.
+    pub fn remove_project(&self, path: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute("DELETE FROM projects WHERE path = ?1", params![path])?;
             Ok(())
         })
     }
@@ -678,6 +742,14 @@ fn row_attachment(r: &Row<'_>) -> rusqlite::Result<Attachment> {
     })
 }
 
+/// Last segment of a project path, used as its display name.
+pub fn project_name(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string())
+}
+
 /// Lower-cased, trimmed, unique tags in their original order.
 pub fn normalize_tags(tags: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -805,6 +877,55 @@ mod tests {
         let t = &s.get_conversation(&conv.summary.id).unwrap().turns[0];
         assert_eq!(t.status, TurnStatus::Error);
         assert_eq!(t.error.as_deref(), Some("closed"));
+    }
+
+    #[test]
+    fn projects_order_by_activity_and_outlive_removal() {
+        let s = Store::in_memory().unwrap();
+        let a = s.add_project("/work/alpha").unwrap();
+        assert_eq!(a.name, "alpha");
+        s.add_project("/work/beta").unwrap();
+        // Adding again keeps the original row.
+        assert_eq!(s.add_project("/work/alpha").unwrap().created_at, a.created_at);
+        assert_eq!(s.list_projects().unwrap().len(), 2);
+
+        let conv = s.create_conversation(AgentId::Claude, "", true, Some("/work/alpha")).unwrap();
+        s.with(|c| {
+            c.execute("UPDATE conversations SET updated_at = ?2 WHERE id = ?1", params![conv.summary.id, now_ms() + 60_000])?;
+            Ok(())
+        })
+        .unwrap();
+        let list = s.list_projects().unwrap();
+        assert_eq!(list[0].path, "/work/alpha");
+        assert!(list[0].last_active_at > list[0].created_at);
+
+        s.remove_project("/work/alpha").unwrap();
+        assert_eq!(s.list_projects().unwrap().len(), 1);
+        let kept = s.get_summary(&conv.summary.id).unwrap();
+        assert_eq!(kept.project_dir.as_deref(), Some("/work/alpha"));
+    }
+
+    #[test]
+    fn migrates_version_4_folders_into_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v4.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA).unwrap();
+            conn.execute_batch(
+                "DROP TABLE projects;
+                 INSERT INTO schema_version VALUES (4);
+                 INSERT INTO conversations (id, title, agent, project_dir, created_at, updated_at) VALUES
+                    ('c1', 'One', 'claude', '/work/alpha', 5, 5),
+                    ('c2', 'Two', 'pi', '/work/alpha', 3, 9),
+                    ('c3', 'Three', 'claude', NULL, 1, 1);",
+            )
+            .unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        let list = s.list_projects().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!((list[0].path.as_str(), list[0].created_at, list[0].last_active_at), ("/work/alpha", 3, 9));
     }
 }
 

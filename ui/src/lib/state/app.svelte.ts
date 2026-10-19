@@ -15,6 +15,7 @@ import type {
 	Conversation,
 	ConversationSummary,
 	ModelInfo,
+	Project,
 	SearchHit,
 	Settings,
 	Theme,
@@ -52,7 +53,7 @@ export interface Draft {
 	agent: AgentId;
 	model: string;
 	webSearch: boolean;
-	/** Folder the agent will run in; null means the Gloss workspace. Fixed once the conversation exists. */
+	/** Path of the project the agent will run in; null means the Gloss workspace. Fixed once the conversation exists. */
 	projectDir: string | null;
 	/** Working mode inside that folder; null is read-only. */
 	mode: string | null;
@@ -76,6 +77,10 @@ class AppState {
 	models = $state<Partial<Record<AgentId, ModelInfo[]>>>({});
 	settings = $state<Settings>({ defaultAgent: 'claude', defaultModel: {}, theme: 'light', webSearch: true });
 	conversations = $state<ConversationSummary[]>([]);
+	/** Projects, most recently active first. */
+	projects = $state<Project[]>([]);
+	/** Paths of the projects whose conversations the rail shows. */
+	expanded = $state<Record<string, boolean>>({});
 	active = $state<Conversation | null>(null);
 	/** Set while a new chat has been opened but nothing sent yet. */
 	draft = $state<Draft | null>(null);
@@ -147,10 +152,11 @@ class AppState {
 		find.expand = (q) => this.openWellsContaining(q);
 		const a = await api();
 		try {
-			const [agents, settings, conversations] = await Promise.all([a.listAgents(), a.getSettings(), a.listConversations()]);
+			const [agents, settings, conversations, projects] = await Promise.all([a.listAgents(), a.getSettings(), a.listConversations(), a.listProjects()]);
 			this.agents = agents;
 			this.settings = settings;
 			this.conversations = conversations;
+			this.projects = projects;
 			this.applyTheme(settings.theme, false);
 			this.refreshTags();
 			await Promise.all(agents.map((ag) => this.loadModels(ag.id)));
@@ -180,6 +186,43 @@ class AppState {
 		if (q !== this.search.trim()) return;
 		this.conversations = list;
 		this.searchHits = hits;
+	}
+
+	async refreshProjects(): Promise<void> {
+		try {
+			this.projects = await (await api()).listProjects();
+		} catch {
+			// The rail keeps the projects it already shows.
+		}
+	}
+
+	/** Shows or hides a project's conversations in the rail. */
+	toggleProject(path: string, open = !this.expanded[path]): void {
+		this.expanded = { ...this.expanded, [path]: open };
+	}
+
+	/** Adds a folder chosen in the native picker as a project and shows it
+	 * expanded. Resolves to the project, or null when nothing was chosen. */
+	async addProject(): Promise<Project | null> {
+		const a = await api();
+		const dir = await a.pickFolder();
+		if (!dir) return null;
+		try {
+			const p = await a.addProject(dir);
+			await this.refreshProjects();
+			this.toggleProject(p.path, true);
+			return p;
+		} catch (e) {
+			this.flash(`Could not add the project: ${String(e).replace(/^Error:\s*/, '')}`);
+			return null;
+		}
+	}
+
+	/** Removes a project from the rail. Its conversations stay, listed by date. */
+	async removeProject(path: string): Promise<void> {
+		await (await api()).removeProject(path);
+		this.projects = this.projects.filter((p) => p.path !== path);
+		if (this.draft?.projectDir === path) this.draft.projectDir = null;
 	}
 
 	async refreshTags(): Promise<void> {
@@ -390,6 +433,7 @@ class AppState {
 		this.modelMenuOpen = false;
 		this.artifactView = null;
 		this.active = await (await api()).getConversation(id);
+		if (this.active.projectDir) this.toggleProject(this.active.projectDir, true);
 		for (const t of this.active.turns) t.attachments.forEach((att) => this.loadThumb(att));
 		this.requests = {};
 		const pending = this.active.pendingRequest;
@@ -397,14 +441,17 @@ class AppState {
 		if (pending && waiting) this.requests = { [waiting.id]: pending };
 	}
 
-	newChat(): void {
+	/** Opens a draft. `projectDir` is the project it starts in; null starts a
+	 * chat outside any project. */
+	newChat(projectDir: string | null = null): void {
 		const agent = this.agents.find((a) => a.id === this.settings.defaultAgent && a.available)?.id ?? this.agents.find((a) => a.available)?.id ?? this.settings.defaultAgent;
 		this.active = null;
 		this.pendingAsk = null;
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir: null, mode: null };
+		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir, mode: null };
+		if (projectDir) this.toggleProject(projectDir, true);
 	}
 
 	/** The working mode of the active conversation or draft; null is read-only. */
@@ -451,15 +498,19 @@ class AppState {
 		return this.active?.projectDir ?? this.draft?.projectDir ?? null;
 	}
 
-	/** Binds the draft to a folder chosen in the native picker. Only a draft can change folder. */
-	async chooseFolder(): Promise<void> {
+	/** Moves the draft into a project; null takes it out of any project.
+	 * Only a draft can change project. */
+	chooseProject(path: string | null): void {
 		if (!this.draft) return;
-		const dir = await (await api()).pickFolder();
-		if (dir && this.draft) this.draft.projectDir = dir;
+		this.draft.projectDir = path;
+		if (path) this.toggleProject(path, true);
 	}
 
-	clearFolder(): void {
-		if (this.draft) this.draft.projectDir = null;
+	/** Adds a folder from the native picker as a project and moves the draft into it. */
+	async addProjectToDraft(): Promise<void> {
+		if (!this.draft) return;
+		const p = await this.addProject();
+		if (p) this.chooseProject(p.path);
 	}
 
 	async setModel(model: string): Promise<void> {
@@ -547,6 +598,7 @@ class AppState {
 			this.draft = null;
 			this.active = conv;
 			this.conversations = [summaryOf(conv), ...this.conversations];
+			if (conv.projectDir) this.refreshProjects();
 		}
 		if (!this.active) return;
 		const ids = this.staged.map((s) => s.id);
@@ -699,6 +751,7 @@ class AppState {
 				delete this.activity[turn.id];
 				this.autoOpenArtifact(e.event.turn);
 				this.refreshList();
+				if (conv.projectDir) this.refreshProjects();
 				break;
 		}
 	}

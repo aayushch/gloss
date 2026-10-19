@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Conversation, Turn } from '$lib/api/types';
-import { wellsContaining } from './threads';
+import type { Conversation, ConversationSummary, Project, Turn } from '$lib/api/types';
+import { splitByProject, wellsContaining } from './threads';
 
 function turn(id: string, text: string, clarificationId: string | null): Turn {
 	return { id, conversationId: 'c', seq: 0, role: 'assistant', text, promptText: null, status: 'done', clarificationId, model: null, error: null, usage: null, createdAt: 0 } as Turn;
@@ -30,5 +30,20 @@ describe('wellsContaining', () => {
 	});
 	it('returns nothing for an empty query', () => {
 		expect(wellsContaining(conv, '  ')).toEqual([]);
+	});
+});
+
+describe('splitByProject', () => {
+	const conv = (id: string, projectDir: string | null) => ({ id, projectDir }) as ConversationSummary;
+	const project = (path: string) => ({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
+
+	it('groups by project and keeps chats of removed projects with the rest', () => {
+		const { byProject, rest } = splitByProject(
+			[conv('a', '/p/one'), conv('b', null), conv('c', '/p/gone'), conv('d', '/p/one')],
+			[project('/p/one'), project('/p/empty')]
+		);
+		expect(byProject.get('/p/one')!.map((c) => c.id)).toEqual(['a', 'd']);
+		expect(byProject.get('/p/empty')).toEqual([]);
+		expect(rest.map((c) => c.id)).toEqual(['b', 'c']);
 	});
 });

@@ -179,9 +179,27 @@ impl Engine {
         Ok(c)
     }
 
+    // ── projects ────────────────────────────────────────────────────────
+
+    /// Adds an existing directory as a project, stored by its canonical path.
+    pub fn add_project(&self, path: &str) -> Result<Project> {
+        let dir = canonical_dir(path)?;
+        self.store.add_project(&dir)
+    }
+
+    pub fn list_projects(&self) -> Result<Vec<Project>> {
+        self.store.list_projects()
+    }
+
+    /// Removes a project from the list. Its conversations are kept.
+    pub fn remove_project(&self, path: &str) -> Result<()> {
+        self.store.remove_project(path)
+    }
+
     /// `project_dir`, when given, must be an existing directory; it is stored
-    /// in canonical form and the agent runs inside it with read-only file
-    /// tools for every turn of the conversation.
+    /// in canonical form, added as a project if it is not one yet, and the
+    /// agent runs inside it with read-only file tools for every turn of the
+    /// conversation.
     pub fn create_conversation(
         &self,
         agent: AgentId,
@@ -196,18 +214,11 @@ impl Engine {
         let web = web_search.unwrap_or(settings.web_search);
         let project = match project_dir.map(|d| d.trim().to_string()).filter(|d| !d.is_empty()) {
             None => None,
-            Some(dir) => {
-                let path = std::path::Path::new(&dir);
-                if !path.is_absolute() {
-                    return Err(anyhow!("project folder must be an absolute path: {}", dir));
-                }
-                if !path.is_dir() {
-                    return Err(anyhow!("project folder does not exist or is not a directory: {}", dir));
-                }
-                let canonical = std::fs::canonicalize(path).with_context(|| format!("resolve {}", dir))?;
-                Some(canonical.to_string_lossy().to_string())
-            }
+            Some(dir) => Some(canonical_dir(&dir)?),
         };
+        if let Some(dir) = &project {
+            self.store.add_project(dir)?;
+        }
         self.store.create_conversation(agent, &model, web, project.as_deref())
     }
 
@@ -678,6 +689,20 @@ impl<'a> TurnState<'a> {
 }
 
 /// Delete an attachment's directory. Missing files are not an error.
+/// The canonical form of `dir`, which must be an absolute path to an existing directory.
+fn canonical_dir(dir: &str) -> Result<String> {
+    let dir = dir.trim();
+    let path = std::path::Path::new(dir);
+    if !path.is_absolute() {
+        return Err(anyhow!("project folder must be an absolute path: {}", dir));
+    }
+    if !path.is_dir() {
+        return Err(anyhow!("project folder does not exist or is not a directory: {}", dir));
+    }
+    let canonical = std::fs::canonicalize(path).with_context(|| format!("resolve {}", dir))?;
+    Ok(canonical.to_string_lossy().to_string())
+}
+
 fn remove_attachment_files(att: &Attachment) {
     if let Some(dir) = std::path::Path::new(&att.path).parent() {
         let _ = std::fs::remove_dir_all(dir);
@@ -821,6 +846,13 @@ mod tests {
         );
         let plain = engine.create_conversation(AgentId::Pi, None, None, Some("  ".into())).unwrap();
         assert!(plain.summary.project_dir.is_none());
+
+        // Binding a folder adds it as a project, by the same canonical path.
+        let projects = engine.list_projects().unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(Some(projects[0].path.as_str()), conv.summary.project_dir.as_deref());
+        assert!(engine.add_project("relative").is_err());
+        assert_eq!(engine.add_project(&format!("{}/proj", dir.path().display())).unwrap().path, projects[0].path);
     }
 
     #[test]

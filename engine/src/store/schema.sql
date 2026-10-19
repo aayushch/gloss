@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at INTEGER NOT NULL
 );
 
+-- Folders the user added as projects. A conversation belongs to the project
+-- whose path equals its project_dir.
+CREATE TABLE IF NOT EXISTS projects (
+    -- Canonical absolute path of the folder.
+    path TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS turns (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,

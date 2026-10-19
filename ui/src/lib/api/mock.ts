@@ -12,6 +12,7 @@ import type {
 	Conversation,
 	ConversationSummary,
 	ModelInfo,
+	Project,
 	Settings,
 	Turn,
 	TurnEventEnvelope
@@ -243,6 +244,17 @@ function seed(): Conv[] {
 
 export function mockApi(): Api {
 	const convs = seed();
+	/** Project path → when it was added. */
+	const projects = new Map<string, number>();
+	const project = (path: string): Project => {
+		const createdAt = projects.get(path) ?? now();
+		const active = Math.max(createdAt, ...convs.filter((c) => c.projectDir === path).map((c) => c.updatedAt));
+		return { path, name: path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path, createdAt, lastActiveAt: active };
+	};
+	const addProject = (path: string): Project => {
+		if (!projects.has(path)) projects.set(path, now());
+		return project(path);
+	};
 	let settings: Settings = { defaultAgent: 'claude', defaultModel: { claude: 'sonnet' }, theme: 'light', webSearch: true };
 	const listeners = new Set<(e: TurnEventEnvelope) => void>();
 	const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
@@ -375,8 +387,14 @@ export function mockApi(): Api {
 			window.open(URL.createObjectURL(new Blob([contents], { type })), '_blank');
 			return name;
 		},
+		listProjects: async () => [...projects.keys()].map(project).sort((a, b) => b.lastActiveAt - a.lastActiveAt),
+		addProject: async (path) => addProject(path),
+		removeProject: async (path) => {
+			projects.delete(path);
+		},
 		getConversation: async (id) => full(find(id)),
 		createConversation: async (agent, model, webSearch, projectDir) => {
+			if (projectDir) addProject(projectDir);
 			const c: Conv = {
 				id: nextId('conv'),
 				title: 'New conversation',
