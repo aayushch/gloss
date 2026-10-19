@@ -1,12 +1,13 @@
 <script lang="ts">
-	// Left navigation rail: new chat, search, tag filters, the projects with
-	// their own conversations, the pinned and date-grouped list of the other
+	// Left navigation rail: new chat, search, tag filters, the projects (each
+	// with its Gloss conversations and the sessions its agents recorded
+	// outside Gloss), the pinned and date-grouped list of the other
 	// conversations, clarification sub-items under the active conversation,
 	// full-text results while searching, and the footer.
 	import { api } from '$lib/api/client';
-	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
-	import type { ConversationSummary, Project } from '$lib/api/types';
-	import { groupOf, pad, short, splitByProject, type Group } from '$lib/state/threads';
+	import { app, AGENT_NAMES, PROJECT_PAGE } from '$lib/state/app.svelte';
+	import type { AgentId, ConversationSummary, ExternalSession, Project, SessionOrigin } from '$lib/api/types';
+	import { agentsIn, groupOf, pad, projectItems, relativeTime, short, splitByProject, type Group } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
 
@@ -19,6 +20,34 @@
 
 	/** The draft goes under its project when that project is listed, otherwise under Today. */
 	const draftProject = $derived(app.draft?.projectDir && app.projects.some((p) => p.path === app.draft!.projectDir) ? app.draft.projectDir : null);
+
+	/** A project's Gloss chats and outside sessions. Outside sessions carry no
+	 * tags, so a tag filter leaves them out. */
+	function entriesOf(path: string) {
+		const chats = split.byProject.get(path) ?? [];
+		const sessions = app.tagFilter ? [] : (app.outside[path] ?? []);
+		const agents = agentsIn(chats, sessions);
+		const filter = app.agentFilter[path] ?? null;
+		const items = projectItems(chats, sessions, filter && agents.includes(filter) ? filter : null);
+		const limit = app.shown[path] ?? PROJECT_PAGE;
+		return { agents, items: items.slice(0, limit), hidden: Math.max(0, items.length - limit) };
+	}
+
+	/** The agent's two-letter mark, as its AgentInfo gives it. */
+	function mono(agent: AgentId): string {
+		return app.agents.find((a) => a.id === agent)?.monogram ?? agent.slice(0, 2);
+	}
+
+	const ORIGIN: Record<SessionOrigin, string> = {
+		terminal: 'in the terminal',
+		ide: 'in an editor',
+		desktop: 'in the desktop app',
+		headless: 'headless, by a script or app'
+	};
+
+	function sessionTip(s: ExternalSession): string {
+		return `${AGENT_NAMES[s.agent]} session run ${s.origin ? ORIGIN[s.origin] : 'outside Gloss'}, ${relativeTime(s.updatedAt)}`;
+	}
 
 	const grouped = $derived.by(() => {
 		const out = new Map<string, ConversationSummary[]>();
@@ -87,7 +116,9 @@
 {#snippet row(c: ConversationSummary, inProject = false)}
 	{@const current = app.active?.id === c.id}
 	<div class="navitem" class:on={current} aria-current={current ? 'page' : undefined} role="button" tabindex="0" onclick={() => app.open(c.id)} onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}>
-		{#if c.projectDir && !inProject}
+		{#if inProject}
+			<span class="mono" title={AGENT_NAMES[c.agent]}>{mono(c.agent)}</span>
+		{:else if c.projectDir}
 			<span class="fmark" title={c.projectDir}><Icon name="folder" size={11} /></span>
 		{/if}
 		<span class="title">{c.title}</span>
@@ -105,6 +136,14 @@
 			</button>
 		{/each}
 	{/if}
+{/snippet}
+
+{#snippet sessionRow(s: ExternalSession)}
+	<div class="navitem outside" title={sessionTip(s)}>
+		<span class="mono">{mono(s.agent)}</span>
+		<span class="title">{s.title}</span>
+		<span class="ext"><Icon name="external" size={10} /></span>
+	</div>
 {/snippet}
 
 <nav class="rail">
@@ -139,25 +178,33 @@
 				</div>
 			{/each}
 		{:else}
-		<div class="group">
+		<section class="projects" aria-label="Projects">
 			<div class="glabel prow">
 				<span>Projects</span>
 				<button type="button" class="act always" title="Add project" aria-label="Add project" onclick={() => app.addProject()}><Icon name="plus" size={12} /></button>
 			</div>
 			{#if !app.projects.length}
-				<button type="button" class="navsub addproj" onclick={() => app.addProject()}>Add a folder to keep its chats together</button>
+				<button type="button" class="addproj" onclick={() => app.addProject()}>Add a folder as a project</button>
 			{/if}
 			{#each shownProjects as p (p.path)}
 				{@const open = !!app.expanded[p.path]}
 				<div class="navitem project" role="button" tabindex="0" title={p.path} aria-expanded={open} onclick={() => app.toggleProject(p.path)} onkeydown={(e) => e.key === 'Enter' && app.toggleProject(p.path)}>
 					<span class="chev"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
-					<span class="pmark"><Icon name="folder" size={12} /></span>
+					<span class="pmark"><Icon name="folder" size={13} /></span>
 					<span class="title">{p.name}</span>
 					<button type="button" class="act" title="Remove project" aria-label="Remove project" onclick={(e) => confirmRemoveProject(e, p)}><Icon name="x" size={12} /></button>
 					<button type="button" class="act always" title="New chat in {p.name}" aria-label="New chat in {p.name}" onclick={(e) => newChatIn(e, p.path)}><Icon name="plus" size={12} /></button>
 				</div>
 				{#if open}
+					{@const entries = entriesOf(p.path)}
 					<div class="pchats">
+						{#if entries.agents.length > 1}
+							<div class="achips">
+								{#each entries.agents as a (a)}
+									<button type="button" class="achip" class:on={app.agentFilter[p.path] === a} title="Only {AGENT_NAMES[a]}" onclick={() => app.setAgentFilter(p.path, a)}>{mono(a)}</button>
+								{/each}
+							</div>
+						{/if}
 						{#if draftProject === p.path}
 							<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
 						{:else}
@@ -165,13 +212,20 @@
 								<Icon name="plus" size={12} /><span class="title">New chat</span>
 							</button>
 						{/if}
-						{#each split.byProject.get(p.path) ?? [] as c (c.id)}
-							{@render row(c, true)}
+						{#each entries.items as item (item.kind === 'chat' ? item.chat.id : `${item.session.agent}:${item.session.id}`)}
+							{#if item.kind === 'chat'}
+								{@render row(item.chat, true)}
+							{:else}
+								{@render sessionRow(item.session)}
+							{/if}
 						{/each}
+						{#if entries.hidden}
+							<button type="button" class="navitem newin" onclick={() => app.showMore(p.path)}><span class="title">Show {entries.hidden} more</span></button>
+						{/if}
 					</div>
 				{/if}
 			{/each}
-		</div>
+		</section>
 		{#if app.draft && !draftProject}
 			<div class="group">
 				<div class="glabel">Today</div>
@@ -267,20 +321,33 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.projects {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 0 4px 6px;
+		margin-bottom: 6px;
+	}
 	.prow {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding-right: 6px;
+		color: var(--accent-text);
 	}
-	.chev,
-	.pmark {
+	.chev {
 		display: inline-flex;
 		flex: none;
 		color: var(--text-3);
 	}
+	.pmark {
+		display: inline-flex;
+		flex: none;
+		color: var(--accent-text);
+	}
 	.project .title {
 		color: var(--text);
+		font-weight: 500;
 	}
 	.pchats {
 		padding-left: 14px;
@@ -290,8 +357,64 @@
 		font-size: 12.5px;
 	}
 	.addproj {
+		display: block;
+		width: 100%;
+		padding: 4px 10px 2px;
+		font-size: 11.5px;
 		color: var(--text-3);
-		padding-left: 10px;
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.addproj:hover {
+		color: var(--text);
+	}
+	.mono {
+		flex: none;
+		width: 18px;
+		font-family: var(--mono);
+		font-size: 9.5px;
+		text-transform: uppercase;
+		text-align: center;
+		color: var(--text-3);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		line-height: 14px;
+	}
+	.outside {
+		cursor: default;
+		color: var(--text-3);
+	}
+	.outside:hover {
+		color: var(--text-2);
+	}
+	.ext {
+		display: inline-flex;
+		flex: none;
+		opacity: 0.7;
+	}
+	.achips {
+		display: flex;
+		gap: 4px;
+		padding: 2px 10px 4px;
+	}
+	.achip {
+		font-family: var(--mono);
+		font-size: 10px;
+		text-transform: uppercase;
+		padding: 1px 6px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		color: var(--text-3);
+	}
+	.achip:hover {
+		color: var(--text);
+	}
+	.achip.on {
+		color: var(--accent-text);
+		background: var(--accent-tint);
+		border-color: var(--accent);
 	}
 	.fmark {
 		display: inline-flex;

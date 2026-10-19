@@ -382,6 +382,15 @@ impl Store {
         })
     }
 
+    /// Every agent session id a conversation holds, whichever agent it belongs to.
+    pub fn agent_session_ids(&self) -> Result<std::collections::HashSet<String>> {
+        self.with(|c| {
+            let mut stmt = c.prepare("SELECT agent_session_id FROM conversations WHERE agent_session_id IS NOT NULL")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            Ok(rows.collect::<Result<_, _>>()?)
+        })
+    }
+
     pub fn set_agent_session_id(&self, id: &str, session_id: &str) -> Result<()> {
         self.with(|c| {
             c.execute(

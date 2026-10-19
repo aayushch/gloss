@@ -2,7 +2,7 @@
 // list, and provides the small formatting helpers the transcript and rail
 // share.
 
-import type { Clarification, Conversation, ConversationSummary, Project, Turn } from '$lib/api/types';
+import type { AgentId, Clarification, Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
 
 export interface ThreadTurn {
 	question: Turn;
@@ -118,4 +118,27 @@ export function splitByProject(
 		else rest.push(c);
 	}
 	return { byProject, rest };
+}
+
+/** One entry in a project's rail list: a Gloss conversation, or a session
+ * the agent recorded outside Gloss. */
+export type ProjectItem = { kind: 'chat'; chat: ConversationSummary } | { kind: 'session'; session: ExternalSession };
+
+/** A project's entries: pinned conversations first, then conversations and
+ * outside sessions together, newest first. `agent`, when set, keeps only
+ * that agent's entries. */
+export function projectItems(chats: ConversationSummary[], sessions: ExternalSession[], agent: AgentId | null): ProjectItem[] {
+	const keep = (a: AgentId) => !agent || a === agent;
+	const pinned: ProjectItem[] = chats.filter((c) => c.pinned && keep(c.agent)).map((chat) => ({ kind: 'chat', chat }));
+	const rest = [
+		...chats.filter((c) => !c.pinned && keep(c.agent)).map((chat) => ({ at: chat.updatedAt, item: { kind: 'chat', chat } as ProjectItem })),
+		...sessions.filter((s) => keep(s.agent)).map((session) => ({ at: session.updatedAt, item: { kind: 'session', session } as ProjectItem }))
+	].sort((a, b) => b.at - a.at);
+	return [...pinned, ...rest.map((r) => r.item)];
+}
+
+/** The agents that have an entry in a project, in AgentId order. */
+export function agentsIn(chats: ConversationSummary[], sessions: ExternalSession[]): AgentId[] {
+	const present = new Set<AgentId>([...chats.map((c) => c.agent), ...sessions.map((s) => s.agent)]);
+	return (['claude', 'codex', 'gemini', 'pi', 'cursor'] as AgentId[]).filter((a) => present.has(a));
 }

@@ -361,6 +361,40 @@ pub struct Project {
     pub last_active_at: i64,
 }
 
+/// Where an agent session that Gloss did not start was run from, as far as
+/// the agent's own files say.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionOrigin {
+    /// The agent's interactive command-line interface.
+    Terminal,
+    /// An editor extension, such as VS Code's.
+    Ide,
+    /// The agent's desktop app.
+    Desktop,
+    /// A non-interactive run (`-p`, `exec`), from a script or another app.
+    Headless,
+}
+
+/// An agent session found in the agent's own history files for a project
+/// folder, and not owned by any Gloss conversation.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSession {
+    pub agent: AgentId,
+    /// The agent's own session id, the one its resume flag takes.
+    pub id: String,
+    /// The session's title as the agent named it, or else its first prompt.
+    pub title: String,
+    /// None when the agent's files do not record where the session ran.
+    pub origin: Option<SessionOrigin>,
+    /// The file the session was read from.
+    pub file: String,
+    pub created_at: i64,
+    /// When the session file was last written.
+    pub updated_at: i64,
+}
+
 /// What kind of file an attachment is, which decides how it reaches the agent:
 /// images go through each CLI's image route, text is inlined into the prompt.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]

@@ -8,6 +8,7 @@ import type {
 	Attachment,
 	Conversation,
 	ConversationSummary,
+	ExternalSession,
 	ModelInfo,
 	Project,
 	RequestAnswer,
@@ -51,6 +52,8 @@ export interface Api {
 	addProject(path: string): Promise<Project>;
 	/** Removes a project from the list; its conversations are kept. */
 	removeProject(path: string): Promise<void>;
+	/** Sessions the agents recorded for the project folder outside Gloss, newest first. */
+	listProjectSessions(path: string): Promise<ExternalSession[]>;
 	getConversation(id: string): Promise<Conversation>;
 	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
 	/** Opens the native folder picker; null when nothing was chosen. */
@@ -132,6 +135,7 @@ function tauriApi(): Api {
 		listProjects: () => call('list_projects'),
 		addProject: (path) => call('add_project', { path }),
 		removeProject: (path) => call('remove_project', { path }),
+		listProjectSessions: (path) => call('list_project_sessions', { path }),
 		getConversation: (id) => call('get_conversation', { id }),
 		createConversation: (agent, model, webSearch, projectDir) =>
 			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null, projectDir: projectDir ?? null }),

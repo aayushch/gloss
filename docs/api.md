@@ -26,6 +26,7 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `get_conversation` | `id: string` | `Conversation` | Turns in `seq` order, clarifications in `number` order. |
 | `list_projects` | – | `Project[]` | Folders the user added as projects, most recently active first (added, or one of their conversations updated). |
 | `add_project` | `path: string` | `Project` | `path` must be an existing absolute directory; it is stored canonicalised. Adding a project that exists returns it unchanged. |
+| `list_project_sessions` | `path: string` | `ExternalSession[]` | Sessions Claude Code, Codex, Gemini CLI and Pi recorded for the folder in their own history files, newest first. Sessions a Gloss conversation holds (by agent session id), empty sessions and other folders' sessions are left out. Cursor is not read. Files are re-read only when they change. |
 | `remove_project` | `path: string` | – | Removes the project from the list only. Its conversations keep their `projectDir` and are listed outside any project. |
 | `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. `projectDir` must be an existing absolute directory; it is stored canonicalised, added as a project if it is not one, and cannot change later. The agent then runs inside it with read-only file tools (see `docs/agents.md`). |
 | `rename_conversation` | `id: string, title: string` | `ConversationSummary` | |

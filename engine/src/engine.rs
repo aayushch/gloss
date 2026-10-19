@@ -12,6 +12,7 @@ use tracing::{info, warn};
 use crate::agents::{self, AgentEvent, ImageAttachment, SpawnRequest};
 use crate::attach;
 use crate::env::ShellEnv;
+use crate::history::{AgentHomes, SessionIndex};
 use crate::paths::GlossPaths;
 use crate::prompt;
 use crate::store::Store;
@@ -28,6 +29,10 @@ pub struct Engine {
     pub paths: GlossPaths,
     pub env: ShellEnv,
     pub store: Store,
+    /// Where each agent keeps its own session history.
+    pub homes: AgentHomes,
+    /// Session files already read from those homes.
+    sessions: SessionIndex,
     /// One cancellation token per conversation with a live agent process.
     running: Mutex<HashMap<String, RunningTurn>>,
     idle_timeout: Duration,
@@ -55,11 +60,19 @@ impl Engine {
         purge_old_artifact_files(&paths.artifacts, Duration::from_secs(7 * 24 * 60 * 60));
         Ok(Engine {
             paths,
+            homes: AgentHomes::from_env(&env),
+            sessions: SessionIndex::default(),
             env,
             store,
             running: Mutex::new(HashMap::new()),
             idle_timeout: DEFAULT_IDLE_TIMEOUT,
         })
+    }
+
+    /// Reads agent history from `homes` instead of the user's home folders.
+    pub fn with_agent_homes(mut self, homes: AgentHomes) -> Engine {
+        self.homes = homes;
+        self
     }
 
     pub fn with_idle_timeout(mut self, timeout: Duration) -> Engine {
@@ -189,6 +202,16 @@ impl Engine {
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
         self.store.list_projects()
+    }
+
+    /// Sessions that Claude Code, Codex, Gemini CLI and Pi recorded for the
+    /// project folder, newest first, leaving out any a Gloss conversation
+    /// holds. Reads the agents' files; never writes them.
+    pub fn list_project_sessions(&self, path: &str) -> Result<Vec<ExternalSession>> {
+        let owned = self.store.agent_session_ids()?;
+        let mut list = self.sessions.list(&self.homes, path);
+        list.retain(|s| !owned.contains(&s.id));
+        Ok(list)
     }
 
     /// Removes a project from the list. Its conversations are kept.
@@ -853,6 +876,30 @@ mod tests {
         assert_eq!(Some(projects[0].path.as_str()), conv.summary.project_dir.as_deref());
         assert!(engine.add_project("relative").is_err());
         assert_eq!(engine.add_project(&format!("{}/proj", dir.path().display())).unwrap().path, projects[0].path);
+    }
+
+    #[test]
+    fn project_sessions_leave_out_those_a_conversation_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let homes = crate::history::AgentHomes::under(&dir.path().join("home"));
+        let engine = Engine::open_with_env(GlossPaths::at(&dir.path().join("gloss")), ShellEnv::from_process())
+            .unwrap()
+            .with_agent_homes(homes.clone());
+        let project = dir.path().join("proj");
+        std::fs::create_dir(&project).unwrap();
+        let project = std::fs::canonicalize(&project).unwrap().to_string_lossy().to_string();
+        let sessions = homes.claude.join("projects").join(crate::history::claude_slug(&project));
+        std::fs::create_dir_all(&sessions).unwrap();
+        for id in ["mine", "theirs"] {
+            let line = serde_json::json!({"type": "user", "sessionId": id, "cwd": project, "entrypoint": "cli",
+                "message": {"role": "user", "content": format!("prompt {}", id)}});
+            std::fs::write(sessions.join(format!("{}.jsonl", id)), format!("{}\n", line)).unwrap();
+        }
+        assert_eq!(engine.list_project_sessions(&project).unwrap().len(), 2);
+        let conv = engine.create_conversation(AgentId::Claude, None, None, Some(project.clone())).unwrap();
+        engine.store.set_agent_session_id(&conv.summary.id, "mine").unwrap();
+        let list = engine.list_project_sessions(&project).unwrap();
+        assert_eq!(list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), vec!["theirs"]);
     }
 
     #[test]

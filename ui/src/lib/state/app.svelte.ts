@@ -14,6 +14,7 @@ import type {
 	Clarification,
 	Conversation,
 	ConversationSummary,
+	ExternalSession,
 	ModelInfo,
 	Project,
 	SearchHit,
@@ -64,6 +65,9 @@ export function folderName(path: string): string {
 	return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
 }
 
+/** Entries a project lists before "Show more". */
+export const PROJECT_PAGE = 8;
+
 export const AGENT_NAMES: Record<AgentId, string> = {
 	claude: 'Claude Code',
 	codex: 'Codex CLI',
@@ -81,6 +85,12 @@ class AppState {
 	projects = $state<Project[]>([]);
 	/** Paths of the projects whose conversations the rail shows. */
 	expanded = $state<Record<string, boolean>>({});
+	/** Sessions each agent recorded outside Gloss, by project path. Loaded when a project is expanded. */
+	outside = $state<Record<string, ExternalSession[]>>({});
+	/** The agent a project's list is narrowed to, by project path. */
+	agentFilter = $state<Record<string, AgentId | null>>({});
+	/** How many entries the rail lists for each project before "Show more". */
+	shown = $state<Record<string, number>>({});
 	active = $state<Conversation | null>(null);
 	/** Set while a new chat has been opened but nothing sent yet. */
 	draft = $state<Draft | null>(null);
@@ -196,9 +206,36 @@ class AppState {
 		}
 	}
 
-	/** Shows or hides a project's conversations in the rail. */
+	/** Shows or hides a project's conversations in the rail. Showing one
+	 * also reloads the sessions its agents recorded outside Gloss. */
 	toggleProject(path: string, open = !this.expanded[path]): void {
 		this.expanded = { ...this.expanded, [path]: open };
+		if (open) this.loadOutside(path);
+	}
+
+	/** Reloads the outside sessions of one project. A failure keeps the list it had. */
+	async loadOutside(path: string): Promise<void> {
+		try {
+			const list = await (await api()).listProjectSessions(path);
+			this.outside = { ...this.outside, [path]: list };
+		} catch {
+			// Unreadable agent history leaves the project with its Gloss chats only.
+		}
+	}
+
+	/** Reloads the outside sessions of every expanded project, for when the
+	 * window regains focus after the user ran an agent elsewhere. */
+	refreshOutside(): void {
+		for (const p of this.projects) if (this.expanded[p.path]) this.loadOutside(p.path);
+	}
+
+	/** Narrows a project's list to one agent; choosing the same agent again clears it. */
+	setAgentFilter(path: string, agent: AgentId | null): void {
+		this.agentFilter = { ...this.agentFilter, [path]: this.agentFilter[path] === agent ? null : agent };
+	}
+
+	showMore(path: string): void {
+		this.shown = { ...this.shown, [path]: (this.shown[path] ?? PROJECT_PAGE) + 20 };
 	}
 
 	/** Adds a folder chosen in the native picker as a project and shows it

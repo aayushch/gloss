@@ -131,6 +131,25 @@ export interface Project {
 	lastActiveAt: number;
 }
 
+/** Where a session Gloss did not start was run from, as the agent's files record it. */
+export type SessionOrigin = 'terminal' | 'ide' | 'desktop' | 'headless';
+
+/** An agent session found in the agent's own history for a project folder, not held by any Gloss conversation. */
+export interface ExternalSession {
+	agent: AgentId;
+	/** The agent's own session id. */
+	id: string;
+	/** The title the agent gave the session, or else its first prompt. */
+	title: string;
+	/** Null when the agent's files do not record it. */
+	origin: SessionOrigin | null;
+	/** The file the session was read from. */
+	file: string;
+	createdAt: number;
+	/** When the session file was last written. */
+	updatedAt: number;
+}
+
 export interface Conversation extends ConversationSummary {
 	agentSessionId: string | null;
 	running: boolean;

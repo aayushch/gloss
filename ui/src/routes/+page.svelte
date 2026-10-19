@@ -42,7 +42,7 @@
 	});
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onfocus={() => app.refreshOutside()} />
 
 <div class="shell">
 	<Rail />

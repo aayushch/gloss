@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Conversation, ConversationSummary, Project, Turn } from '$lib/api/types';
-import { splitByProject, wellsContaining } from './threads';
+import type { Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
+import { agentsIn, projectItems, splitByProject, wellsContaining } from './threads';
 
 function turn(id: string, text: string, clarificationId: string | null): Turn {
 	return { id, conversationId: 'c', seq: 0, role: 'assistant', text, promptText: null, status: 'done', clarificationId, model: null, error: null, usage: null, createdAt: 0 } as Turn;
@@ -45,5 +45,22 @@ describe('splitByProject', () => {
 		expect(byProject.get('/p/one')!.map((c) => c.id)).toEqual(['a', 'd']);
 		expect(byProject.get('/p/empty')).toEqual([]);
 		expect(rest.map((c) => c.id)).toEqual(['b', 'c']);
+	});
+});
+
+describe('projectItems', () => {
+	const chat = (id: string, agent: string, updatedAt: number, pinned = false) => ({ id, agent, updatedAt, pinned }) as ConversationSummary;
+	const session = (id: string, agent: string, updatedAt: number) => ({ id, agent, updatedAt }) as ExternalSession;
+	const key = (i: ReturnType<typeof projectItems>[number]) => (i.kind === 'chat' ? i.chat.id : i.session.id);
+	const chats = [chat('a', 'claude', 10), chat('b', 'pi', 50, true), chat('c', 'claude', 30)];
+	const sessions = [session('s1', 'codex', 40), session('s2', 'claude', 20)];
+
+	it('puts pinned chats first, then mixes chats and sessions by recency', () => {
+		expect(projectItems(chats, sessions, null).map(key)).toEqual(['b', 's1', 'c', 's2', 'a']);
+	});
+
+	it('filters by agent and lists the agents present', () => {
+		expect(projectItems(chats, sessions, 'claude').map(key)).toEqual(['c', 's2', 'a']);
+		expect(agentsIn(chats, sessions)).toEqual(['claude', 'codex', 'pi']);
 	});
 });

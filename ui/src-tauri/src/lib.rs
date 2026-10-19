@@ -170,6 +170,17 @@ fn add_project(engine: State<'_, Eng>, path: String) -> Result<Project, String> 
     engine.add_project(&path).map_err(err)
 }
 
+/// Agent sessions recorded for the project folder outside Gloss. Reading the
+/// agents' files can take a moment on first use, so it runs off the main thread.
+#[tauri::command]
+async fn list_project_sessions(engine: State<'_, Eng>, path: String) -> Result<Vec<ExternalSession>, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.list_project_sessions(&path))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
 /// Removes the project from the list; its conversations are kept.
 #[tauri::command]
 fn remove_project(engine: State<'_, Eng>, path: String) -> Result<(), String> {
@@ -307,6 +318,7 @@ pub fn run() {
             list_projects,
             add_project,
             remove_project,
+            list_project_sessions,
             get_conversation,
             create_conversation,
             rename_conversation,

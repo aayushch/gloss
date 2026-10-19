@@ -82,6 +82,8 @@ enum Cmd {
     },
     /// Print a conversation's turns and clarifications.
     Show { conversation: String },
+    /// List the agent sessions recorded for a folder outside Gloss.
+    Sessions { folder: String },
 }
 
 #[tokio::main]
@@ -240,6 +242,12 @@ async fn main() -> Result<()> {
         Cmd::List { query, tag } => {
             for c in engine.list_conversations(query.as_deref(), tag.as_deref())? {
                 println!("{}  {:<8} {:<20} {:>2} clarifications  {}", c.id, c.agent, c.model, c.clarification_count, c.title);
+            }
+        }
+        Cmd::Sessions { folder } => {
+            for s in engine.list_project_sessions(&folder)? {
+                let when = chrono::DateTime::from_timestamp_millis(s.updated_at).map(|t| t.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default();
+                println!("{}  {:<7} {:<9} {:<38} {}", when, s.agent, format!("{:?}", s.origin), s.id, s.title);
             }
         }
         Cmd::Show { conversation } => {

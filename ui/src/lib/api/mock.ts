@@ -11,6 +11,7 @@ import type {
 	Clarification,
 	Conversation,
 	ConversationSummary,
+	ExternalSession,
 	ModelInfo,
 	Project,
 	Settings,
@@ -391,6 +392,23 @@ export function mockApi(): Api {
 		addProject: async (path) => addProject(path),
 		removeProject: async (path) => {
 			projects.delete(path);
+		},
+		listProjectSessions: async (path) => {
+			const ago = (h: number) => now() - h * 3_600_000;
+			const session = (agent: ExternalSession['agent'], id: string, title: string, origin: ExternalSession['origin'], hours: number): ExternalSession => ({
+				agent,
+				id,
+				title,
+				origin,
+				file: `${path}/.mock/${id}.jsonl`,
+				createdAt: ago(hours + 1),
+				updatedAt: ago(hours)
+			});
+			return [
+				session('claude', 'mock-c1', 'Fix the login redirect loop', 'terminal', 2),
+				session('codex', 'mock-x1', 'Add a --verbose flag to the CLI', 'ide', 30),
+				session('pi', 'mock-p1', 'What does this app do?', null, 80)
+			];
 		},
 		getConversation: async (id) => full(find(id)),
 		createConversation: async (agent, model, webSearch, projectDir) => {

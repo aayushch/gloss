@@ -83,6 +83,13 @@ describe('app state against the mock api', () => {
 		expect(app.draft?.projectDir).toBe('/Users/me/code/demo-project');
 		app.newChat();
 		expect(app.draft?.projectDir).toBeNull();
+		app.toggleProject('/Users/me/code/demo-project', true);
+		await settle(10);
+		expect(app.outside['/Users/me/code/demo-project'].map((x) => x.agent)).toEqual(['claude', 'codex', 'pi']);
+		app.setAgentFilter('/Users/me/code/demo-project', 'codex');
+		expect(app.agentFilter['/Users/me/code/demo-project']).toBe('codex');
+		app.setAgentFilter('/Users/me/code/demo-project', 'codex');
+		expect(app.agentFilter['/Users/me/code/demo-project']).toBeNull();
 		await app.removeProject('/Users/me/code/demo-project');
 		expect(app.projects.find((p) => p.path === '/Users/me/code/demo-project')).toBeUndefined();
 	});

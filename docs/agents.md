@@ -15,6 +15,15 @@ Verified on this machine on 2026-10-13 unless marked otherwise.
   sessions land in one bucket per agent and never show up in a real project's
   resume picker, while project-bound sessions appear in that project's own
   history by design.
+- **Reading their history.** For a project, Gloss lists the sessions each
+  agent recorded for the folder outside Gloss (`engine/src/history/`, one
+  file per agent with the layout and records it reads). Claude Code:
+  `~/.claude/projects/<path with non-alphanumerics as ->/<id>.jsonl`, title
+  from the last `custom-title` or `ai-title` record, else the first prompt.
+  Codex: every `~/.codex/sessions/**/rollout-*.jsonl`, matched by
+  `session_meta.cwd`. Gemini CLI: `~/.gemini/tmp/<name or sha256>/chats/`,
+  matched by `projectHash`. Pi: `~/.pi/agent/sessions/--<path>--/`. Cursor
+  is not read.
 - **Project folders.** A bound conversation starts read-only: Claude Code
   runs with `--restricted` and the Read, Glob, Grep and LS tools pre-approved
   (plus the web tools), which also confines the file tools to the folder and
