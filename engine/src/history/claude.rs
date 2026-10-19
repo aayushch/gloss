@@ -115,3 +115,35 @@ fn prompt_of(v: &serde_json::Value) -> Option<String> {
     }
     Some(text.to_string())
 }
+
+/// Every turn: prompts from `user` records, and replies from `assistant`
+/// records, whose `message.content` holds `text` and `tool_use` parts.
+/// Subagent (sidechain) records are left out.
+pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
+    let mut out = Turns::default();
+    for v in all_lines(path) {
+        if v.get("isSidechain").and_then(|x| x.as_bool()) == Some(true) {
+            continue;
+        }
+        let at = time_of(&v);
+        match str_at(&v, "type") {
+            Some("user") => {
+                if let Some(text) = prompt_of(&v) {
+                    out.prompt(&text, at);
+                }
+            }
+            Some("assistant") => {
+                let Some(parts) = v.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_array()) else { continue };
+                for part in parts {
+                    match str_at(part, "type") {
+                        Some("text") => out.text(str_at(part, "text").unwrap_or(""), at),
+                        Some("tool_use") => out.tool(str_at(part, "name").unwrap_or("tool"), part.get("input").unwrap_or(&serde_json::Value::Null), at),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out.done()
+}

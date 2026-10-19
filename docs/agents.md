@@ -23,7 +23,9 @@ Verified on this machine on 2026-10-13 unless marked otherwise.
   Codex: every `~/.codex/sessions/**/rollout-*.jsonl`, matched by
   `session_meta.cwd`. Gemini CLI: `~/.gemini/tmp/<name or sha256>/chats/`,
   matched by `projectHash`. Pi: `~/.pi/agent/sessions/--<path>--/`. Cursor
-  is not read.
+  is not read. Continuing one of these sessions passes its id to the usual
+  resume flag; for Pi, `--session-dir` is that session's folder instead of
+  `~/.gloss/pi-sessions`.
 - **Project folders.** A bound conversation starts read-only: Claude Code
   runs with `--restricted` and the Read, Glob, Grep and LS tools pre-approved
   (plus the web tools), which also confines the file tools to the folder and

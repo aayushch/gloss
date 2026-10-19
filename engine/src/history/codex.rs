@@ -67,3 +67,22 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
         },
     })
 }
+
+/// Every turn: prompts from `user_message` events, reply text from
+/// `agent_message` events, and tool calls from `function_call` and
+/// `custom_tool_call` items.
+pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
+    let mut out = Turns::default();
+    for v in all_lines(path) {
+        let at = time_of(&v);
+        let Some(p) = v.get("payload") else { continue };
+        match (str_at(&v, "type"), str_at(p, "type")) {
+            (Some("event_msg"), Some("user_message")) => out.prompt(str_at(p, "message").unwrap_or(""), at),
+            (Some("event_msg"), Some("agent_message")) => out.text(str_at(p, "message").unwrap_or(""), at),
+            (Some("response_item"), Some("function_call")) => out.tool(str_at(p, "name").unwrap_or("tool"), p.get("arguments").unwrap_or(&serde_json::Value::Null), at),
+            (Some("response_item"), Some("custom_tool_call")) => out.tool(str_at(p, "name").unwrap_or("tool"), &serde_json::Value::Null, at),
+            _ => {}
+        }
+    }
+    out.done()
+}

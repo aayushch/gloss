@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -41,6 +41,13 @@ const MIGRATE_V4_TO_V5: &str = "
         SELECT project_dir, MIN(created_at) FROM conversations
         WHERE project_dir IS NOT NULL GROUP BY project_dir;
     UPDATE schema_version SET version = 5;
+";
+
+/// Version 6 records which outside session a conversation continued.
+const MIGRATE_V5_TO_V6: &str = "
+    ALTER TABLE conversations ADD COLUMN origin_file TEXT;
+    ALTER TABLE conversations ADD COLUMN origin_until INTEGER;
+    UPDATE schema_version SET version = 6;
 ";
 
 pub struct Store {
@@ -78,17 +85,24 @@ impl Store {
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
+                conn.execute_batch(MIGRATE_V5_TO_V6)?;
             }
             Some(2) => {
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
+                conn.execute_batch(MIGRATE_V5_TO_V6)?;
             }
             Some(3) => {
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
+                conn.execute_batch(MIGRATE_V5_TO_V6)?;
             }
-            Some(4) => conn.execute_batch(MIGRATE_V4_TO_V5)?,
+            Some(4) => {
+                conn.execute_batch(MIGRATE_V4_TO_V5)?;
+                conn.execute_batch(MIGRATE_V5_TO_V6)?;
+            }
+            Some(5) => conn.execute_batch(MIGRATE_V5_TO_V6)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -331,10 +345,10 @@ impl Store {
     pub fn get_conversation(&self, id: &str) -> Result<Conversation> {
         let summary = self.get_summary(id)?;
         self.with(|c| {
-            let agent_session_id: Option<String> = c.query_row(
-                "SELECT agent_session_id FROM conversations WHERE id = ?1",
+            let (agent_session_id, continued_from): (Option<String>, Option<String>) = c.query_row(
+                "SELECT agent_session_id, origin_file FROM conversations WHERE id = ?1",
                 params![id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )?;
             let mut stmt = c.prepare(
                 "SELECT id, conversation_id, seq, role, text, prompt_text, status, clarification_id,
@@ -364,6 +378,7 @@ impl Store {
             Ok(Conversation {
                 summary,
                 agent_session_id,
+                continued_from,
                 running: false,
                 pending_request: None,
                 turns,
@@ -379,6 +394,29 @@ impl Store {
                 params![id],
                 |r| r.get(0),
             )?)
+        })
+    }
+
+    /// Marks a conversation as continuing the session in `file`, taken over at `until`.
+    pub fn set_origin(&self, id: &str, file: &str, until: i64) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE conversations SET origin_file = ?2, origin_until = ?3 WHERE id = ?1",
+                params![id, file, until],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// The outside session file a conversation continued and when it took over, if any.
+    pub fn origin(&self, id: &str) -> Result<Option<(String, i64)>> {
+        self.with(|c| {
+            let row: (Option<String>, Option<i64>) = c.query_row(
+                "SELECT origin_file, origin_until FROM conversations WHERE id = ?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            Ok(row.0.map(|f| (f, row.1.unwrap_or(i64::MAX))))
         })
     }
 
@@ -923,6 +961,8 @@ mod tests {
             conn.execute_batch(SCHEMA).unwrap();
             conn.execute_batch(
                 "DROP TABLE projects;
+                 ALTER TABLE conversations DROP COLUMN origin_file;
+                 ALTER TABLE conversations DROP COLUMN origin_until;
                  INSERT INTO schema_version VALUES (4);
                  INSERT INTO conversations (id, title, agent, project_dir, created_at, updated_at) VALUES
                     ('c1', 'One', 'claude', '/work/alpha', 5, 5),

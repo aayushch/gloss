@@ -9,6 +9,7 @@ import type {
 	Conversation,
 	ConversationSummary,
 	ExternalSession,
+	SessionTurn,
 	ModelInfo,
 	Project,
 	RequestAnswer,
@@ -54,6 +55,12 @@ export interface Api {
 	removeProject(path: string): Promise<void>;
 	/** Sessions the agents recorded for the project folder outside Gloss, newest first. */
 	listProjectSessions(path: string): Promise<ExternalSession[]>;
+	/** The turns of one of those sessions. */
+	readProjectSession(path: string, agent: AgentId, id: string): Promise<SessionTurn[]>;
+	/** Starts a conversation that resumes one of those sessions in place. */
+	continueProjectSession(path: string, agent: AgentId, id: string): Promise<Conversation>;
+	/** The turns a continued conversation's session had before Gloss took it over. */
+	conversationHistory(id: string): Promise<SessionTurn[]>;
 	getConversation(id: string): Promise<Conversation>;
 	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
 	/** Opens the native folder picker; null when nothing was chosen. */
@@ -136,6 +143,9 @@ function tauriApi(): Api {
 		addProject: (path) => call('add_project', { path }),
 		removeProject: (path) => call('remove_project', { path }),
 		listProjectSessions: (path) => call('list_project_sessions', { path }),
+		readProjectSession: (path, agent, id) => call('read_project_session', { path, agent, id }),
+		continueProjectSession: (path, agent, id) => call('continue_project_session', { path, agent, id }),
+		conversationHistory: (id) => call('conversation_history', { id }),
 		getConversation: (id) => call('get_conversation', { id }),
 		createConversation: (agent, model, webSearch, projectDir) =>
 			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null, projectDir: projectDir ?? null }),

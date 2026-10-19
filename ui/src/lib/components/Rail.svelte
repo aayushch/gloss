@@ -5,8 +5,8 @@
 	// conversations, clarification sub-items under the active conversation,
 	// full-text results while searching, and the footer.
 	import { api } from '$lib/api/client';
-	import { app, AGENT_NAMES, PROJECT_PAGE } from '$lib/state/app.svelte';
-	import type { AgentId, ConversationSummary, ExternalSession, Project, SessionOrigin } from '$lib/api/types';
+	import { app, AGENT_NAMES, ORIGIN_LABELS, PROJECT_PAGE } from '$lib/state/app.svelte';
+	import type { AgentId, ConversationSummary, ExternalSession, Project } from '$lib/api/types';
 	import { agentsIn, groupOf, pad, projectItems, relativeTime, short, splitByProject, type Group } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
@@ -38,15 +38,8 @@
 		return app.agents.find((a) => a.id === agent)?.monogram ?? agent.slice(0, 2);
 	}
 
-	const ORIGIN: Record<SessionOrigin, string> = {
-		terminal: 'in the terminal',
-		ide: 'in an editor',
-		desktop: 'in the desktop app',
-		headless: 'headless, by a script or app'
-	};
-
 	function sessionTip(s: ExternalSession): string {
-		return `${AGENT_NAMES[s.agent]} session run ${s.origin ? ORIGIN[s.origin] : 'outside Gloss'}, ${relativeTime(s.updatedAt)}`;
+		return `${AGENT_NAMES[s.agent]} session run ${s.origin ? ORIGIN_LABELS[s.origin] : 'outside Gloss'}, ${relativeTime(s.updatedAt)}`;
 	}
 
 	const grouped = $derived.by(() => {
@@ -138,12 +131,13 @@
 	{/if}
 {/snippet}
 
-{#snippet sessionRow(s: ExternalSession)}
-	<div class="navitem outside" title={sessionTip(s)}>
+{#snippet sessionRow(s: ExternalSession, project: string)}
+	{@const current = app.viewing?.session.agent === s.agent && app.viewing?.session.id === s.id}
+	<button type="button" class="navitem outside" class:on={current} aria-current={current ? 'page' : undefined} title={sessionTip(s)} onclick={() => app.openSession(project, s)}>
 		<span class="mono">{mono(s.agent)}</span>
 		<span class="title">{s.title}</span>
 		<span class="ext"><Icon name="external" size={10} /></span>
-	</div>
+	</button>
 {/snippet}
 
 <nav class="rail">
@@ -216,7 +210,7 @@
 							{#if item.kind === 'chat'}
 								{@render row(item.chat, true)}
 							{:else}
-								{@render sessionRow(item.session)}
+								{@render sessionRow(item.session, p.path)}
 							{/if}
 						{/each}
 						{#if entries.hidden}
@@ -383,7 +377,6 @@
 		line-height: 14px;
 	}
 	.outside {
-		cursor: default;
 		color: var(--text-3);
 	}
 	.outside:hover {

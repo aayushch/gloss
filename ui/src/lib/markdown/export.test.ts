@@ -23,6 +23,7 @@ const conv: Conversation = {
 	createdAt: Date.UTC(2026, 9, 14),
 	updatedAt: 0,
 	agentSessionId: null,
+	continuedFrom: null,
 	running: false,
 	pendingRequest: null,
 	turns: [

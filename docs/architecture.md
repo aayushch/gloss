@@ -77,6 +77,16 @@ each project with its own conversations and its own "New chat"; the global
 takes it off the list: its conversations keep their folder and are listed by
 date.
 
+An expanded project also lists the sessions its agents recorded outside
+Gloss (`engine/src/history/`, read-only). Opening one shows its turns from
+the agent's file. Sending a message, or "Continue in Gloss", creates a
+conversation that resumes that same agent session in place: the agent keeps
+writing to the same history file, so the terminal and Gloss share it. The
+conversation records the file and the takeover time (`origin_file`,
+`origin_until`) and shows the file's earlier turns above its own. The
+session then drops out of the outside list, because a conversation holds its
+id.
+
 A conversation can instead be bound to a project folder when it is created,
 by starting it from the project or picking the project in the draft's header
 (binding a folder that is not yet a project adds it). The agent then starts

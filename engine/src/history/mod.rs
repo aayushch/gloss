@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 use crate::env::ShellEnv;
-use crate::types::{ExternalSession, SessionOrigin};
+use crate::types::{AgentId, ExternalSession, Role, SessionOrigin, SessionTurn};
 
 /// The folder name Claude Code files a project's sessions under.
 pub fn claude_slug(project: &str) -> String {
@@ -138,6 +138,110 @@ impl SessionIndex {
         }
         out
     }
+}
+
+/// Every turn of a session file, in order. Cursor sessions are not read and
+/// give no turns.
+pub fn read_turns(agent: AgentId, file: &Path) -> Vec<SessionTurn> {
+    match agent {
+        AgentId::Claude => claude::turns(file),
+        AgentId::Codex => codex::turns(file),
+        AgentId::Gemini => gemini::turns(file),
+        AgentId::Pi => pi::turns(file),
+        AgentId::Cursor => Vec::new(),
+    }
+}
+
+/// Collects turns from records read in order. A prompt always starts a new
+/// turn; reply text and tool calls join the reply in progress, so an agent
+/// that writes one record per text block or tool call still gives one reply
+/// per prompt.
+#[derive(Default)]
+struct Turns {
+    list: Vec<SessionTurn>,
+}
+
+impl Turns {
+    fn prompt(&mut self, text: &str, at: i64) {
+        let text = text.trim();
+        if !text.is_empty() {
+            self.list.push(SessionTurn { role: Role::User, text: text.to_string(), tools: Vec::new(), at });
+        }
+    }
+
+    fn reply(&mut self, at: i64) -> &mut SessionTurn {
+        if self.list.last().is_none_or(|t| t.role != Role::Assistant) {
+            self.list.push(SessionTurn { role: Role::Assistant, text: String::new(), tools: Vec::new(), at });
+        }
+        self.list.last_mut().expect("pushed above")
+    }
+
+    fn text(&mut self, text: &str, at: i64) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        let turn = self.reply(at);
+        if !turn.text.is_empty() {
+            turn.text.push_str("\n\n");
+        }
+        turn.text.push_str(text);
+    }
+
+    fn tool(&mut self, name: &str, args: &serde_json::Value, at: i64) {
+        let label = tool_label(name, args);
+        self.reply(at).tools.push(label);
+    }
+
+    fn done(self) -> Vec<SessionTurn> {
+        self.list
+    }
+}
+
+/// A short label for a tool call: the tool's name and its main argument, a
+/// file's name rather than its full path, cut to one line of 60 characters.
+fn tool_label(name: &str, args: &serde_json::Value) -> String {
+    // Some agents send the arguments as a JSON string.
+    let parsed;
+    let args = match args.as_str().map(serde_json::from_str::<serde_json::Value>) {
+        Some(Ok(v)) => {
+            parsed = v;
+            &parsed
+        }
+        _ => args,
+    };
+    let main = ["file_path", "path", "absolute_path", "command", "cmd", "pattern", "query", "url", "description", "prompt"]
+        .iter()
+        .find_map(|k| match args.get(*k)? {
+            serde_json::Value::String(s) => Some((*k, s.clone())),
+            // Codex sends a shell command as an argv array; the script is last.
+            serde_json::Value::Array(a) => a.iter().rev().find_map(|x| x.as_str()).map(|s| (*k, s.to_string())),
+            _ => None,
+        });
+    let Some((key, value)) = main else { return name.to_string() };
+    let value = if key.contains("path") {
+        Path::new(&value).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(value)
+    } else {
+        value.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    let short: String = value.chars().take(60).collect();
+    let more = if value.chars().count() > 60 { "…" } else { "" };
+    format!("{} {}{}", name, short, more)
+}
+
+/// Every JSON line of a file. Lines that are not JSON are skipped.
+fn all_lines(path: &Path) -> Vec<serde_json::Value> {
+    let Ok(file) = std::fs::File::open(path) else { return Vec::new() };
+    BufReader::new(file)
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|l| serde_json::from_str(&l).ok())
+        .collect()
+}
+
+/// The time of a record's `timestamp` field, or 0.
+fn time_of(v: &serde_json::Value) -> i64 {
+    str_at(v, "timestamp").and_then(parse_time).unwrap_or(0)
 }
 
 /// True when two folder paths name the same folder, ignoring a trailing slash.

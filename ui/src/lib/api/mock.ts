@@ -14,6 +14,7 @@ import type {
 	ExternalSession,
 	ModelInfo,
 	Project,
+	SessionTurn,
 	Settings,
 	Turn,
 	TurnEventEnvelope
@@ -108,10 +109,21 @@ A locked instruction constrains both: the compiler treats it as a barrier and th
 let counter = 100;
 const nextId = (p: string) => `${p}_${(counter++).toString(36)}`;
 const now = () => Date.now();
+
+const MOCK_SESSION_TURNS: SessionTurn[] = [
+	{ role: 'user', text: 'The login page redirects back to itself after a successful sign-in. Find out why.', tools: [], at: 0 },
+	{
+		role: 'assistant',
+		text: 'The session cookie is set with `SameSite=Strict`, so the redirect from the identity provider arrives without it and the guard sends you back to `/login`.\n\nSwitching it to `Lax` fixes the loop.',
+		tools: ['Read auth.ts', 'Grep SameSite', 'Edit auth.ts', 'Bash npm test'],
+		at: 0
+	}
+];
 const DAY = 86_400_000;
 
 interface Conv extends ConversationSummary {
 	agentSessionId: string | null;
+	continuedFrom: string | null;
 	running: boolean;
 	turns: Turn[];
 	clarifications: Clarification[];
@@ -175,6 +187,7 @@ function seed(): Conv[] {
 		createdAt: now() - 3600_000,
 		updatedAt: now() - 1800_000,
 		agentSessionId: '32bead75-3df0-42d1-a069-faae5a2370fe',
+		continuedFrom: null,
 		running: false,
 		turns: [],
 		clarifications: []
@@ -211,6 +224,7 @@ function seed(): Conv[] {
 		createdAt: now() - DAY - 3600_000,
 		updatedAt: now() - DAY,
 		agentSessionId: null,
+		continuedFrom: null,
 		running: false,
 		turns: [],
 		clarifications: []
@@ -232,6 +246,7 @@ function seed(): Conv[] {
 		createdAt: now() - 2 * DAY,
 		updatedAt: now() - 2 * DAY + 60_000,
 		agentSessionId: null,
+		continuedFrom: null,
 		running: false,
 		turns: [],
 		clarifications: []
@@ -275,7 +290,7 @@ export function mockApi(): Api {
 		updatedAt: c.updatedAt
 	});
 	const staged = new Map<string, { att: Attachment; url: string }>();
-	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, running: c.running, pendingRequest: pending.get(c.id)?.request ?? null, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
+	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, continuedFrom: c.continuedFrom, running: c.running, pendingRequest: pending.get(c.id)?.request ?? null, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
 	const find = (id: string): Conv => {
 		const c = convs.find((x) => x.id === id);
 		if (!c) throw new Error(`No conversation ${id}`);
@@ -316,7 +331,7 @@ export function mockApi(): Api {
 		timers.set(conv.id, list);
 	}
 
-	return {
+	const api: Api = {
 		listAgents: async () => AGENTS,
 		listModels: async (agent) => MODELS[agent],
 		getSettings: async () => settings,
@@ -404,12 +419,26 @@ export function mockApi(): Api {
 				createdAt: ago(hours + 1),
 				updatedAt: ago(hours)
 			});
+			const held = new Set(convs.map((c) => c.agentSessionId));
 			return [
-				session('claude', 'mock-c1', 'Fix the login redirect loop', 'terminal', 2),
+				session('claude', 'mock-c1', 'Fix the login redirect loop', 'terminal', 0.1),
 				session('codex', 'mock-x1', 'Add a --verbose flag to the CLI', 'ide', 30),
 				session('pi', 'mock-p1', 'What does this app do?', null, 80)
-			];
+			].filter((s) => !held.has(s.id));
 		},
+		readProjectSession: async () => MOCK_SESSION_TURNS,
+		continueProjectSession: async (path, agent, id) => {
+			const sessions = await api.listProjectSessions(path);
+			const s = sessions.find((x) => x.agent === agent && x.id === id);
+			if (!s) throw new Error(`no ${agent} session ${id}`);
+			const conv = await api.createConversation(agent, undefined, undefined, path);
+			const c = find(conv.id);
+			c.agentSessionId = id;
+			c.continuedFrom = s.file;
+			c.title = s.title;
+			return full(c);
+		},
+		conversationHistory: async (id) => (find(id).continuedFrom ? MOCK_SESSION_TURNS : []),
 		getConversation: async (id) => full(find(id)),
 		createConversation: async (agent, model, webSearch, projectDir) => {
 			if (projectDir) addProject(projectDir);
@@ -427,6 +456,7 @@ export function mockApi(): Api {
 				createdAt: now(),
 				updatedAt: now(),
 				agentSessionId: null,
+				continuedFrom: null,
 				running: false,
 				turns: [],
 				clarifications: []
@@ -547,4 +577,5 @@ export function mockApi(): Api {
 			return () => listeners.delete(cb);
 		}
 	};
+	return api;
 }

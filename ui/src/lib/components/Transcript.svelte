@@ -2,11 +2,15 @@
 	// Scrolling transcript. Owns text-selection handling (the floating "Ask
 	// about this" button), scroll-to-well jumps and auto-scroll on new turns.
 	import type { Turn } from '$lib/api/types';
-	import { app } from '$lib/state/app.svelte';
+	import { app, AGENT_NAMES, ORIGIN_LABELS } from '$lib/state/app.svelte';
 	import { find } from '$lib/state/find.svelte';
-	import { blockRegistry, buildThreads } from '$lib/state/threads';
+	import { blockRegistry, buildThreads, relativeTime } from '$lib/state/threads';
+
+	/** A session written to this recently may still be open where it started. */
+	const RECENT_MS = 10 * 60_000;
 	import AskButton from './AskButton.svelte';
 	import AssistantTurn from './AssistantTurn.svelte';
+	import SessionTurns from './SessionTurns.svelte';
 	import UserBubble from './UserBubble.svelte';
 
 	let container: HTMLDivElement | undefined = $state();
@@ -133,6 +137,10 @@
 
 <div class="transcript" bind:this={container} onmouseup={onMouseUp} role="presentation">
 	{#if conv}
+		{#if app.earlier.length}
+			<SessionTurns turns={app.earlier} />
+			<div class="handover"><span>Continued in Gloss</span></div>
+		{/if}
 		{#each mainTurns as t, i (t.id)}
 			{#if t.role === 'user'}
 				<UserBubble turn={t} />
@@ -140,8 +148,26 @@
 				<AssistantTurn turn={t} userTurn={userBefore(mainTurns, i)} {conv} {threads} />
 			{/if}
 		{/each}
-		{#if conv.turns.length === 0}
+		{#if conv.turns.length === 0 && !app.earlier.length}
 			<div class="empty">Send a message to start. Select any part of a reply to ask about it inline.</div>
+		{/if}
+	{:else if app.viewing}
+		{@const v = app.viewing}
+		{@const recent = Date.now() - v.session.updatedAt < RECENT_MS}
+		<div class="note" class:warn={recent}>
+			{AGENT_NAMES[v.session.agent]} session run {v.session.origin ? ORIGIN_LABELS[v.session.origin] : 'outside Gloss'}, last written {relativeTime(v.session.updatedAt)}.
+			Send a message below to continue it here: Gloss resumes the same session, so it stays in {AGENT_NAMES[v.session.agent]}'s own history too.
+			It continues read-only until you pick another mode in the header.
+			{#if recent}
+				<strong>It was written to in the last few minutes. If it is still open in a terminal or editor, close it there first: both would write to the same session.</strong>
+			{/if}
+		</div>
+		{#if v.turns === null}
+			<div class="empty">Reading the session…</div>
+		{:else if !v.turns.length}
+			<div class="empty">This session has no turns Gloss can show.</div>
+		{:else}
+			<SessionTurns turns={v.turns} />
 		{/if}
 	{:else if app.draft}
 		<div class="empty">
@@ -187,5 +213,42 @@
 	}
 	.error {
 		color: var(--accent-text);
+	}
+	.note {
+		font-size: 12.5px;
+		line-height: 1.5;
+		color: var(--text-2);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 10px 14px;
+		margin: 0 0 22px;
+		max-width: 720px;
+	}
+	.note.warn {
+		border-color: var(--accent);
+	}
+	.note strong {
+		display: block;
+		margin-top: 6px;
+		color: var(--accent-text);
+		font-weight: 500;
+	}
+	.handover {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 4px 0 22px;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-3);
+	}
+	.handover::before,
+	.handover::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--line);
 	}
 </style>

@@ -84,6 +84,10 @@ enum Cmd {
     Show { conversation: String },
     /// List the agent sessions recorded for a folder outside Gloss.
     Sessions { folder: String },
+    /// Print the turns of one of those sessions.
+    Session { folder: String, agent: String, id: String },
+    /// Continue one of those sessions in a new conversation and print its id.
+    Continue { folder: String, agent: String, id: String },
 }
 
 #[tokio::main]
@@ -249,6 +253,18 @@ async fn main() -> Result<()> {
                 let when = chrono::DateTime::from_timestamp_millis(s.updated_at).map(|t| t.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default();
                 println!("{}  {:<7} {:<9} {:<38} {}", when, s.agent, format!("{:?}", s.origin), s.id, s.title);
             }
+        }
+        Cmd::Session { folder, agent, id } => {
+            let agent = AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
+            for t in engine.read_project_session(&folder, agent, &id)? {
+                println!("--- {:?}{}", t.role, if t.tools.is_empty() { String::new() } else { format!("  [{}]", t.tools.join(" · ")) });
+                println!("{}", t.text);
+            }
+        }
+        Cmd::Continue { folder, agent, id } => {
+            let agent = AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
+            let c = engine.continue_project_session(&folder, agent, &id)?;
+            println!("{}", c.summary.id);
         }
         Cmd::Show { conversation } => {
             let c = engine.get_conversation(&conversation)?;

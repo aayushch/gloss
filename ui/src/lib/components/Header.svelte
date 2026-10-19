@@ -48,14 +48,14 @@
 		app.chooseProject(path);
 	}
 
-	const title = $derived(app.active?.title ?? 'New conversation');
+	const title = $derived(app.active?.title ?? app.viewing?.session.title ?? 'New conversation');
 	const count = $derived(app.active?.clarifications.length ?? 0);
 	const agent = $derived(app.activeAgent);
 	const agentId = $derived(app.activeAgentId);
 	const models = $derived(app.models[agentId] ?? []);
 	const modelLabel = $derived(agent && !agent.supportsModelSelect ? 'Auto' : app.modelName(agentId, app.activeModelId));
-	const canPickModel = $derived(!agent || agent.supportsModelSelect);
-	const showWeb = $derived(!agent || agent.supportsWebSearch);
+	const canPickModel = $derived((!agent || agent.supportsModelSelect) && !app.viewing);
+	const showWeb = $derived((!agent || agent.supportsWebSearch) && !app.viewing);
 </script>
 
 <header data-tauri-drag-region>
@@ -101,7 +101,7 @@
 			<span class="fname">{folderName(app.activeProjectDir)}</span>
 		</span>
 	{/if}
-	{#if app.activeProjectDir && app.activeModes.length}
+	{#if app.activeProjectDir && app.activeModes.length && !app.viewing}
 		<select
 			class="mode"
 			title={app.activeModes.find((m) => m.id === app.activeMode)?.description ?? 'Reads files only; never changes them'}
@@ -173,7 +173,11 @@
 			<ModelMenu agentName={agent?.name ?? agentId} {models} selected={app.activeModelId} onselect={(id) => app.setModel(id)} onclose={() => (app.modelMenuOpen = false)} />
 		{/if}
 	</div>
-	<span class="pill count">{count} clarification{count === 1 ? '' : 's'}</span>
+	{#if app.viewing}
+		<button type="button" class="ibtn continue" title="Resume this session in Gloss; it stays in the agent's own history too" onclick={() => app.continueSession()}>Continue in Gloss</button>
+	{:else}
+		<span class="pill count">{count} clarification{count === 1 ? '' : 's'}</span>
+	{/if}
 	{#if app.active && app.active.turns.length}
 		<div class="export-wrap" data-export>
 			<button type="button" class="ico" title="Export conversation" aria-label="Export conversation" aria-haspopup="menu" aria-expanded={exportOpen} onclick={() => (exportOpen = !exportOpen)}>
@@ -376,6 +380,13 @@
 	}
 	.ico.on {
 		color: var(--accent-text);
+	}
+	.continue {
+		height: 28px;
+		padding: 0 12px;
+		font-size: 12.5px;
+		color: var(--accent-text);
+		border-color: var(--accent);
 	}
 	.export-wrap {
 		position: relative;

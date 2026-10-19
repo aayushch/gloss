@@ -150,8 +150,20 @@ export interface ExternalSession {
 	updatedAt: number;
 }
 
+/** One turn of a session read from an agent's own history file. */
+export interface SessionTurn {
+	role: 'user' | 'assistant';
+	text: string;
+	/** One short label per tool call, such as "Edit engine.rs". */
+	tools: string[];
+	/** Unix milliseconds; 0 when the file records no time. */
+	at: number;
+}
+
 export interface Conversation extends ConversationSummary {
 	agentSessionId: string | null;
+	/** The agent's history file this conversation continued, when it took over a session started outside Gloss. */
+	continuedFrom: string | null;
 	running: boolean;
 	/** The request the running agent is waiting on, if any. */
 	pendingRequest: AgentRequest | null;

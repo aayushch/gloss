@@ -18,6 +18,8 @@ import type {
 	ModelInfo,
 	Project,
 	SearchHit,
+	SessionOrigin,
+	SessionTurn,
 	Settings,
 	Theme,
 	Turn,
@@ -60,10 +62,26 @@ export interface Draft {
 	mode: string | null;
 }
 
+/** A session from outside Gloss, open read-only in the main column. */
+export interface ViewedSession {
+	project: string;
+	session: ExternalSession;
+	/** Null while the file is being read. */
+	turns: SessionTurn[] | null;
+}
+
 /** Last path segment of a folder path, for labels. */
 export function folderName(path: string): string {
 	return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
 }
+
+/** Where an outside session ran, as a phrase that follows "run". */
+export const ORIGIN_LABELS: Record<SessionOrigin, string> = {
+	terminal: 'in the terminal',
+	ide: 'in an editor',
+	desktop: 'in the desktop app',
+	headless: 'headless, by a script or app'
+};
 
 /** Entries a project lists before "Show more". */
 export const PROJECT_PAGE = 8;
@@ -94,6 +112,11 @@ class AppState {
 	active = $state<Conversation | null>(null);
 	/** Set while a new chat has been opened but nothing sent yet. */
 	draft = $state<Draft | null>(null);
+	/** Set while an outside session is open read-only; sending a message continues it. */
+	viewing = $state<ViewedSession | null>(null);
+	/** For an active conversation that continued an outside session, the
+	 * session's turns from before Gloss took it over. */
+	earlier = $state<SessionTurn[]>([]);
 	search = $state('');
 	/** Full-text hits for `search`, or null when the search box is empty. */
 	searchHits = $state<SearchHit[] | null>(null);
@@ -130,12 +153,12 @@ class AppState {
 	private autoOpened: string | null = null;
 
 	get activeAgent(): AgentInfo | undefined {
-		const id = this.active?.agent ?? this.draft?.agent ?? this.settings.defaultAgent;
+		const id = this.activeAgentId;
 		return this.agents.find((a) => a.id === id);
 	}
 
 	get activeAgentId(): AgentId {
-		return this.active?.agent ?? this.draft?.agent ?? this.settings.defaultAgent;
+		return this.active?.agent ?? this.draft?.agent ?? this.viewing?.session.agent ?? this.settings.defaultAgent;
 	}
 
 	get activeModelId(): string {
@@ -465,12 +488,19 @@ class AppState {
 
 	async open(id: string): Promise<void> {
 		this.draft = null;
+		this.viewing = null;
 		this.pendingAsk = null;
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		this.active = await (await api()).getConversation(id);
+		const a = await api();
+		this.active = await a.getConversation(id);
 		if (this.active.projectDir) this.toggleProject(this.active.projectDir, true);
+		this.earlier = [];
+		if (this.active.continuedFrom) {
+			const earlier = await a.conversationHistory(id).catch(() => []);
+			if (this.active?.id === id) this.earlier = earlier;
+		}
 		for (const t of this.active.turns) t.attachments.forEach((att) => this.loadThumb(att));
 		this.requests = {};
 		const pending = this.active.pendingRequest;
@@ -483,6 +513,8 @@ class AppState {
 	newChat(projectDir: string | null = null): void {
 		const agent = this.agents.find((a) => a.id === this.settings.defaultAgent && a.available)?.id ?? this.agents.find((a) => a.available)?.id ?? this.settings.defaultAgent;
 		this.active = null;
+		this.viewing = null;
+		this.earlier = [];
 		this.pendingAsk = null;
 		this.composerFor = null;
 		this.modelMenuOpen = false;
@@ -530,9 +562,48 @@ class AppState {
 		}
 	}
 
-	/** The folder the active conversation or draft runs in, if any. */
+	/** The folder the active conversation, draft or viewed session runs in, if any. */
 	get activeProjectDir(): string | null {
-		return this.active?.projectDir ?? this.draft?.projectDir ?? null;
+		return this.active?.projectDir ?? this.draft?.projectDir ?? this.viewing?.project ?? null;
+	}
+
+	/** Opens an outside session of a project read-only in the main column. */
+	async openSession(project: string, session: ExternalSession): Promise<void> {
+		this.active = null;
+		this.draft = null;
+		this.earlier = [];
+		this.pendingAsk = null;
+		this.composerFor = null;
+		this.modelMenuOpen = false;
+		this.artifactView = null;
+		this.viewing = { project, session, turns: null };
+		try {
+			const turns = await (await api()).readProjectSession(project, session.agent, session.id);
+			if (this.viewing?.session.id === session.id) this.viewing.turns = turns;
+		} catch (e) {
+			if (this.viewing?.session.id === session.id) this.viewing.turns = [];
+			this.flash(`Could not read the session: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	/** Turns the viewed outside session into a Gloss conversation that
+	 * resumes it in place, and opens that conversation. */
+	async continueSession(): Promise<Conversation | null> {
+		const v = this.viewing;
+		if (!v) return null;
+		try {
+			const conv = await (await api()).continueProjectSession(v.project, v.session.agent, v.session.id);
+			this.viewing = null;
+			this.active = conv;
+			this.earlier = v.turns ?? [];
+			this.conversations = [summaryOf(conv), ...this.conversations];
+			this.outside = { ...this.outside, [v.project]: (this.outside[v.project] ?? []).filter((s) => !(s.agent === v.session.agent && s.id === v.session.id)) };
+			this.refreshProjects();
+			return conv;
+		} catch (e) {
+			this.flash(`Could not continue the session: ${String(e).replace(/^Error:\s*/, '')}`);
+			return null;
+		}
 	}
 
 	/** Moves the draft into a project; null takes it out of any project.
@@ -622,6 +693,7 @@ class AppState {
 		const body = text.trim();
 		if (!body) return;
 		const a = await api();
+		if (this.viewing && !(await this.continueSession())) return;
 		if (this.draft) {
 			const d = this.draft;
 			const conv = await a.createConversation(d.agent, d.model || undefined, d.webSearch, d.projectDir);
@@ -688,8 +760,8 @@ class AppState {
 			this.active.clarifications = [...this.active.clarifications, res.clarification];
 			this.active.clarificationCount = this.active.clarifications.length;
 		}
-		if (this.active.turns.length === 2) {
-			// The engine derives the title from the first message; mirror it until the list refreshes.
+		if (this.active.turns.length === 2 && this.active.title === 'New conversation') {
+			// The engine replaces the placeholder title with the first message; mirror it until the list refreshes.
 			this.active.title = text.length > 60 ? text.slice(0, 57).trimEnd() + '…' : text;
 		}
 		this.active.running = true;

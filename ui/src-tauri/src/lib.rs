@@ -181,6 +181,36 @@ async fn list_project_sessions(engine: State<'_, Eng>, path: String) -> Result<V
         .map_err(err)
 }
 
+/// The turns of one of those sessions, read from the agent's file.
+#[tauri::command]
+async fn read_project_session(engine: State<'_, Eng>, path: String, agent: AgentId, id: String) -> Result<Vec<SessionTurn>, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.read_project_session(&path, agent, &id))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
+/// Starts a conversation that resumes one of those sessions in place.
+#[tauri::command]
+async fn continue_project_session(engine: State<'_, Eng>, path: String, agent: AgentId, id: String) -> Result<Conversation, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.continue_project_session(&path, agent, &id))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
+/// The turns a continued conversation's session had before Gloss took it over.
+#[tauri::command]
+async fn conversation_history(engine: State<'_, Eng>, id: String) -> Result<Vec<SessionTurn>, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.conversation_history(&id))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
 /// Removes the project from the list; its conversations are kept.
 #[tauri::command]
 fn remove_project(engine: State<'_, Eng>, path: String) -> Result<(), String> {
@@ -319,6 +349,9 @@ pub fn run() {
             add_project,
             remove_project,
             list_project_sessions,
+            read_project_session,
+            continue_project_session,
+            conversation_history,
             get_conversation,
             create_conversation,
             rename_conversation,

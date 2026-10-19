@@ -169,3 +169,77 @@ fn titles_are_one_short_line() {
     assert!(!is_slash_command("/src/main.rs fails"));
     assert!(!is_slash_command("why / here"));
 }
+
+#[test]
+fn reads_turns_with_tool_calls_collapsed() {
+    let root = tempfile::tempdir().unwrap();
+    let homes = AgentHomes::under(root.path());
+    let claude_file = homes.claude.join("projects").join("-work-my-app").join("t1.jsonl");
+    write(
+        &claude_file,
+        &[
+            serde_json::json!({"type": "user", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "Fix the bug"}}),
+            serde_json::json!({"type": "assistant", "timestamp": "2026-10-01T10:00:01Z", "message": {"content": [
+                {"type": "text", "text": "Looking."},
+                {"type": "tool_use", "name": "Read", "input": {"file_path": "/work/my.app/src/engine.rs"}}]}}),
+            serde_json::json!({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "…"}]}}),
+            serde_json::json!({"type": "assistant", "isSidechain": true, "message": {"content": [{"type": "text", "text": "subagent"}]}}),
+            serde_json::json!({"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash", "input": {"command": "cargo   test\n--all"}},
+                {"type": "text", "text": "Fixed."}]}}),
+        ],
+    );
+    let turns = read_turns(AgentId::Claude, &claude_file);
+    assert_eq!(turns.len(), 2);
+    assert_eq!((turns[0].role, turns[0].text.as_str()), (Role::User, "Fix the bug"));
+    assert_eq!(turns[0].at, parse_time("2026-10-01T10:00:00Z").unwrap());
+    assert_eq!(turns[1].text, "Looking.\n\nFixed.");
+    assert_eq!(turns[1].tools, vec!["Read engine.rs", "Bash cargo test --all"]);
+
+    let codex_file = root.path().join("rollout-x.jsonl");
+    write(
+        &codex_file,
+        &[
+            serde_json::json!({"type": "session_meta", "payload": {"id": "x"}}),
+            serde_json::json!({"type": "event_msg", "payload": {"type": "user_message", "message": "Add a flag"}}),
+            serde_json::json!({"type": "response_item", "payload": {"type": "function_call", "name": "shell",
+                "arguments": "{\"command\":[\"bash\",\"-lc\",\"rg flag\"]}"}}),
+            serde_json::json!({"type": "event_msg", "payload": {"type": "agent_message", "message": "Done."}}),
+        ],
+    );
+    let turns = read_turns(AgentId::Codex, &codex_file);
+    assert_eq!(turns.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), vec!["Add a flag", "Done."]);
+    assert_eq!(turns[1].tools, vec!["shell rg flag"]);
+
+    let gemini_file = root.path().join("session-g.jsonl");
+    write(
+        &gemini_file,
+        &[
+            serde_json::json!({"sessionId": "g", "kind": "main"}),
+            serde_json::json!({"type": "user", "content": [{"text": "Summarise"}]}),
+            serde_json::json!({"type": "gemini", "content": "", "toolCalls": [{"name": "read_file", "args": {"absolute_path": "/w/README.md"}}]}),
+            serde_json::json!({"type": "gemini", "content": "It is a CLI."}),
+            serde_json::json!({"type": "info", "content": "ignored"}),
+        ],
+    );
+    let turns = read_turns(AgentId::Gemini, &gemini_file);
+    assert_eq!(turns.len(), 2);
+    assert_eq!((turns[1].text.as_str(), turns[1].tools.clone()), ("It is a CLI.", vec!["read_file README.md".to_string()]));
+
+    let pi_file = root.path().join("pi.jsonl");
+    write(
+        &pi_file,
+        &[
+            serde_json::json!({"type": "session", "id": "p"}),
+            serde_json::json!({"type": "message", "message": {"role": "user", "content": [{"type": "text", "text": "What is this?"}]}}),
+            serde_json::json!({"type": "message", "message": {"role": "assistant", "content": [
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "toolCall", "name": "bash", "arguments": {"command": "ls"}}]}}),
+            serde_json::json!({"type": "message", "message": {"role": "toolResult", "content": [{"type": "text", "text": "a b"}]}}),
+            serde_json::json!({"type": "message", "message": {"role": "assistant", "content": [{"type": "text", "text": "A repo."}]}}),
+        ],
+    );
+    let turns = read_turns(AgentId::Pi, &pi_file);
+    assert_eq!(turns.len(), 2);
+    assert_eq!((turns[1].text.as_str(), turns[1].tools.clone()), ("A repo.", vec!["bash ls".to_string()]));
+}

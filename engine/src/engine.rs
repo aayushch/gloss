@@ -12,7 +12,7 @@ use tracing::{info, warn};
 use crate::agents::{self, AgentEvent, ImageAttachment, SpawnRequest};
 use crate::attach;
 use crate::env::ShellEnv;
-use crate::history::{AgentHomes, SessionIndex};
+use crate::history::{self, AgentHomes, SessionIndex};
 use crate::paths::GlossPaths;
 use crate::prompt;
 use crate::store::Store;
@@ -212,6 +212,61 @@ impl Engine {
         let mut list = self.sessions.list(&self.homes, path);
         list.retain(|s| !owned.contains(&s.id));
         Ok(list)
+    }
+
+    /// The outside session `agent`/`id` of a project, as `list_project_sessions` lists it.
+    fn project_session(&self, path: &str, agent: AgentId, id: &str) -> Result<ExternalSession> {
+        self.list_project_sessions(path)?
+            .into_iter()
+            .find(|s| s.agent == agent && s.id == id)
+            .ok_or_else(|| anyhow!("{} has no {} session {} outside Gloss", path, agent, id))
+    }
+
+    /// The turns of an outside session of the project, read from the agent's
+    /// file. Only sessions the project lists can be read, so this never opens
+    /// a file outside the agents' history for that folder.
+    pub fn read_project_session(&self, path: &str, agent: AgentId, id: &str) -> Result<Vec<SessionTurn>> {
+        let s = self.project_session(path, agent, id)?;
+        Ok(history::read_turns(agent, std::path::Path::new(&s.file)))
+    }
+
+    /// Takes over an outside session of the project: a new conversation in the
+    /// project that resumes the same agent session, so its turns are written
+    /// to the same history file the terminal (or editor) used. The turns
+    /// before now stay in that file and come from `conversation_history`.
+    pub fn continue_project_session(&self, path: &str, agent: AgentId, id: &str) -> Result<Conversation> {
+        let s = self.project_session(path, agent, id)?;
+        let conv = self.create_conversation(agent, None, None, Some(path.to_string()))?;
+        let conv_id = conv.summary.id.clone();
+        self.store.set_agent_session_id(&conv_id, &s.id)?;
+        self.store.set_origin(&conv_id, &s.file, crate::store::now_ms())?;
+        self.store.rename_conversation(&conv_id, &s.title)?;
+        self.get_conversation(&conv_id)
+    }
+
+    /// Where Pi keeps this conversation's session: the folder of the outside
+    /// session it continued, or else Gloss's own Pi session folder.
+    fn pi_session_dir(&self, conv_id: &str, agent: AgentId) -> Result<std::path::PathBuf> {
+        if agent == AgentId::Pi {
+            if let Some((file, _)) = self.store.origin(conv_id)? {
+                if let Some(dir) = std::path::Path::new(&file).parent() {
+                    return Ok(dir.to_path_buf());
+                }
+            }
+        }
+        Ok(self.paths.pi_sessions.clone())
+    }
+
+    /// For a conversation that continued an outside session: the session's
+    /// turns from before Gloss took it over. Empty for any other conversation.
+    pub fn conversation_history(&self, id: &str) -> Result<Vec<SessionTurn>> {
+        let Some((file, until)) = self.store.origin(id)? else { return Ok(Vec::new()) };
+        let agent = self.store.get_summary(id)?.agent;
+        let mut turns = history::read_turns(agent, std::path::Path::new(&file));
+        // Turns written after the takeover are this conversation's own, which
+        // the store already holds. A turn with no recorded time (0) is kept.
+        turns.retain(|t| t.at < until);
+        Ok(turns)
     }
 
     /// Removes a project from the list. Its conversations are kept.
@@ -479,7 +534,7 @@ impl Engine {
             project: project_dir.is_some(),
             mode: if project_dir.is_some() { conv.summary.mode.clone() } else { None },
             cwd: project_dir.unwrap_or_else(|| self.paths.workspace.clone()),
-            pi_session_dir: self.paths.pi_sessions.clone(),
+            pi_session_dir: self.pi_session_dir(&conv_id, agent)?,
             system_note: note,
             title: Some(title),
             images,
@@ -900,6 +955,46 @@ mod tests {
         engine.store.set_agent_session_id(&conv.summary.id, "mine").unwrap();
         let list = engine.list_project_sessions(&project).unwrap();
         assert_eq!(list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), vec!["theirs"]);
+    }
+
+    #[test]
+    fn continuing_an_outside_session_resumes_it_in_a_new_conversation() {
+        let dir = tempfile::tempdir().unwrap();
+        let homes = crate::history::AgentHomes::under(&dir.path().join("home"));
+        let engine = Engine::open_with_env(GlossPaths::at(&dir.path().join("gloss")), ShellEnv::from_process())
+            .unwrap()
+            .with_agent_homes(homes.clone());
+        let project = dir.path().join("proj");
+        std::fs::create_dir(&project).unwrap();
+        let project = std::fs::canonicalize(&project).unwrap().to_string_lossy().to_string();
+        let pi_dir = homes.pi.join("sessions").join(format!("--{}--", project.trim_start_matches('/').replace('/', "-")));
+        std::fs::create_dir_all(&pi_dir).unwrap();
+        let lines = [
+            serde_json::json!({"type": "session", "id": "p1", "cwd": project, "timestamp": "2026-10-01T10:00:00Z"}),
+            serde_json::json!({"type": "message", "timestamp": "2026-10-01T10:00:01Z", "message": {"role": "user", "content": "What is this?"}}),
+            serde_json::json!({"type": "message", "timestamp": "2026-10-01T10:00:02Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "A repo."}]}}),
+            // Written after the takeover: the continued conversation's own turn.
+            serde_json::json!({"type": "message", "timestamp": "2999-01-01T00:00:00Z", "message": {"role": "user", "content": "Later"}}),
+        ];
+        let body: String = lines.iter().map(|l| format!("{}\n", l)).collect();
+        std::fs::write(pi_dir.join("p1.jsonl"), body).unwrap();
+
+        assert!(engine.read_project_session(&project, AgentId::Claude, "p1").is_err());
+        assert_eq!(engine.read_project_session(&project, AgentId::Pi, "p1").unwrap().len(), 3);
+
+        let conv = engine.continue_project_session(&project, AgentId::Pi, "p1").unwrap();
+        assert_eq!(conv.agent_session_id.as_deref(), Some("p1"));
+        assert_eq!(conv.summary.title, "What is this?");
+        assert_eq!(conv.summary.project_dir.as_deref(), Some(project.as_str()));
+        assert!(conv.continued_from.as_deref().is_some_and(|f| f.ends_with("p1.jsonl")));
+        assert!(engine.list_project_sessions(&project).unwrap().is_empty());
+        let earlier = engine.conversation_history(&conv.summary.id).unwrap();
+        assert_eq!(earlier.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), vec!["What is this?", "A repo."]);
+        assert_eq!(engine.pi_session_dir(&conv.summary.id, AgentId::Pi).unwrap(), pi_dir);
+
+        let plain = engine.create_conversation(AgentId::Pi, None, None, None).unwrap();
+        assert!(engine.conversation_history(&plain.summary.id).unwrap().is_empty());
+        assert_eq!(engine.pi_session_dir(&plain.summary.id, AgentId::Pi).unwrap(), engine.paths.pi_sessions);
     }
 
     #[test]

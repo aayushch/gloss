@@ -38,7 +38,7 @@
 	const composerDisabled = $derived.by(() => {
 		if (app.loadError) return true;
 		const agent = app.activeAgent;
-		return !!app.draft && (!agent || !agent.available);
+		return (!!app.draft || !!app.viewing) && (!agent || !agent.available);
 	});
 </script>
 

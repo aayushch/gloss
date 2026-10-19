@@ -99,3 +99,42 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
         },
     })
 }
+
+/// Every turn: `user` messages are prompts, `gemini` messages are replies
+/// with their `toolCalls`. Info and error messages are left out.
+pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
+    let records = if path.extension().and_then(|e| e.to_str()) == Some("json") {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|v| v.get("messages").and_then(|m| m.as_array()).cloned())
+            .unwrap_or_default()
+    } else {
+        all_lines(path)
+    };
+    let mut out = Turns::default();
+    for v in records {
+        let at = time_of(&v);
+        let content = v.get("content").unwrap_or(&serde_json::Value::Null);
+        match str_at(&v, "type") {
+            Some("user") => out.prompt(&all_text(content), at),
+            Some("gemini") => {
+                out.text(&all_text(content), at);
+                for call in v.get("toolCalls").and_then(|c| c.as_array()).into_iter().flatten() {
+                    out.tool(str_at(call, "name").unwrap_or("tool"), call.get("args").unwrap_or(&serde_json::Value::Null), at);
+                }
+            }
+            _ => {}
+        }
+    }
+    out.done()
+}
+
+/// Message content as one text: a string as it is, or the `text` of every part.
+fn all_text(content: &serde_json::Value) -> String {
+    match content {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(parts) => parts.iter().filter_map(|p| str_at(p, "text")).collect::<Vec<_>>().join("\n\n"),
+        _ => String::new(),
+    }
+}

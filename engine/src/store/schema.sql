@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     project_dir TEXT,
     -- The agent's working mode inside project_dir (a CLI mode id); NULL means read-only.
     mode TEXT,
+    -- For a conversation that continued a session started outside Gloss: the
+    -- agent's history file, and when Gloss took the session over.
+    origin_file TEXT,
+    origin_until INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

@@ -55,3 +55,35 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
         },
     })
 }
+
+/// Every turn: `message` records from the user are prompts; the
+/// assistant's hold `text` and `toolCall` parts. Tool results and thinking
+/// are left out.
+pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
+    let mut out = Turns::default();
+    for v in all_lines(path) {
+        if str_at(&v, "type") != Some("message") {
+            continue;
+        }
+        let at = time_of(&v);
+        let Some(m) = v.get("message") else { continue };
+        let content = m.get("content").unwrap_or(&serde_json::Value::Null);
+        match str_at(m, "role") {
+            Some("user") => out.prompt(first_text(content).unwrap_or(""), at),
+            Some("assistant") => {
+                if let Some(s) = content.as_str() {
+                    out.text(s, at);
+                }
+                for part in content.as_array().into_iter().flatten() {
+                    match str_at(part, "type") {
+                        Some("text") => out.text(str_at(part, "text").unwrap_or(""), at),
+                        Some("toolCall") => out.tool(str_at(part, "name").unwrap_or("tool"), part.get("arguments").unwrap_or(&serde_json::Value::Null), at),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out.done()
+}

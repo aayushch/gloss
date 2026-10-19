@@ -395,6 +395,19 @@ pub struct ExternalSession {
     pub updated_at: i64,
 }
 
+/// One turn of a session read from an agent's own history file: the user's
+/// prompt, or the agent's reply with the tools it called collapsed to labels.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTurn {
+    pub role: Role,
+    pub text: String,
+    /// One short label per tool call, such as "Edit engine.rs" or "Bash cargo test".
+    pub tools: Vec<String>,
+    /// Unix milliseconds; 0 when the file records no time.
+    pub at: i64,
+}
+
 /// What kind of file an attachment is, which decides how it reaches the agent:
 /// images go through each CLI's image route, text is inlined into the prompt.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -462,6 +475,10 @@ pub struct Conversation {
     pub summary: ConversationSummary,
     /// The agent's own session/thread id once the first turn has started.
     pub agent_session_id: Option<String>,
+    /// The agent's history file this conversation continued, when it took
+    /// over a session started outside Gloss. Turns from that file before the
+    /// takeover come from `conversation_history`.
+    pub continued_from: Option<String>,
     /// True while an agent process is running for this conversation.
     pub running: bool,
     /// The request the running agent is waiting on, so a reopened

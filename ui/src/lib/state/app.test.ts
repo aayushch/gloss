@@ -94,6 +94,37 @@ describe('app state against the mock api', () => {
 		expect(app.projects.find((p) => p.path === '/Users/me/code/demo-project')).toBeUndefined();
 	});
 
+	it('opens an outside session read-only and continues it by sending', async () => {
+		const project = '/Users/me/code/demo-project';
+		app.newChat(project);
+		app.toggleProject(project, true);
+		await settle(10);
+		const session = app.outside[project].find((x) => x.agent === 'claude')!;
+		await app.openSession(project, session);
+		expect(app.active).toBeNull();
+		expect(app.activeAgentId).toBe('claude');
+		expect(app.activeProjectDir).toBe(project);
+		expect(app.viewing?.turns?.length).toBe(2);
+
+		await app.send('Now add a test for it');
+		expect(app.viewing).toBeNull();
+		expect(app.active?.agentSessionId).toBe(session.id);
+		expect(app.active?.continuedFrom).toBe(session.file);
+		expect(app.active?.title).toBe(session.title);
+		expect(app.earlier.length).toBe(2);
+		expect(app.outside[project].some((x) => x.id === session.id)).toBe(false);
+		await settle(100);
+		await app.cancel();
+		await settle(20);
+
+		// Reopening the conversation loads the earlier turns again.
+		const id = app.active!.id;
+		app.newChat();
+		expect(app.earlier).toEqual([]);
+		await app.open(id);
+		expect(app.earlier.length).toBe(2);
+	});
+
 	it('shows the agent\'s question as a request and resumes once answered', async () => {
 		app.newChat();
 		await app.send('[ask] Which style?');
