@@ -1,10 +1,20 @@
 <script lang="ts">
-	// Modal settings sheet: agent choice, default model per agent, app
-	// updates, the browser extension and appearance.
-	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
+	// Modal settings sheet with four panes, picked from a list on the left:
+	// General (appearance, updates), Agents (agent choice, default model
+	// per agent), Browser extension (install, status) and Web pages (what
+	// the extension sends and which agent answers).
+	import { app, AGENT_NAMES, type SettingsTab } from '$lib/state/app.svelte';
 	import { updater, type CheckResult } from '$lib/state/updater.svelte';
 	import type { AgentId, BrowserRegistration, SessionInfo } from '$lib/api/types';
 	import Icon from './Icon.svelte';
+
+	const TABS: { id: SettingsTab; label: string }[] = [
+		{ id: 'general', label: 'General' },
+		{ id: 'agents', label: 'Agents' },
+		{ id: 'extension', label: 'Browser extension' },
+		{ id: 'pages', label: 'Web pages' },
+	];
+	const tab = $derived(app.settingsTab);
 
 	const agents = $derived(app.agents);
 	const selectedAgent = $derived(app.settings.defaultAgent);
@@ -123,7 +133,14 @@
 			<h2 id="settings-title">Settings</h2>
 			<button type="button" class="close" aria-label="Close" onclick={() => (app.settingsOpen = false)}><Icon name="x" size={16} /></button>
 		</div>
-
+		<div class="body">
+		<nav class="tabs" aria-label="Settings sections">
+			{#each TABS as t (t.id)}
+				<button type="button" class="tab" class:on={tab === t.id} aria-current={tab === t.id ? 'page' : undefined} onclick={() => (app.settingsTab = t.id)}>{t.label}</button>
+			{/each}
+		</nav>
+		<div class="pane">
+		{#if tab === 'agents'}
 		<section>
 			<h3>Agent</h3>
 			<p class="intro">Gloss talks to the coding agents installed on this machine. New conversations use the selected agent; each conversation stays bound to the agent that started it.</p>
@@ -174,6 +191,16 @@
 				</div>
 			{/if}
 		</section>
+		{/if}
+
+		{#if tab === 'general'}
+		<section>
+			<h3>Appearance</h3>
+			<div class="seg" role="radiogroup" aria-label="Appearance">
+				<button type="button" class:on={app.settings.theme === 'light'} onclick={() => app.applyTheme('light')}>Light</button>
+				<button type="button" class:on={app.settings.theme === 'dark'} onclick={() => app.applyTheme('dark')}>Dark</button>
+			</div>
+		</section>
 
 		<section>
 			<h3>Updates</h3>
@@ -205,7 +232,9 @@
 				</div>
 			{/if}
 		</section>
+		{/if}
 
+		{#if tab === 'extension'}
 		<section>
 			<h3>Browser extension</h3>
 			<p class="intro">Highlight text on any web page and ask about it. The reply stays anchored to the passage, and every page you ask about appears under Pages in the rail.</p>
@@ -291,6 +320,13 @@
 					</div>
 				{/if}
 			{/if}
+		</section>
+		{/if}
+
+		{#if tab === 'pages'}
+		<section class="pages">
+			<h3>Web pages</h3>
+			<p class="intro">What the browser extension sends along with a question, and which agent answers.</p>
 			<div class="prefs">
 				<label class="toggle">
 					<input type="checkbox" checked={app.settings.sendPageText} onchange={(e) => app.saveSettings({ sendPageText: e.currentTarget.checked })} />
@@ -333,13 +369,9 @@
 			</div>
 		</section>
 
-		<section>
-			<h3>Appearance</h3>
-			<div class="seg" role="radiogroup" aria-label="Appearance">
-				<button type="button" class:on={app.settings.theme === 'light'} onclick={() => app.applyTheme('light')}>Light</button>
-				<button type="button" class:on={app.settings.theme === 'dark'} onclick={() => app.applyTheme('dark')}>Dark</button>
-			</div>
-		</section>
+		{/if}
+		</div>
+		</div>
 	</div>
 </div>
 
@@ -354,17 +386,66 @@
 		z-index: 50;
 	}
 	.sheet {
-		width: 480px;
+		width: 660px;
 		max-width: calc(100vw - 32px);
+		height: 560px;
 		max-height: calc(100vh - 48px);
-		overflow: auto;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 		background: var(--bg);
 		border-radius: 14px;
 		border: 1px solid var(--line);
 		box-shadow: var(--shadow);
-		padding: 18px 20px 20px;
+	}
+	.body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+	.tabs {
+		width: 160px;
+		flex: none;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 10px 10px;
+		border-right: 1px solid var(--line);
+		background: var(--surface);
+	}
+	.tab {
+		padding: 7px 10px;
+		border-radius: 8px;
+		text-align: left;
+		font-size: 13px;
+		color: var(--text-2);
+	}
+	.tab:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+	.tab.on {
+		background: var(--surface-2);
+		color: var(--text);
+		font-weight: 500;
+	}
+	.pane {
+		flex: 1;
+		min-width: 0;
+		overflow-y: auto;
+		padding: 0 20px 20px;
+	}
+	.pane section:first-child {
+		margin-top: 14px;
+	}
+	.pages .prefs {
+		margin-top: 0;
+		padding-top: 0;
+		border-top: 0;
 	}
 	.titlebar {
+		padding: 14px 20px 10px;
+		border-bottom: 1px solid var(--line);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

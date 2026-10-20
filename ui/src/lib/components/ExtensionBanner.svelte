@@ -13,7 +13,7 @@
 			<span class="text">Ask about any web page</span>
 			<button type="button" class="close" title="Dismiss" aria-label="Dismiss extension notice" onclick={() => app.dismissExtensionBanner()}><Icon name="x" size={12} /></button>
 		</div>
-		<button type="button" class="act" onclick={() => (app.settingsOpen = true)}>Install the Gloss extension</button>
+		<button type="button" class="act" onclick={() => { app.settingsTab = 'extension'; app.settingsOpen = true; }}>Install the Gloss extension</button>
 	</div>
 {/if}
 

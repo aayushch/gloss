@@ -98,6 +98,9 @@ export const AGENT_NAMES: Record<AgentId, string> = {
 	cursor: 'Cursor Agent'
 };
 
+/** The panes of the settings sheet. */
+export type SettingsTab = 'general' | 'agents' | 'extension' | 'pages';
+
 /** The foldable groups of the rail. */
 export type RailSection = 'projects' | 'pages' | 'chats';
 
@@ -176,6 +179,8 @@ class AppState {
 	/** Every artifact of the active conversation, grouped by id with versions in order. */
 	artifacts: ArtifactGroup[] = $derived(this.active ? collectArtifacts(this.active) : []);
 	settingsOpen = $state(false);
+	/** The pane the settings sheet shows; a banner can open the sheet on its own pane. */
+	settingsTab = $state<SettingsTab>('general');
 	modelMenuOpen = $state(false);
 	pendingAsk = $state<PendingAsk | null>(null);
 	composerFor = $state<ComposerFor | null>(null);
