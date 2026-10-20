@@ -149,20 +149,15 @@ jobs:
             : > ui/src-tauri/resources/gloss.xpi
           fi
 
-      - name: Build the Safari extension (macOS)
+      - name: Import the signing certificate for Xcode (macOS)
         if: runner.os == 'macOS'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -n "$APPLE_CERTIFICATE" ]; then
             bash scripts/import-signing-cert.sh
           fi
-          unzip -q -o extension/dist/safari.zip -d extension/dist/safari
-          bash scripts/build-safari.sh --skip-extension-build
-          echo "TAURI_EXTRA_CONFIG=--config {\"bundle\":{\"macOS\":{\"files\":{\"PlugIns/Gloss Extension.appex\":\"$PWD/safari/build/Gloss Extension.appex\"}}}}" >> "$GITHUB_ENV"
 
       - name: Build and attach installers
         uses: tauri-apps/tauri-action@v0
@@ -190,7 +185,9 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           projectPath: ui
-          args: --target ${{ matrix.target }} ${{ env.TAURI_EXTRA_CONFIG }}
+          # The Safari extension is built by Xcode in the bundle's prepare step
+          # (scripts/prepare-bundle.sh) with APPLE_SIGNING_IDENTITY.
+          args: --target ${{ matrix.target }}
 
   attach-extension:
     needs: [extension, build]

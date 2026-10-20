@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bash ../scripts/build-bridge.sh --debug && bash ../scripts/ensure-resources.sh && npm run dev",
-    "beforeBuildCommand": "bash ../scripts/build-bridge.sh && bash ../scripts/ensure-resources.sh && npm run build"
+    "beforeDevCommand": "bash ../scripts/prepare-bundle.sh --debug && npm run dev",
+    "beforeBuildCommand": "bash ../scripts/prepare-bundle.sh && npm run build"
   },
   "app": {
     "windows": [
@@ -46,7 +46,8 @@
       "minimumSystemVersion": "12.0",
       "signingIdentity": null,
       "files": {
-        "Resources/Assets.car": "icons/Assets.car"
+        "Resources/Assets.car": "icons/Assets.car",
+        "PlugIns/Gloss Extension.appex": "../../safari/build/Gloss Extension.appex"
       },
       "entitlements": "entitlements.plist"
     },

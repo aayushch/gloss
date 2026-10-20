@@ -24,11 +24,12 @@ if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
 fi
 # The entitlements come from safari/handler, not from the capabilities the
 # converter put in the project: the extension needs outgoing network access
-# and the App Group, and nothing else.
+# and the App Group, and nothing else. Xcode's injected get-task-allow is
+# turned off because notarization rejects it.
 xcodebuild -project "$project" -target "Gloss Extension" -configuration Release \
   CONFIGURATION_BUILD_DIR="$out" SYMROOT="$out/sym" OBJROOT="$out/obj" \
   ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
   CODE_SIGN_ENTITLEMENTS="$root/safari/handler/Gloss_Extension.entitlements" \
-  ENABLE_USER_SELECTED_FILES="" \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO ENABLE_USER_SELECTED_FILES="" \
   "${sign[@]}" -quiet
 echo "built $out/Gloss Extension.appex"

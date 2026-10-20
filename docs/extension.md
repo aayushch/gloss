@@ -77,14 +77,15 @@ Without a secret, the matching step is skipped and the rest still ships.
   recorded in `extension/EXTENSION_ID`, which the app compiles into its host
   manifests.
 - `scripts/make-safari-project.sh` generates the Xcode project once;
-  `scripts/build-safari.sh` builds `safari/build/Gloss Extension.appex`;
-  `scripts/build.sh --safari` puts it into Gloss.app. Safari only works with
+  `scripts/build-safari.sh` builds `safari/build/Gloss Extension.appex`,
+  which every `tauri build` runs on macOS (through `scripts/prepare-bundle.sh`)
+  before the bundler copies it into Gloss.app. Safari only works with
   a **signed** Gloss: the extension's sandbox can read the port and token
   from the App Group container alone, and macOS lets only an app signed with
   the group entitlement write there (an unsigned build logs "could not write
   bridge info" and Safari sees "Gloss isn't running"). For a local Safari
-  test, build with `scripts/build.sh --safari --sign "Developer ID
-  Application: …"` and run that bundle.
+  test, build with `scripts/build.sh --sign "Developer ID Application: …"`
+  and run that bundle.
 - `gloss-engine serve --loopback` runs the bridge without the app;
   `node scripts/bridge-smoke.mjs` drives `gloss-bridge` like a browser;
   `gloss-engine page-ask --url … "question"` asks like the extension does.
