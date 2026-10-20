@@ -78,6 +78,16 @@ class ContentApp {
 
 	start(): void {
 		this.host = document.createElement(HOST_TAG);
+		// Modal dialogs on the page trap focus inside themselves and pull it
+		// back when it moves elsewhere, which would make the composer's box
+		// impossible to type into. react-focus-lock (Atlassian, many React
+		// apps) leaves focus alone inside an element carrying this attribute,
+		// and the two listeners below keep the focus events of the Gloss UI
+		// from reaching the document-level handlers other trap libraries
+		// install, since the document sees them as happening on the host.
+		this.host.setAttribute('data-no-focus-lock', '');
+		this.host.addEventListener('focusin', (e) => e.stopPropagation());
+		this.host.addEventListener('focusout', (e) => e.stopPropagation());
 		this.shadow = this.host.attachShadow({ mode: 'closed' });
 		const style = document.createElement('style');
 		style.textContent = styles;
