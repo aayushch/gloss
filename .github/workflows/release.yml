@@ -139,12 +139,13 @@ jobs:
           name: extension-builds
           path: extension/dist
 
-      - name: Bundle the Firefox add-on
+      - name: Bundle the Firefox add-on signed by the extension job
         shell: bash
         run: |
           mkdir -p ui/src-tauri/resources
           if [ -f extension/dist/gloss.xpi ]; then
             cp extension/dist/gloss.xpi ui/src-tauri/resources/gloss.xpi
+            echo "${GITHUB_REF_NAME#v}" | sed 's/-.*//' > ui/src-tauri/resources/gloss.xpi.version
           else
             : > ui/src-tauri/resources/gloss.xpi
           fi

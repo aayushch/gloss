@@ -67,6 +67,10 @@ The `Release` workflow builds the extension once and then:
 - attaches `chrome.zip`, `firefox.zip` and the signed `.xpi` to the release.
 
 Without a secret, the matching step is skipped and the rest still ships.
+A local `npx tauri build` behaves the same way: with the two Mozilla keys
+exported it signs and bundles the add-on itself (once per version), and
+with the `APPLE_*` variables it builds, signs and notarizes the Safari
+extension inside the app.
 
 ## For developers
 

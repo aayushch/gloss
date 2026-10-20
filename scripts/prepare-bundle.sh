@@ -8,7 +8,13 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 mode="${1:-}"
 
 bash "$root/scripts/build-bridge.sh" ${mode:+"$mode"}
-bash "$root/scripts/ensure-resources.sh"
+if [ "$mode" = "--debug" ]; then
+  # A development run never signs with Mozilla; it keeps whatever is there.
+  mkdir -p "$root/ui/src-tauri/resources"
+  [ -f "$root/ui/src-tauri/resources/gloss.xpi" ] || : > "$root/ui/src-tauri/resources/gloss.xpi"
+else
+  bash "$root/scripts/ensure-resources.sh"
+fi
 
 if [ "$(uname -s)" = Darwin ]; then
   if ! xcode-select -p >/dev/null 2>&1 || ! xcrun --find xcodebuild >/dev/null 2>&1; then

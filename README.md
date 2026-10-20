@@ -110,10 +110,10 @@ scripts/build.sh --sign "Developer ID Application: …"   # signed macOS build
 Every `tauri build` (and `tauri dev`) first runs `scripts/prepare-bundle.sh`:
 it builds the `gloss-bridge` sidecar and, on macOS with Xcode, the Safari
 extension, which the bundler copies into `Gloss.app/Contents/PlugIns`. The
-Firefox add-on is bundled when `ui/src-tauri/resources/gloss.xpi` holds a
-Mozilla-signed file: run `scripts/sign-firefox.sh` (needs the AMO API keys)
-before building; otherwise an empty placeholder ships and the Firefox button
-in Settings stays off. The release workflow does both.
+Firefox add-on is signed by Mozilla and bundled as part of the same build
+when `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` (the addons.mozilla.org API keys)
+are set; without them an empty placeholder ships and the Firefox button in
+Settings stays off. The release workflow does the same.
 
 Output lands in `target/release/bundle/` (`dmg/`, `macos/`, `nsis/`, `msi/`,
 `appimage/`, `deb/`, `rpm/`). Each platform can only package for itself.
