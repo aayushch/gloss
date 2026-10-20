@@ -36,8 +36,21 @@
 	const mismatch = $derived(connection.state === 'protocol_mismatch' ? connection.mismatch : null);
 	const shortQuote = $derived(composer.quote.length > 140 ? composer.quote.slice(0, 140) + '…' : composer.quote);
 
+	// Focus the box when it appears, and again on the next frames when the
+	// page pulled focus away in the meantime (a dialog's focus trap does so
+	// in a deferred step).
 	$effect(() => {
-		textarea?.focus();
+		const box = textarea;
+		if (!box) return;
+		let tries = 0;
+		let frame = 0;
+		const claim = () => {
+			const root = box.getRootNode() as ShadowRoot | Document;
+			if (root.activeElement !== box) box.focus();
+			if (++tries < 4) frame = requestAnimationFrame(claim);
+		};
+		claim();
+		return () => cancelAnimationFrame(frame);
 	});
 
 	function submit() {

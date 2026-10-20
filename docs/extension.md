@@ -42,6 +42,9 @@ are given would go stale.
   no longer found on the page, and recent pages.
 - Private windows are left alone. Hosts on the deny list in Gloss's settings
   are never asked about, and "Send page text to the agent" can be turned off.
+- While the composer or popover is open, what you type and click in it
+  stays in it: the page's keyboard shortcuts and dialog focus traps do not
+  see those events. Once it is closed the page gets every key again.
 
 ## When something is off
 

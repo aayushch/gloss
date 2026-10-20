@@ -39,9 +39,12 @@ import { watchUrl } from './urlwatch';
 const MIN_SELECTION_CHARS = 3;
 /**
  * Events the page never sees when they happen inside the Gloss UI: the
- * ones focus-trap libraries watch, see `guardEvent`.
+ * ones focus-trap libraries watch and the three key events that page
+ * shortcut handlers bind (single-letter shortcuts mostly use keypress),
+ * see `guardEvent`. Nothing is guarded while no Gloss UI is showing,
+ * since only events aimed inside it are affected.
  */
-const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keyup'];
+const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keypress', 'keyup'];
 /** Characters of page text sent around the quote. */
 const CONTEXT_CHARS = 300;
 /** Page text sent with an ask is cut to the first 40k and last 20k characters. */
@@ -384,7 +387,10 @@ class ContentApp {
 	 * dialogs trap focus: their libraries listen on the document, often in
 	 * the capture phase, cancel presses outside the dialog and pull focus
 	 * back, which would make the composer's box impossible to type into.
-	 * The window is the first stop of every event, so a trusted event
+	 * Keyboard shortcuts are the other case: the page sees a key typed in
+	 * the composer as typed on the host element, not in a text box, and
+	 * runs the shortcut for that letter. The window is the first stop of
+	 * every event, so a trusted event
 	 * aimed inside the host is stopped there and a copy that does not
 	 * leave the shadow tree is dispatched in its place. The copy reaches
 	 * every listener of the Gloss UI; when one of them cancels it, the
