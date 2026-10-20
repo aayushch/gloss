@@ -65,6 +65,8 @@ class ContentApp {
 	private indexDirty = true;
 	private mutations: MutationObserver | null = null;
 	private pending: PendingAsk | null = null;
+	/** The selection the pill was last shown for, kept for `askRange`. */
+	private pillRange: Range | null = null;
 	private launchTimer: ReturnType<typeof setTimeout> | null = null;
 	private loading: Promise<void> | null = null;
 	private retryTimers: ReturnType<typeof setTimeout>[] = [];
@@ -344,7 +346,22 @@ class ContentApp {
 			this.store.pill = null;
 			return;
 		}
+		this.pillRange = range.cloneRange();
 		this.store.pill = { x: rect.right, y: rect.bottom };
+	}
+
+	/**
+	 * The passage an ask is about: the live selection, or else the one the
+	 * pill was shown for. Safari drops the page selection when the pill is
+	 * pressed, before the press is handled, so the copy taken when the pill
+	 * appeared is what the composer then opens on.
+	 */
+	private askRange(): Range | null {
+		const live = this.selectedRange();
+		if (live) return live;
+		const kept = this.pillRange;
+		if (!kept || kept.collapsed || !document.contains(kept.commonAncestorContainer)) return null;
+		return kept;
 	}
 
 	private onSelectionChange(): void {
@@ -371,7 +388,7 @@ class ContentApp {
 
 	/** Opens the composer for the current selection; shows a toast when there is none. */
 	private openComposer(): void {
-		const range = this.selectedRange();
+		const range = this.askRange();
 		if (!range) {
 			this.store.showToast('Select some text on the page first.');
 			return;
