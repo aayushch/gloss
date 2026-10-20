@@ -3,7 +3,9 @@
 //   node build.mjs --target chrome|firefox|safari|all [--watch]
 //
 // Each target gets its own dist/<target> folder: the bundled scripts, the
-// HTML pages, the icons and manifests/<target>.json copied to manifest.json.
+// HTML pages, the icons (rendered into icons/ by scripts/icons.sh at the
+// repository root, from the same source as the app icon) and
+// manifests/<target>.json copied to manifest.json.
 // The `__BROWSER__` define tells the code which browser it runs in.
 
 import * as esbuild from 'esbuild';
@@ -44,16 +46,6 @@ function common(target) {
 		conditions: ['svelte', 'browser', watch ? 'development' : 'production'],
 		plugins: [sveltePlugin({ compilerOptions: { runes: true, css: 'external', dev: watch } })],
 	};
-}
-
-/** Generates the icons once; the script is pure Node and runs in a second. */
-async function ensureIcons() {
-	try {
-		await access(path.join(root, 'icons', 'icon128.png'));
-	} catch {
-		const r = spawnSync(process.execPath, [path.join(root, 'scripts', 'icons.mjs')], { stdio: 'inherit' });
-		if (r.status !== 0) throw new Error('icon generation failed');
-	}
 }
 
 /** Copies the static files of one target into its dist folder. */
@@ -104,7 +96,6 @@ async function buildTarget(target) {
 	}
 }
 
-await ensureIcons();
 for (const target of targets) {
 	await buildTarget(target);
 }

@@ -18,7 +18,7 @@ npm run zip            # dist/gloss-chrome-<version>.zip and dist/gloss-firefox-
 npm run lint:firefox   # web-ext lint over dist/firefox
 ```
 
-`build.mjs` bundles with esbuild, copies `manifests/<target>.json` to `dist/<target>/manifest.json` and injects the `__BROWSER__` define (`'chrome' | 'firefox' | 'safari'`) that picks the transport. Icons are generated once by `scripts/icons.mjs` into `icons/`.
+`build.mjs` bundles with esbuild, copies `manifests/<target>.json` to `dist/<target>/manifest.json` and injects the `__BROWSER__` define (`'chrome' | 'firefox' | 'safari'`) that picks the transport. The icons in `icons/` are rendered by `scripts/icons.sh` at the repository root from `design/icon/`, the same source as the app icon (the 16 and 32 px toolbar sizes use the mark without its text lines).
 
 ## Load in Chrome (unpacked)
 
@@ -44,7 +44,7 @@ Safari cannot stream over native messaging, so the Safari build (`dist/safari`) 
 ```
 build.mjs                 esbuild + esbuild-svelte build, one dist folder per target
 manifests/                chrome.json, firefox.json, safari.json
-scripts/icons.mjs         writes icons/icon{16,32,48,128}.png with pngjs
+icons/                    icon{16,32,48,128}.png, rendered from design/icon/ by ../scripts/icons.sh
 src/shared/protocol.ts    wire types mirrored from engine/src/bridge and engine/src/types.rs
 src/shared/messages.ts    messages between the background and its clients
 src/shared/client.ts      the runtime-port client used by content, popup and ask window

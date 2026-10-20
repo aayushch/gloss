@@ -58,7 +58,13 @@ The `Release` workflow builds the extension once and then:
 
 - signs the Firefox build with Mozilla as a self-distributed add-on
   (`AMO_JWT_ISSUER`, `AMO_JWT_SECRET` secrets from addons.mozilla.org › API
-  keys) and bundles the `.xpi` into every installer;
+  keys) and bundles the `.xpi` into every installer. Signing is an upload:
+  Mozilla keeps every version under the add-on `gloss@aay.sh` in the
+  developer hub but never lists it on the public site, and Firefox refuses
+  an unsigned add-on. The icon shown in the developer hub is a field of
+  its own on the add-on record, set after each signing by
+  `scripts/amo-icon.mjs` (run it by hand with the two keys exported to
+  update the icon on its own);
 - builds the Safari extension with Xcode on the macOS runners and places it
   inside Gloss.app before the app is signed and notarized (the usual
   `APPLE_*` secrets);

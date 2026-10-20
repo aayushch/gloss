@@ -4,7 +4,9 @@
 # with its version noted beside it so later builds reuse it. Every build
 # runs this through ensure-resources.sh when AMO_JWT_ISSUER and
 # AMO_JWT_SECRET (addons.mozilla.org API keys) are set. Each signing needs
-# a version Mozilla has not seen: bump with set-version.sh.
+# a version Mozilla has not seen: bump with set-version.sh. The add-on's
+# icon on addons.mozilla.org is not part of the upload, so it is set
+# afterwards with amo-icon.mjs; that step only warns when it fails.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 : "${AMO_JWT_ISSUER:?set AMO_JWT_ISSUER (addons.mozilla.org › Tools › Manage API Keys)}"
@@ -19,3 +21,4 @@ mkdir -p "$root/ui/src-tauri/resources"
 cp dist/signed/*.xpi "$root/ui/src-tauri/resources/gloss.xpi"
 node -p 'require(process.argv[1]).version' "$root/extension/package.json" > "$root/ui/src-tauri/resources/gloss.xpi.version"
 echo "signed add-on copied to ui/src-tauri/resources/gloss.xpi"
+node "$root/scripts/amo-icon.mjs" || echo "warning: the add-on icon on addons.mozilla.org was not updated" >&2
