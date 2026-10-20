@@ -43,6 +43,20 @@ if [ ${#EXT_FILES[@]} -gt 0 ]; then
     ' "$NUMERIC" "${EXT_FILES[@]}"
 fi
 
+# Lock files record the package version too.
+for dir in "$REPO_ROOT/ui" "$REPO_ROOT/extension"; do
+    if [ -f "$dir/package-lock.json" ]; then
+        (cd "$dir" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null 2>&1) || echo "warning: could not refresh $dir/package-lock.json" >&2
+    fi
+done
+
+# The Safari extension's bundle version lives in its Xcode project.
+PBXPROJ="$REPO_ROOT/safari/Gloss/Gloss.xcodeproj/project.pbxproj"
+if [ -f "$PBXPROJ" ]; then
+    sed -i.bak -E "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $NUMERIC;/" "$PBXPROJ"
+    rm -f "$PBXPROJ.bak"
+fi
+
 # The workspace manifest is the single source for every crate's version.
 sed -i.bak -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$REPO_ROOT/Cargo.toml"
 rm -f "$REPO_ROOT/Cargo.toml.bak"

@@ -1536,7 +1536,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "gloss-app"
-version = "1.0.1"
+version = "2.0.0"
 dependencies = [
  "base64 0.22.1",
  "dirs",
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "gloss-bridge"
-version = "1.0.1"
+version = "2.0.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "gloss-engine"
-version = "1.0.1"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "async-trait",

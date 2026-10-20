@@ -3,7 +3,7 @@ resolver = "2"
 members = ["engine", "bridge", "ui/src-tauri"]
 
 [workspace.package]
-version = "1.0.1"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 
