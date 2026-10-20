@@ -1,6 +1,6 @@
 {
   "name": "gloss-extension",
-  "version": "2.0.6",
+  "version": "2.1.1",
   "private": true,
   "description": "Browser extension for Gloss: ask about any text you highlight on the web.",
   "type": "module",
@@ -10,7 +10,7 @@
     "check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "zip": "node scripts/zip.mjs",
-    "lint:firefox": "web-ext lint -s dist/firefox"
+    "lint:firefox": "web-ext lint --self-hosted -s dist/firefox"
   },
   "dependencies": {
     "approx-string-match": "^2.0.1",

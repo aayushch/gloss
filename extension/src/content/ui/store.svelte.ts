@@ -49,6 +49,10 @@ export class UiStore {
 	anchorRect = $state<Rect | null>(null);
 	connection = $state<ConnectionStatus>({ state: 'connecting', settings: DEFAULT_SETTINGS });
 	toast = $state<string | null>(null);
+	/** Viewport position of the note navigator; null while it is not shown. */
+	dock = $state<{ left: number; top: number } | null>(null);
+	/** The note the navigator last showed, where stepping continues from once its popover is closed. */
+	lastAskId = $state<string | null>(null);
 	version = $state(0);
 	readonly page: PageState = createPageState();
 	private toastTimer: ReturnType<typeof setTimeout> | null = null;

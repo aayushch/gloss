@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Clarification, GetPageResult, Turn, TurnEventEnvelope } from '../src/shared/protocol';
-import { addAsk, applyTurnEvent, createPageState, isStreaming, loadPage, removeAsk, setOpen } from '../src/content/state';
+import { addAsk, applyTurnEvent, createPageState, isStreaming, loadPage, orderedAskIds, removeAsk, setOpen, type AskEntry } from '../src/content/state';
 
 function turn(id: string, role: 'user' | 'assistant', text: string, clarificationId: string | null, status: Turn['status'] = 'done'): Turn {
 	return {
@@ -123,5 +123,27 @@ describe('page state', () => {
 		expect(s.asks.get('c9')!.clarification.open).toBe(false);
 		expect(removeAsk(s, 'c9')).toBe(entry);
 		expect(s.asks.size).toBe(0);
+	});
+});
+
+describe('orderedAskIds', () => {
+	function entry(id: string, number: number, range: Range | null, state: AskEntry['state']): AskEntry {
+		return { clarification: { ...clarification(id), number }, turns: [], range, state };
+	}
+
+	it('orders placed asks by where their passage starts, then the rest by number', () => {
+		document.body.innerHTML = '<p id="a">first</p><p id="b">second</p><p id="c">third</p>';
+		const rangeOf = (id: string) => {
+			const r = document.createRange();
+			r.selectNodeContents(document.getElementById(id)!);
+			return r;
+		};
+		const s = createPageState();
+		s.asks.set('late', entry('late', 1, rangeOf('c'), 'anchored'));
+		s.asks.set('orphan', entry('orphan', 2, null, 'orphan'));
+		s.asks.set('early', entry('early', 3, rangeOf('a'), 'fuzzy'));
+		s.asks.set('pending', entry('pending', 0, null, 'pending'));
+		s.asks.set('middle', entry('middle', 4, rangeOf('b'), 'anchored'));
+		expect(orderedAskIds(s)).toEqual(['early', 'middle', 'late', 'pending', 'orphan']);
 	});
 });

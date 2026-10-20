@@ -756,6 +756,7 @@ export function mockApi(): Api {
 				{ id: 'firefox', name: 'Firefox', family: 'firefox', installed: false, registered: false, manifestPath: '~/Library/Application Support/Mozilla/NativeMessagingHosts/com.gloss.bridge.json', error: null }
 			],
 			sessions: [{ id: 1, transport: 'native', browser: 'chrome', extensionVersion: '1.0.1', connectedAt: now() - 600_000 }],
+			bundledVersion: '1.0.1',
 			xpiBundled: true,
 			chromeStoreUrl: 'https://chromewebstore.google.com/detail/gloss/mock',
 			firefoxXpiPath: '/Applications/Gloss.app/Contents/Resources/gloss.xpi',
@@ -783,7 +784,8 @@ export function mockApi(): Api {
 		onOpenPage: async (cb) => {
 			openPageListeners.add(cb);
 			return () => openPageListeners.delete(cb);
-		}
+		},
+		onExtensionsEvent: async () => () => {}
 	};
 	return api;
 }

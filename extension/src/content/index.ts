@@ -4,9 +4,9 @@
 // Gloss only through the background.
 
 import { mount, unmount } from 'svelte';
-import { browser, inPrivateContext, SETTINGS_KEY, storageGet } from '../shared/browser';
+import { browser, inPrivateContext, localGet, localSet, SETTINGS_KEY, storageGet } from '../shared/browser';
 import { connectClient, type Client } from '../shared/client';
-import type { BackgroundMessage, ConnectionStatus, PageTextReply, TabMessage } from '../shared/messages';
+import type { BackgroundMessage, ConnectionStatus, NavigatorState, PageTextReply, TabMessage } from '../shared/messages';
 import {
 	DEFAULT_SETTINGS,
 	BridgeFailure,
@@ -25,9 +25,11 @@ import {
 	type WebAnchor,
 } from '../shared/protocol';
 import { describe, resolve } from './anchor';
+import { Dock, fractionOf } from './dock';
+import { GUARD_KEY, GUARD_READY_KEY, GUARDED_EVENTS, type GuardHolder } from './events';
 import { GlyphLayer } from './glyphs';
 import { HighlightLayer } from './highlight';
-import { addAsk, addFollowUp, applyTurnEvent, clearPage, loadPage, removeAsk, setAnchor, setOpen, type AskEntry } from './state';
+import { addAsk, addFollowUp, applyTurnEvent, clearPage, loadPage, orderedAskIds, removeAsk, setAnchor, setOpen, type AskEntry } from './state';
 import styles from './styles.css';
 import { HOST_TAG, normalise, TextIndex } from './text';
 import type { Actions } from './ui/actions';
@@ -37,14 +39,6 @@ import { watchUrl } from './urlwatch';
 
 /** Shortest selection the pill appears for. */
 const MIN_SELECTION_CHARS = 3;
-/**
- * Events the page never sees when they happen inside the Gloss UI: the
- * ones focus-trap libraries watch and the three key events that page
- * shortcut handlers bind (single-letter shortcuts mostly use keypress),
- * see `guardEvent`. Nothing is guarded while no Gloss UI is showing,
- * since only events aimed inside it are affected.
- */
-const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keypress', 'keyup'];
 /** Characters of page text sent around the quote. */
 const CONTEXT_CHARS = 300;
 /** Page text sent with an ask is cut to the first 40k and last 20k characters. */
@@ -52,6 +46,8 @@ const PAGE_TEXT_HEAD = 40_000;
 const PAGE_TEXT_TAIL = 20_000;
 /** Orphans are tried again on this schedule after load: pages often render late. */
 const ORPHAN_RETRY_MS = [1_000, 2_000, 3_000];
+/** Local storage key of the navigator's height on the right edge, a fraction of the viewport height. */
+const NAV_HEIGHT_KEY = 'navigatorHeight';
 /** How long the composer waits for Gloss to come up after "Open Gloss". */
 const LAUNCH_WAIT_MS = 45_000;
 
@@ -69,6 +65,9 @@ class ContentApp {
 	private app: ReturnType<typeof mount> | null = null;
 	private highlights!: HighlightLayer;
 	private glyphs!: GlyphLayer;
+	private dock!: Dock;
+	/** The reader hid the note navigator; it comes back with the next ask or page load. */
+	private navigatorHidden = false;
 	private index: TextIndex | null = null;
 	private indexDirty = true;
 	private mutations: MutationObserver | null = null;
@@ -117,6 +116,17 @@ class ContentApp {
 				this.updateAnchorRect();
 			},
 		});
+		this.dock = new Dock(
+			(x, y) => {
+				for (const el of document.elementsFromPoint(x, y)) if (el !== this.host) return el;
+				return null;
+			},
+			(pos) => (this.store.dock = { left: pos.left, top: pos.top }),
+			() => !!this.shadow.querySelector('.gloss-nav:hover, .gloss-nav:focus-within, .gloss-nav.is-dragging'),
+		);
+		void localGet<number>(NAV_HEIGHT_KEY).then((f) => {
+			if (typeof f === 'number' && !this.disposed) this.dock.setFraction(f);
+		});
 		this.mutations = new MutationObserver(() => (this.indexDirty = true));
 		this.mutations.observe(document.body, { childList: true, subtree: true, characterData: true });
 
@@ -134,7 +144,13 @@ class ContentApp {
 			if ((e as PageTransitionEvent).persisted) this.client.resume();
 		});
 
-		for (const type of GUARDED_EVENTS) this.listen(window, type, this.guardEvent, true);
+		// guard.ts, run before the page's scripts, holds the first window
+		// listeners and calls this guard from them. Where it did not run
+		// (an extension reload leaves open pages without it), the guard
+		// listens itself, after whatever the page added before it.
+		const holder = globalThis as GuardHolder;
+		if (holder[GUARD_READY_KEY]) holder[GUARD_KEY] = this.guardEvent;
+		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.guardEvent, true);
 		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'keyup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
@@ -163,16 +179,32 @@ class ContentApp {
 		this.disposed = true;
 		for (const [t, type, fn, options] of this.listeners) t.removeEventListener(type, fn, options);
 		browser.runtime.onMessage.removeListener(this.onTabMessage);
+		const holder = globalThis as GuardHolder;
+		if (holder[GUARD_KEY] === this.guardEvent) delete holder[GUARD_KEY];
 		this.stopUrlWatch?.();
 		this.mutations?.disconnect();
 		for (const t of this.retryTimers) clearTimeout(t);
 		if (this.reresolveTimer) clearTimeout(this.reresolveTimer);
 		if (this.launchTimer) clearTimeout(this.launchTimer);
+		this.dock.hide();
 		this.glyphs.dispose();
 		this.highlights.dispose();
 		if (this.app) void unmount(this.app);
 		this.host.remove();
 		this.client.close();
+	}
+
+	/** Tells the UI the page state changed and shows or hides the note navigator to match. */
+	private bump(): void {
+		this.store.bump();
+		const { lastAskId } = this.store;
+		if (lastAskId && !this.store.page.asks.has(lastAskId)) this.store.lastAskId = null;
+		if (!this.disposed && this.store.page.asks.size > 0 && !this.navigatorHidden) {
+			this.dock.show();
+		} else {
+			this.dock.hide();
+			this.store.dock = null;
+		}
 	}
 
 	// ---- page loading and anchoring ----------------------------------
@@ -208,7 +240,7 @@ class ContentApp {
 			for (const id of this.store.page.asks.keys()) removed.delete(id);
 			for (const id of removed) this.forgetAsk(id);
 			this.subscribe();
-			this.store.bump();
+			this.bump();
 			this.resolvePending();
 			this.scheduleOrphanRetries();
 		})().finally(() => (this.loading = null));
@@ -229,7 +261,7 @@ class ContentApp {
 			states[id] = entry.state as AnchorState;
 		}
 		this.report(states);
-		this.store.bump();
+		this.bump();
 	}
 
 	/** Resolves one ask against the current index and updates its highlight and glyph. */
@@ -280,7 +312,7 @@ class ContentApp {
 						if (entry.state !== 'orphan') states[id] = entry.state as AnchorState;
 					}
 					this.report(states);
-					this.store.bump();
+					this.bump();
 				}, delay),
 			);
 		}
@@ -303,7 +335,7 @@ class ContentApp {
 				if (entry.state !== before) states[id] = entry.state as AnchorState;
 			}
 			this.report(states);
-			this.store.bump();
+			this.bump();
 		}, 300);
 	}
 
@@ -318,6 +350,8 @@ class ContentApp {
 		this.store.pill = null;
 		this.closePopover();
 		this.cancelComposer();
+		this.store.lastAskId = null;
+		this.navigatorHidden = false;
 		this.highlights.clear();
 		this.glyphs.clear();
 		this.indexDirty = true;
@@ -511,12 +545,13 @@ class ContentApp {
 			this.pending = null;
 			this.highlights.setActive(null);
 			if (entry && result.clarification) {
+				this.navigatorHidden = false;
 				this.highlights.add(pending.range);
 				this.glyphs.set(result.clarification.id, pending.range, { open: true, active: false, fuzzy: false });
 				this.openPopover(result.clarification.id);
 			}
 			this.subscribe();
-			this.store.bump();
+			this.bump();
 		} catch (e) {
 			if (this.store.composer !== composer) return;
 			const f = failureOf(e);
@@ -569,13 +604,14 @@ class ContentApp {
 		this.cancelComposer();
 		this.store.pill = null;
 		this.store.popover = { askId: id };
+		this.store.lastAskId = id;
 		this.highlights.setActive(entry.range);
 		this.glyphs.update(id, { active: true });
 		this.updateAnchorRect();
 		if (!entry.clarification.open) {
 			setOpen(this.store.page, id, true);
 			this.glyphs.update(id, { open: true });
-			this.store.bump();
+			this.bump();
 			this.client.request('setOpen', { clarificationId: id, open: true }).catch(() => {});
 		}
 	}
@@ -587,6 +623,44 @@ class ContentApp {
 		this.store.anchorRect = null;
 		this.highlights.setActive(null);
 		this.glyphs.update(open.askId, { active: false });
+	}
+
+	/**
+	 * Shows a note: scrolls its passage into view when it is on the page
+	 * and opens its popover, which hangs from the passage or, for a note
+	 * whose passage is gone, sits at the top of the viewport.
+	 */
+	private focusAsk(id: string, warnOrphan: boolean): boolean {
+		const entry = this.store.page.asks.get(id);
+		if (!entry) return false;
+		if (entry.range && entry.state !== 'orphan') this.glyphs.scrollTo(id);
+		else if (warnOrphan) this.store.showToast("This note's passage is no longer on the page.");
+		this.openPopover(id);
+		// The popover follows the passage while a smooth scroll runs; this
+		// catches the final position when the scroll fired no events.
+		setTimeout(() => this.updateAnchorRect(), 400);
+		return true;
+	}
+
+	/** Shows the note `delta` places from the current one in reading order, wrapping at either end. */
+	private stepNote(delta: 1 | -1): void {
+		const ids = orderedAskIds(this.store.page);
+		if (!ids.length) return;
+		const current = this.store.popover?.askId ?? this.store.lastAskId;
+		const i = current ? ids.indexOf(current) : -1;
+		const next = i < 0 ? (delta > 0 ? 0 : ids.length - 1) : (i + delta + ids.length) % ids.length;
+		this.focusAsk(ids[next], false);
+	}
+
+	private toggleNote(): void {
+		if (this.store.popover) {
+			this.closePopover();
+			return;
+		}
+		const ids = orderedAskIds(this.store.page);
+		const last = this.store.lastAskId;
+		const id = last && ids.includes(last) ? last : ids[0];
+		if (id) this.focusAsk(id, false);
 	}
 
 	private updateAnchorRect(): void {
@@ -615,13 +689,24 @@ class ContentApp {
 			send: (text) => void this.send(text),
 			launchApp: () => this.launchApp(),
 			closePopover: () => this.closePopover(),
+			stepNote: (delta) => this.stepNote(delta),
+			toggleNote: () => this.toggleNote(),
+			hideNavigator: () => {
+				this.navigatorHidden = true;
+				this.bump();
+			},
+			moveNavigator: (top) => {
+				const fraction = fractionOf(top, this.dock.viewport().height);
+				this.dock.setFraction(fraction);
+				void localSet(NAV_HEIGHT_KEY, fraction);
+			},
 			followUp: async (askId, text) => {
 				const entry = this.store.page.asks.get(askId);
 				if (!entry) return;
 				try {
 					const r = await this.client.request<FollowUpResult>('followUp', { clarificationId: askId, question: text });
 					addFollowUp(this.store.page, askId, r);
-					this.store.bump();
+					this.bump();
 				} catch (e) {
 					this.store.showToast(describeFailure(e));
 				}
@@ -634,7 +719,7 @@ class ContentApp {
 				setOpen(this.store.page, askId, false);
 				this.glyphs.update(askId, { open: false });
 				this.closePopover();
-				this.store.bump();
+				this.bump();
 				this.client.request('setOpen', { clarificationId: askId, open: false }).catch(() => {});
 			},
 			remove: async (askId) => {
@@ -647,7 +732,7 @@ class ContentApp {
 				this.forgetAsk(askId);
 				removeAsk(this.store.page, askId);
 				this.subscribe();
-				this.store.bump();
+				this.bump();
 			},
 			openInGloss: async (askId) => {
 				const urlKey = this.store.page.urlKey;
@@ -689,7 +774,7 @@ class ContentApp {
 			}
 			case 'turn':
 				applyTurnEvent(this.store.page, data as TurnEventEnvelope);
-				this.store.bump();
+				this.bump();
 				break;
 			case 'page': {
 				const p = data as PageEventData;
@@ -697,7 +782,7 @@ class ContentApp {
 					for (const id of [...this.store.page.asks.keys()]) this.forgetAsk(id);
 					clearPage(this.store.page);
 					this.subscribe();
-					this.store.bump();
+					this.bump();
 				} else {
 					void this.loadPage();
 				}
@@ -722,22 +807,23 @@ class ContentApp {
 				this.openComposer();
 				sendResponse({ ok: true });
 				return;
+			case 'navigator-state': {
+				const reply: NavigatorState = { hidden: this.navigatorHidden, notes: this.store.page.asks.size };
+				sendResponse(reply);
+				return;
+			}
+			case 'show-navigator':
+				this.navigatorHidden = false;
+				this.bump();
+				sendResponse({ ok: true });
+				return;
 			case 'page-text': {
 				const reply: PageTextReply = { ...this.pageMeta(), text: this.pageText() };
 				sendResponse(reply);
 				return;
 			}
 			case 'focus-ask': {
-				const entry = this.store.page.asks.get(msg.clarificationId);
-				if (!entry) {
-					sendResponse({ ok: false });
-					return;
-				}
-				if (entry.range && entry.state !== 'orphan') this.glyphs.scrollTo(msg.clarificationId);
-				else this.store.showToast("This note's passage is no longer on the page.");
-				this.openPopover(msg.clarificationId);
-				setTimeout(() => this.updateAnchorRect(), 400);
-				sendResponse({ ok: true });
+				sendResponse({ ok: this.focusAsk(msg.clarificationId, true) });
 				return;
 			}
 		}

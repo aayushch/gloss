@@ -5,7 +5,7 @@
 	import { browser } from '../shared/browser';
 	import { connectClient, type Client } from '../shared/client';
 	import { MARK_SVG } from '../shared/mark';
-	import type { ConnectionStatus, PageTextReply, TabMessage } from '../shared/messages';
+	import { LOCAL_METHODS, type AskWindowParams, type ConnectionStatus, type NavigatorState, type PageTextReply, type TabMessage } from '../shared/messages';
 	import {
 		DEFAULT_SETTINGS,
 		failureOf,
@@ -32,6 +32,8 @@
 	let askError = $state<string | null>(null);
 	let sending = $state(false);
 	let launching = $state(false);
+	/** The tab's note navigator; null where no content script runs, such as the PDF viewer. */
+	let navState = $state<NavigatorState | null>(null);
 
 	const asks = $derived((page?.page.conversation.clarifications ?? []).filter((c) => c.webAnchor));
 	const orphans = $derived(asks.filter((c) => c.anchorState === 'orphan').length);
@@ -108,6 +110,7 @@
 		client.onEvent(onEvent);
 		const [active] = await browser.tabs.query({ active: true, currentWindow: true });
 		tab = active ?? null;
+		navState = await sendToTab<NavigatorState>({ type: 'navigator-state' });
 		status = await client.status();
 		await refresh();
 	});
@@ -123,8 +126,17 @@
 		}
 	}
 
+	/**
+	 * Shows a note on the page. A tab the content script cannot run in,
+	 * such as the PDF viewer, shows it in the ask window instead, where the
+	 * page's other notes can be stepped through too.
+	 */
 	async function focusAsk(c: Clarification) {
-		await sendToTab({ type: 'focus-ask', clarificationId: c.id });
+		const shown = await sendToTab<{ ok: boolean }>({ type: 'focus-ask', clarificationId: c.id });
+		if (!shown?.ok && tab?.url) {
+			const params: AskWindowParams = { url: tab.url, title: tab.title ?? '', focus: c.id };
+			await client.request(LOCAL_METHODS.openAskWindow, params).catch(() => {});
+		}
 		window.close();
 	}
 
@@ -172,6 +184,11 @@
 		client.request('openInGloss', { urlKey: page.urlKey }).catch(() => launch());
 	}
 
+	async function showNavigator() {
+		await sendToTab({ type: 'show-navigator' });
+		window.close();
+	}
+
 	function openPage(p: Page) {
 		void browser.tabs.create({ url: p.url });
 		window.close();
@@ -212,6 +229,13 @@
 				</div>
 				{#if orphans > 0}
 					<div class="muted">{orphans} {orphans === 1 ? 'note' : 'notes'} not found on this page.</div>
+				{/if}
+				{#if navState?.hidden}
+					<div class="row" style="margin-top:6px">
+						<span class="muted">The note navigator is hidden on this page.</span>
+						<span class="spacer"></span>
+						<button class="btn" onclick={showNavigator}>Show</button>
+					</div>
 				{/if}
 				<div class="row" style="margin-top:6px">
 					<span class="spacer"></span>

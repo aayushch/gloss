@@ -199,6 +199,8 @@ export interface ExtensionStatus {
 	translocated: boolean;
 	browsers: BrowserRegistration[];
 	sessions: SessionInfo[];
+	/** The extension version this Gloss ships; a connected extension older than this is offered an update. */
+	bundledVersion: string;
 	/** True when the app bundles the Firefox .xpi. */
 	xpiBundled: boolean;
 	chromeStoreUrl: string;

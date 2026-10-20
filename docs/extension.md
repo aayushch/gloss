@@ -26,6 +26,24 @@ Move Gloss to the Applications folder before installing: macOS runs a
 freshly downloaded app from a temporary location, and the path the browsers
 are given would go stale.
 
+## Updates
+
+The extension always has the app's version (the numeric part, as browsers
+require): every release sets both, and the Firefox add-on and the Safari
+extension inside Gloss are built from that same release. When a browser
+connects, Gloss compares its extension's version with its own; if the
+extension is older, a card at the bottom of the rail says so, and the
+Settings sheet marks the connection.
+
+| Browser | How it updates |
+| --- | --- |
+| Firefox | The card's **Update Firefox extension** (or **Update in Firefox** in Settings) hands Firefox the add-on file inside Gloss, never a download, and Firefox asks to confirm. Firefox also checks the `update_url` in the add-on's manifest about once a day; it points at `updates.json` on the latest GitHub release, so the add-on also updates on its own once a release is published. |
+| Safari | The extension is part of Gloss.app, so updating Gloss updates it. Safari keeps running the old one until it is quit and reopened, which is what the card asks for. |
+| Chromium browsers | Updates come from the Chrome Web Store only, which these browsers check every few hours; Gloss cannot install one. The card says the update is on its way. |
+
+The card disappears once every connected browser reports the new version.
+Closing it hides it until Gloss restarts.
+
 ## Using it
 
 - Select text, then click the pill or use the context menu "Ask Gloss about…"
@@ -36,7 +54,19 @@ are given would go stale.
   page. Select the passage and use the context menu; the ask window opens
   with the quote, and the note is kept in Gloss under the PDF's URL. The
   keyboard shortcut does the same without a quote, as a question about the
-  whole document.
+  whole document. The ask window also steps through the PDF's earlier
+  notes with ‹ and › (or the arrow keys), and clicking one of them in the
+  toolbar list opens the window on that note.
+- Pages with notes show a small navigator, ‹ 2/5 ›, that steps through
+  them in reading order, scrolling to each passage and opening its reply;
+  the middle button reopens the last note shown, or closes it. It always
+  sits on the right edge, at mid-height until dragged up or down; the
+  height dragged to is kept for every site. Only an element pinned to the
+  screen under it (a chat button, cookie banner, sticky sidebar) moves it,
+  and then only along the right edge to the nearest clear height. Scrolling
+  never moves it. It stays faint until pointed at, and its × hides it until
+  the next ask or page load; the toolbar popup then offers **Show** to put
+  it back.
 - The popover streams the reply; ask follow-ups in it. Close (×) or Escape
   puts it away and keeps the note: the passage keeps its rounded tint, the
   same the app gives a quoted span, with the icon's quote mark in the
@@ -50,7 +80,10 @@ are given would go stale.
   are never asked about, and "Send page text to the agent" can be turned off.
 - While the composer or popover is open, what you type and click in it
   stays in it: the page's keyboard shortcuts and dialog focus traps do not
-  see those events. Once it is closed the page gets every key again.
+  see those events. Once it is closed the page gets every key again. A
+  small script (`guard.js`) loads before the page's own scripts so that
+  Gloss's listeners come first; a page that registers its shortcut
+  listener while loading (Jira does) would otherwise see the key first.
 
 ## When something is off
 
@@ -84,7 +117,10 @@ The `Release` workflow builds the extension once and then:
   Chrome Web Store Publish API"). The store item must exist already, created
   once by uploading `dist/chrome.zip` by hand with the `key` in its manifest
   so the item id equals `extension/EXTENSION_ID`;
-- attaches `chrome.zip`, `firefox.zip` and the signed `.xpi` to the release.
+- attaches `chrome.zip`, `firefox.zip`, the signed `.xpi` and `updates.json`
+  (Firefox's update manifest, pointing at that release's `.xpi`) to the
+  release. The add-on reads `updates.json` through the latest-release link,
+  so Firefox picks up a release only once its draft is published.
 
 Without a secret, the matching step is skipped and the rest still ships.
 A local `npx tauri build` behaves the same way: with the two Mozilla keys

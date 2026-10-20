@@ -4,7 +4,7 @@
 // the toolbar badge and context menu, and launches Gloss on request.
 
 import { browser, extensionVersion, SETTINGS_KEY, storageSet } from '../shared/browser';
-import { LOCAL_METHODS, PORT_NAME, type BackgroundMessage, type ClientMessage, type ConnectionStatus } from '../shared/messages';
+import { LOCAL_METHODS, PORT_NAME, type AskWindowParams, type BackgroundMessage, type ClientMessage, type ConnectionStatus } from '../shared/messages';
 import {
 	BridgeFailure,
 	DEFAULT_SETTINGS,
@@ -130,6 +130,10 @@ function unavailable(): BridgeFailure {
 /** Answers one client request, relaying to Gloss unless the background handles it itself. */
 async function relay(client: ClientEntry, method: string, params: unknown): Promise<unknown> {
 	if (method === LOCAL_METHODS.status) return status;
+	if (method === LOCAL_METHODS.openAskWindow) {
+		await openAskWindow(params as AskWindowParams);
+		return { ok: true };
+	}
 	if (client.incognito && ASK_METHODS.has(method)) {
 		throw new BridgeFailure('denied', 'Gloss does not take questions from private windows');
 	}
@@ -299,15 +303,43 @@ async function askFromTab(tab: chrome.tabs.Tab | undefined, selectionText: strin
 		new Promise<boolean>((r) => setTimeout(() => r(false), CONTENT_REPLY_MS)),
 	]);
 	if (opened || tab.incognito) return;
-	const params = new URLSearchParams({ url: tab.url ?? '', title: tab.title ?? '', text: selectionText });
-	const url = browser.runtime.getURL('ask.html') + '?' + params.toString();
+	await openAskWindow({ url: tab.url ?? '', title: tab.title ?? '', text: selectionText });
+}
+
+/** The ask window's tab while one is open, so the next ask loads into it where the reader left it. */
+let askWindowTab: number | null = null;
+
+async function openAskWindow(p: AskWindowParams): Promise<void> {
+	const query = new URLSearchParams({ url: p.url, title: p.title });
+	if (p.text) query.set('text', p.text);
+	if (p.focus) query.set('focus', p.focus);
+	const url = browser.runtime.getURL('ask.html') + '?' + query.toString();
+	if (askWindowTab !== null) {
+		try {
+			// A tab opened in place of a window may since have been navigated elsewhere; that tab is left alone.
+			const current = await browser.tabs.get(askWindowTab);
+			if (!current.url?.startsWith(browser.runtime.getURL('ask.html'))) throw new Error('not the ask window');
+			const t = await browser.tabs.update(askWindowTab, { url });
+			if (t?.windowId !== undefined) await browser.windows.update(t.windowId, { focused: true });
+			return;
+		} catch {
+			// The window was closed or its tab shows something else now; open a new one.
+			askWindowTab = null;
+		}
+	}
 	try {
-		await browser.windows.create({ url, type: 'popup', width: 420, height: 560 });
+		const w = await browser.windows.create({ url, type: 'popup', width: 420, height: 560 });
+		askWindowTab = w?.tabs?.[0]?.id ?? null;
 	} catch (e) {
 		console.warn('gloss: could not open the ask window, opening a tab instead', e);
-		await browser.tabs.create({ url });
+		const t = await browser.tabs.create({ url });
+		askWindowTab = t.id ?? null;
 	}
 }
+
+browser.tabs.onRemoved.addListener((tabId) => {
+	if (tabId === askWindowTab) askWindowTab = null;
+});
 
 browser.runtime.onInstalled.addListener(() => void setupMenu());
 browser.runtime.onStartup?.addListener(() => void setupMenu());

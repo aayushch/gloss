@@ -46,6 +46,11 @@ struct ExtensionStatus {
     translocated: bool,
     browsers: Vec<native_host::BrowserRegistration>,
     sessions: Vec<SessionInfo>,
+    /// The extension version this Gloss ships. Every release sets the
+    /// extension to the numeric part of the app's version (scripts/set-version.sh),
+    /// and the bundled Firefox add-on and Safari extension are built from that
+    /// same release, so this is the app's version without a prerelease suffix.
+    bundled_version: String,
     xpi_bundled: bool,
     chrome_store_url: String,
     firefox_xpi_path: Option<String>,
@@ -129,6 +134,10 @@ fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> Ext
         translocated: native_host::translocated(&status.bridge_path),
         browsers: native_host::status(&status.bridge_path),
         sessions: status.handler.sessions(),
+        bundled_version: {
+            let v = &app.package_info().version;
+            format!("{}.{}.{}", v.major, v.minor, v.patch)
+        },
         xpi_bundled: xpi.is_some(),
         chrome_store_url: format!("{}{}", native_host::CHROME_STORE_URL, native_host::CHROME_EXTENSION_ID.trim()),
         firefox_xpi_path: xpi.map(|p| p.to_string_lossy().to_string()),
@@ -629,6 +638,9 @@ fn forward_events(app: AppHandle, engine: Eng) {
                 Ok(AppEvent::Focus { url_key, clarification_id }) => {
                     show_main(&app);
                     let _ = app.emit("open-page", serde_json::json!({ "urlKey": url_key, "clarificationId": clarification_id }));
+                }
+                Ok(AppEvent::Extensions) => {
+                    let _ = app.emit("extensions-event", ());
                 }
                 Ok(AppEvent::Shutdown) | Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,

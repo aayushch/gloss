@@ -115,6 +115,8 @@ export interface Api {
 	onPageEvent(cb: (e: PageEvent) => void): Promise<() => void>;
 	onSettingsEvent(cb: (s: Settings) => void): Promise<() => void>;
 	onOpenPage(cb: (e: OpenPageEvent) => void): Promise<() => void>;
+	/** A browser extension connected or disconnected. */
+	onExtensionsEvent(cb: () => void): Promise<() => void>;
 }
 
 /** File types the picker offers; the engine still checks the content. */
@@ -221,6 +223,10 @@ function tauriApi(): Api {
 		onOpenPage: async (cb) => {
 			const { listen } = await import('@tauri-apps/api/event');
 			return listen<OpenPageEvent>('open-page', (ev) => cb(ev.payload));
+		},
+		onExtensionsEvent: async (cb) => {
+			const { listen } = await import('@tauri-apps/api/event');
+			return listen('extensions-event', () => cb());
 		}
 	};
 }

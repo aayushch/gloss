@@ -103,7 +103,15 @@ impl BridgeHandler {
     }
 
     pub fn forget_session(&self, id: u64) {
-        self.sessions.lock().unwrap().retain(|s| s.id != id);
+        let removed = {
+            let mut sessions = self.sessions.lock().unwrap();
+            let before = sessions.len();
+            sessions.retain(|s| s.id != id);
+            sessions.len() != before
+        };
+        if removed {
+            self.engine.publish(AppEvent::Extensions);
+        }
     }
 
     /// Settings the extension needs, as `hello` and the `settings` event send them.
@@ -151,9 +159,12 @@ impl BridgeHandler {
                     extension_version: p.extension_version,
                     connected_at: now_ms(),
                 };
-                let mut sessions = self.sessions.lock().unwrap();
-                sessions.retain(|s| s.id != session.id);
-                sessions.push(info);
+                {
+                    let mut sessions = self.sessions.lock().unwrap();
+                    sessions.retain(|s| s.id != session.id);
+                    sessions.push(info);
+                }
+                engine.publish(AppEvent::Extensions);
                 let settings = engine.settings()?;
                 Ok(json!({
                     "protocol": PROTOCOL,

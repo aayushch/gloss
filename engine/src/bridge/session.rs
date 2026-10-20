@@ -99,7 +99,7 @@ fn event_line(ev: AppEvent) -> Option<Outgoing> {
             "settings",
             json!({ "sendPageText": s.send_page_text, "denyList": s.page_deny_list }),
         )),
-        AppEvent::Focus { .. } | AppEvent::Shutdown => None,
+        AppEvent::Focus { .. } | AppEvent::Extensions | AppEvent::Shutdown => None,
     }
 }
 

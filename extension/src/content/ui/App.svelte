@@ -4,6 +4,7 @@
 	import Pill from './Pill.svelte';
 	import Composer from './Composer.svelte';
 	import Popover from './Popover.svelte';
+	import Navigator from './Navigator.svelte';
 
 	let { store, actions }: { store: UiStore; actions: Actions } = $props();
 	const running = $derived.by(() => {
@@ -12,6 +13,10 @@
 	});
 </script>
 
+<!-- The navigator comes first so the pill, composer and popover paint over it. -->
+{#if store.dock}
+	<Navigator {store} {actions} dock={store.dock} />
+{/if}
 {#if store.pill && !store.composer}
 	<Pill pill={store.pill} inert={running} onopen={actions.openComposer} />
 {/if}

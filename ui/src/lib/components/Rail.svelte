@@ -11,6 +11,7 @@
 	import type { AgentId, ConversationSummary, ExternalSession, Page, Project } from '$lib/api/types';
 	import { agentsIn, groupOf, hostOf, pad, projectItems, relativeTime, short, splitForRail, type Group } from '$lib/state/threads';
 	import ExtensionBanner from './ExtensionBanner.svelte';
+	import ExtensionUpdateBanner from './ExtensionUpdateBanner.svelte';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
 
@@ -325,6 +326,7 @@
 	</div>
 
 	<ExtensionBanner />
+	<ExtensionUpdateBanner />
 	<UpdateBanner />
 
 	<div class="foot">

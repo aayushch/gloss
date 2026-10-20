@@ -174,10 +174,14 @@ export class GlyphLayer {
 		return null;
 	}
 
-	/** Scrolls the passage into view. */
+	/** Scrolls the passage to the middle of the viewport, unless it is already well inside it. */
 	scrollTo(id: string): void {
 		const g = this.glyphs.get(id);
 		if (!g) return;
+		const first = firstRect(g.range);
+		const last = lastRect(g.range);
+		const margin = 48;
+		if (first && last && first.top >= margin && last.bottom <= this.win.innerHeight - margin) return;
 		const el = g.range.startContainer.nodeType === Node.ELEMENT_NODE ? (g.range.startContainer as Element) : g.range.startContainer.parentElement;
 		el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 	}

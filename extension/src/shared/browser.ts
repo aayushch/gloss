@@ -33,6 +33,24 @@ export async function storageSet(key: string, value: unknown): Promise<void> {
 	}
 }
 
+/** Reads one key from local storage, which keeps it across browser restarts. */
+export async function localGet<T>(key: string): Promise<T | undefined> {
+	try {
+		const r = await browser.storage.local.get(key);
+		return r[key] as T | undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+export async function localSet(key: string, value: unknown): Promise<void> {
+	try {
+		await browser.storage.local.set({ [key]: value });
+	} catch {
+		// Storage can be unavailable in some contexts; the value is a preference only.
+	}
+}
+
 /** The key under which the background caches settings from Gloss. */
 export const SETTINGS_KEY = 'settings';
 

@@ -22,6 +22,7 @@ import type {
 	PageEvent,
 	Project,
 	SearchHit,
+	SessionInfo,
 	SessionOrigin,
 	SessionTurn,
 	Settings,
@@ -30,6 +31,7 @@ import type {
 	TurnEventEnvelope
 } from '$lib/api/types';
 import { copyText } from '$lib/clipboard';
+import { isOlder } from '$lib/version';
 import { find } from '$lib/state/find.svelte';
 import { wellsContaining } from '$lib/state/threads';
 import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
@@ -138,6 +140,10 @@ class AppState {
 	safariError = $state<string | null>(null);
 	/** True after Safari's settings were opened from here, until the extension shows as enabled. */
 	safariPrompted = $state(false);
+	/** The bundled extension version whose update prompt the user closed; it comes back at the next launch. */
+	extensionUpdateDismissed = $state<string | null>(null);
+	/** True after the bundled add-on was handed to Firefox from the update prompt, until Firefox reconnects. */
+	firefoxUpdateStarted = $state(false);
 	/** Projects, most recently active first. */
 	projects = $state<Project[]>([]);
 	/** Paths of the projects whose conversations the rail shows. */
@@ -252,8 +258,12 @@ class AppState {
 				this.settings = s;
 				this.applyTheme(s.theme, false);
 			}),
-			a.onOpenPage((e) => this.openPage(e.urlKey, e.clarificationId ?? undefined))
+			a.onOpenPage((e) => this.openPage(e.urlKey, e.clarificationId ?? undefined)),
+			a.onExtensionsEvent(() => void this.refreshExtensionStatus(true))
 		]);
+		// Read at launch, not only when Settings opens, so an extension older
+		// than the one this Gloss ships is offered its update right away.
+		void this.refreshExtensionStatus(true);
 	}
 
 	async loadModels(agent: AgentId): Promise<void> {
@@ -453,12 +463,14 @@ class AppState {
 		}
 	}
 
-	/** Hands the bundled Firefox add-on to Firefox, which offers to install it. */
-	async installFirefoxExtension(): Promise<void> {
+	/** Hands the bundled Firefox add-on to Firefox, which offers to install it; false when Firefox could not be opened. */
+	async installFirefoxExtension(): Promise<boolean> {
 		try {
 			await (await api()).installFirefoxExtension();
+			return true;
 		} catch (e) {
 			this.flash(`Could not open Firefox: ${String(e).replace(/^Error:\s*/, '')}`);
+			return false;
 		}
 	}
 
@@ -484,12 +496,39 @@ class AppState {
 		}
 	}
 
-	async refreshExtensionStatus(): Promise<void> {
+	/** `quiet` skips the error message, for the reads the app makes on its own. */
+	async refreshExtensionStatus(quiet = false): Promise<void> {
 		try {
 			this.extension = await (await api()).extensionStatus();
+			if (!this.outdatedExtensions.some((s) => s.browser === 'firefox')) this.firefoxUpdateStarted = false;
 		} catch (e) {
-			this.flash(`Could not read the extension status: ${String(e).replace(/^Error:\s*/, '')}`);
+			if (!quiet) this.flash(`Could not read the extension status: ${String(e).replace(/^Error:\s*/, '')}`);
 		}
+	}
+
+	/**
+	 * Connected extensions older than the one this Gloss ships, one per
+	 * browser (the oldest, when a browser has several windows connected).
+	 */
+	get outdatedExtensions(): SessionInfo[] {
+		const ext = this.extension;
+		if (!ext) return [];
+		const byBrowser = new Map<string, SessionInfo>();
+		for (const s of ext.sessions) {
+			if (!isOlder(s.extensionVersion, ext.bundledVersion)) continue;
+			const seen = byBrowser.get(s.browser);
+			if (!seen || isOlder(s.extensionVersion, seen.extensionVersion)) byBrowser.set(s.browser, s);
+		}
+		return [...byBrowser.values()];
+	}
+
+	/** Installs the Firefox add-on this Gloss carries over the older one; Firefox asks the user to confirm. */
+	async updateFirefoxExtension(): Promise<void> {
+		if (await this.installFirefoxExtension()) this.firefoxUpdateStarted = true;
+	}
+
+	dismissExtensionUpdate(): void {
+		this.extensionUpdateDismissed = this.extension?.bundledVersion ?? null;
 	}
 
 	/** Writes the native-messaging manifests so installed browsers can start the bridge. */

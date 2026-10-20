@@ -275,6 +275,8 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("Test")).unwrap();
         assert!(installed(&present));
         let absent = BrowserTarget { id: "a", name: "Absent", family: Family::Firefox, dir: dir.path().join("Absent/NativeMessagingHosts") };
-        assert!(!installed(&absent));
+        // Windows browsers find the host through the registry, so every
+        // browser there counts as installed and gets its registration.
+        assert_eq!(installed(&absent), cfg!(target_os = "windows"));
     }
 }

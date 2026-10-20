@@ -8,7 +8,10 @@
 mod frame;
 mod launch;
 
-use std::io::{self, BufRead, BufReader, Write};
+use std::io;
+#[cfg(unix)]
+use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -22,6 +25,7 @@ use std::os::unix::net::UnixStream;
 /// Where Gloss listens: `$GLOSS_HOME/bridge.sock`, else `~/.gloss/bridge.sock`.
 /// The browser's environment is not the login shell's, so `GLOSS_HOME` set
 /// only there is not seen here.
+#[cfg(unix)]
 fn socket_path() -> PathBuf {
     if let Some(home) = std::env::var_os("GLOSS_HOME").filter(|h| !h.is_empty()) {
         return PathBuf::from(home).join("bridge.sock");
@@ -33,7 +37,10 @@ fn socket_path() -> PathBuf {
 /// How long the bridge keeps trying to reach Gloss after launching it.
 const LAUNCH_WAIT: Duration = Duration::from_secs(30);
 
+/// The connection fields exist on Unix only: elsewhere the bridge cannot
+/// reach Gloss yet and answers every request with an error.
 struct Bridge {
+    #[cfg(unix)]
     socket: PathBuf,
     out: Mutex<io::Stdout>,
     /// The writing half of the connection to Gloss, when there is one,
@@ -43,6 +50,7 @@ struct Bridge {
     conn: Mutex<Option<(u64, UnixStream)>>,
     #[cfg(not(unix))]
     conn: Mutex<Option<(u64, ())>>,
+    #[cfg(unix)]
     generation: std::sync::atomic::AtomicU64,
 }
 
@@ -55,6 +63,7 @@ impl Bridge {
         }
     }
 
+    #[cfg(unix)]
     fn emit_line(&self, line: &str) {
         let mut out = self.out.lock().unwrap();
         if frame::write_frame(&mut *out, line.as_bytes()).is_err() {
@@ -189,9 +198,11 @@ fn main() {
     // The browser passes its own identification in argv (an origin for
     // Chrome, a manifest path and extension id for Firefox); it is not needed.
     let bridge = Arc::new(Bridge {
+        #[cfg(unix)]
         socket: socket_path(),
         out: Mutex::new(io::stdout()),
         conn: Mutex::new(None),
+        #[cfg(unix)]
         generation: std::sync::atomic::AtomicU64::new(0),
     });
     bridge.connect();

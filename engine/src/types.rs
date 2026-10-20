@@ -534,6 +534,10 @@ pub enum AppEvent {
         #[serde(rename = "clarificationId")]
         clarification_id: Option<String>,
     },
+    /// A browser extension connected or disconnected; the window re-reads
+    /// the connected extensions to see whether one is older than the
+    /// extension this Gloss ships.
+    Extensions,
     Shutdown,
 }
 

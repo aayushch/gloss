@@ -205,6 +205,24 @@ describe('app state against the mock api', () => {
 		expect(app.extension?.browsers.find((b) => b.id === 'chrome')?.registered).toBe(true);
 	});
 
+	it('lists each browser whose extension is older than the bundled one, and dismisses the prompt', async () => {
+		await app.refreshExtensionStatus();
+		expect(app.outdatedExtensions).toEqual([]);
+		const base = app.extension!;
+		const session = (id: number, browser: string, extensionVersion: string) => ({ id, transport: 'native', browser, extensionVersion, connectedAt: 0 });
+		app.extension = {
+			...base,
+			bundledVersion: '2.0.10',
+			sessions: [session(1, 'firefox', '2.0.9'), session(2, 'firefox', '2.0.8'), session(3, 'chrome', '2.0.10'), session(4, 'safari', '2.0.6')]
+		};
+		expect(app.outdatedExtensions.map((s) => [s.browser, s.extensionVersion])).toEqual([
+			['firefox', '2.0.8'],
+			['safari', '2.0.6']
+		]);
+		app.dismissExtensionUpdate();
+		expect(app.extensionUpdateDismissed).toBe('2.0.10');
+	});
+
 	it('creates a conversation from a draft on first send and cancels', async () => {
 		app.newChat();
 		expect(app.draft).not.toBeNull();

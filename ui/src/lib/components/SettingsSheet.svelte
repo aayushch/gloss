@@ -7,6 +7,7 @@
 	import { updater, type CheckResult } from '$lib/state/updater.svelte';
 	import type { AgentId, BrowserRegistration, SessionInfo } from '$lib/api/types';
 	import Icon from './Icon.svelte';
+	import { isOlder } from '$lib/version';
 
 	const TABS: { id: SettingsTab; label: string }[] = [
 		{ id: 'general', label: 'General' },
@@ -76,8 +77,12 @@
 
 	function sessionLabel(s: SessionInfo): string {
 		const name = s.browser ? s.browser.charAt(0).toUpperCase() + s.browser.slice(1) : 'Browser';
-		return `${name} ${s.extensionVersion} connected`;
+		const label = `${name} ${s.extensionVersion} connected`;
+		return ext && isOlder(s.extensionVersion, ext.bundledVersion) ? `${label}; Gloss ships ${ext.bundledVersion}` : label;
 	}
+
+	/** True while a connected Firefox runs an older add-on than the one inside Gloss. */
+	const firefoxOutdated = $derived(app.outdatedExtensions.some((s) => s.browser === 'firefox'));
 
 	/** A short list of names: "Chrome, Brave and Firefox". */
 	function joinNames(names: string[]): string {
@@ -257,7 +262,7 @@
 							<span class="name">Firefox</span>
 							<span class="cmd">{ext.xpiBundled ? 'The add-on ships inside Gloss; Firefox asks once to install it.' : 'This build of Gloss does not include the Firefox add-on.'}</span>
 						</span>
-						<button type="button" class="ibtn" disabled={!ext.xpiBundled} title={ext.firefoxXpiPath ?? ''} onclick={() => app.installFirefoxExtension()}>Install in Firefox</button>
+						<button type="button" class="ibtn" disabled={!ext.xpiBundled} title={ext.firefoxXpiPath ?? ''} onclick={() => (firefoxOutdated ? app.updateFirefoxExtension() : app.installFirefoxExtension())}>{firefoxOutdated ? 'Update in Firefox' : 'Install in Firefox'}</button>
 					</div>
 					{#if isMac}
 						<div class="card">

@@ -382,3 +382,25 @@ kbd {
 	font-family: inherit;
 	font-size: 12px;
 }
+
+/* The ask window's note stepper: ‹ Note 2 of 5 › */
+.note-nav {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.note-nav .note-step {
+	width: 30px;
+	padding: 2px 0;
+	font-size: 16px;
+	line-height: 1.2;
+}
+
+.note-nav .note-pos {
+	flex: 1;
+	color: var(--fg-muted);
+	font-size: 12.5px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}

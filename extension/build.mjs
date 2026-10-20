@@ -71,7 +71,7 @@ async function buildTarget(target) {
 	// into its shadow root, so its build loads .css files as text.
 	const content = await esbuild.context({
 		...common(target),
-		entryPoints: { content: path.join(root, 'src/content/index.ts') },
+		entryPoints: { content: path.join(root, 'src/content/index.ts'), guard: path.join(root, 'src/content/guard.ts') },
 		outdir: out,
 		loader: { '.css': 'text' },
 	});

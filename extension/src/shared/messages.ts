@@ -37,8 +37,20 @@ export type TabMessage =
 	| { type: 'focus-ask'; clarificationId: string }
 	| { type: 'page-text' }
 	| { type: 'ping' }
+	/** Answered with `NavigatorState`. */
+	| { type: 'navigator-state' }
+	/** Puts back the note navigator the reader hid on this page. */
+	| { type: 'show-navigator' }
 	/** Open the composer for the page's current selection. */
 	| { type: 'open-composer'; selectionText: string };
+
+/** Whether the page's note navigator is showing, for the toolbar popup. */
+export interface NavigatorState {
+	/** The reader hid it with its ×. */
+	hidden: boolean;
+	/** Notes on the page; the navigator shows only when there is at least one. */
+	notes: number;
+}
 
 export interface PageTextReply {
 	url: string;
@@ -50,4 +62,18 @@ export interface PageTextReply {
 /** Methods the background answers itself instead of relaying to Gloss. */
 export const LOCAL_METHODS = {
 	status: '$status',
+	/** Opens the ask window with `AskWindowParams`, reusing the one already open. */
+	openAskWindow: '$openAskWindow',
 } as const;
+
+/**
+ * What the ask window shows, passed in its URL. `text` is a selection to
+ * ask about; `focus` is the id of an existing note to show first. Without
+ * either it opens on a question about the whole page.
+ */
+export interface AskWindowParams {
+	url: string;
+	title: string;
+	text?: string;
+	focus?: string;
+}

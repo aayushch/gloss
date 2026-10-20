@@ -111,6 +111,30 @@ export function setAnchor(state: PageState, askId: string, range: Range | null, 
 	entry.state = anchorState;
 }
 
+/**
+ * The page's asks in reading order, as the note navigator steps through
+ * them: asks found on the page by where their passage starts, then the
+ * ones without a passage on the page (orphans, unresolved) by their number.
+ */
+export function orderedAskIds(state: PageState): string[] {
+	const placed: [string, Range][] = [];
+	const rest: AskEntry[] = [];
+	for (const [id, entry] of state.asks) {
+		if (entry.range && entry.state !== 'orphan' && entry.state !== 'pending') placed.push([id, entry.range]);
+		else rest.push(entry);
+	}
+	placed.sort(([, a], [, b]) => {
+		try {
+			return a.compareBoundaryPoints(Range.START_TO_START, b);
+		} catch {
+			// Ranges in different documents or detached trees cannot be compared.
+			return 0;
+		}
+	});
+	rest.sort((a, b) => a.clarification.number - b.clarification.number || a.clarification.createdAt - b.clarification.createdAt);
+	return [...placed.map(([id]) => id), ...rest.map((e) => e.clarification.id)];
+}
+
 /** The ask whose turns include `turnId`. */
 export function askOfTurn(state: PageState, turnId: string): string | null {
 	for (const [id, entry] of state.asks) {

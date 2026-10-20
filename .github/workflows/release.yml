@@ -7,7 +7,10 @@ name: Release
 #
 # The browser extension is built first: the Firefox add-on is signed by
 # Mozilla (self-distributed, so it never appears on addons.mozilla.org) and
-# bundled into every installer; the macOS build also wraps the extension as
+# bundled into every installer. The release also carries updates.json, which
+# the add-on's update_url reads through the latest-release link, so Firefox
+# installs the new add-on from the release once the draft is published. The
+# macOS build also wraps the extension as
 # a Safari extension inside Gloss.app. The Chrome Web Store zip is attached
 # to the release for a manual upload to the store.
 
@@ -58,6 +61,15 @@ jobs:
             --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
           cp dist/signed/*.xpi dist/gloss.xpi
           echo "xpi=dist/gloss.xpi" >> "$GITHUB_OUTPUT"
+          # Firefox's update manifest for the add-on, pointing at this tag's .xpi.
+          version="$(node -p 'require("./dist/firefox/manifest.json").version')"
+          hash="sha256:$(sha256sum dist/gloss.xpi | cut -d' ' -f1)"
+          link="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/gloss.xpi"
+          node -e '
+            const [version, link, hash] = process.argv.slice(1);
+            const doc = { addons: { "gloss@aay.sh": { updates: [{ version, update_link: link, update_hash: hash }] } } };
+            require("fs").writeFileSync("dist/updates.json", JSON.stringify(doc, null, 2) + "\n");
+          ' "$version" "$link" "$hash"
 
       - name: Publish to the Chrome Web Store
         working-directory: extension
@@ -83,6 +95,7 @@ jobs:
           path: |
             extension/dist/*.zip
             extension/dist/gloss.xpi
+            extension/dist/updates.json
           if-no-files-found: ignore
 
   build:
@@ -207,3 +220,4 @@ jobs:
           ls dist
           gh release upload "$GITHUB_REF_NAME" dist/chrome.zip dist/firefox.zip --clobber
           [ -f dist/gloss.xpi ] && gh release upload "$GITHUB_REF_NAME" dist/gloss.xpi --clobber || true
+          [ -f dist/updates.json ] && gh release upload "$GITHUB_REF_NAME" dist/updates.json --clobber || true
