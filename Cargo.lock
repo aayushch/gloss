@@ -1539,8 +1539,11 @@ name = "gloss-app"
 version = "2.0.0"
 dependencies = [
  "base64 0.22.1",
+ "block2",
  "dirs",
  "gloss-engine",
+ "objc2",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tauri",

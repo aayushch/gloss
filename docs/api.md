@@ -46,11 +46,12 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `get_page` | `urlKey: string` | `PageDetail \| null` | The page with its conversation; asks are the clarifications carrying a `webAnchor`, turns without a clarification are questions about the whole page. |
 | `delete_page` | `urlKey: string` | – | Deletes the page's conversation (and so the page, its asks and turns). |
 | `delete_clarification` | `id: string` | – | Removes one clarification with its turns and any clarification nested in its replies. |
-| `extension_status` | – | `ExtensionStatus` | Bridge path, whether the app runs translocated, per-browser host-manifest status, connected extensions, whether the Firefox add-on and Safari extension are bundled, the Chrome Web Store URL, the loopback port. |
+| `extension_status` | – | `ExtensionStatus` | Bridge path, whether the app runs translocated, per-browser host-manifest status, connected extensions, whether the Firefox add-on and Safari extension are bundled, the Chrome Web Store URL, the loopback port, and the Safari bridge file or the error that kept it from being written. |
 | `register_native_hosts` / `unregister_native_hosts` | – | `BrowserRegistration[]` | Writes or removes the native-messaging host manifests for every installed browser. Done at every launch too. |
 | `open_url` | `url: string` | – | Opens an http(s) link in the default browser. |
 | `install_firefox_extension` | – | – | Opens the bundled signed `.xpi` with Firefox, which asks to install it. Errors when this build has no add-on. |
-| `open_safari_extensions` | – | – | Brings Safari forward so the extension can be enabled under Settings › Extensions. |
+| `open_safari_extensions` | – | – | Opens Safari's Settings › Extensions pane at the Gloss extension (falls back to bringing Safari forward). |
+| `safari_extension_state` | – | `SafariExtensionState` | Whether Safari has the bundled extension turned on; an error when Safari cannot say, such as a build without the extension. |
 
 ## Event `turn-event`
 

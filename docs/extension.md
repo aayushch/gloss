@@ -19,7 +19,7 @@ Open **Settings › Browser extension** in Gloss for the buttons below.
 | --- | --- |
 | Chrome, Brave, Edge, Arc, Vivaldi, Chromium | Install from the Chrome Web Store (the listing is unlisted; Gloss links to it). These browsers only install extensions from the store, so Gloss cannot do it for you. Gloss writes the native-messaging host file each browser needs at every launch. |
 | Firefox | Click **Install in Firefox**: Gloss hands Firefox the add-on it ships with (signed by Mozilla), and Firefox asks to install it. |
-| Safari | The extension is inside Gloss.app. Open Safari › Settings › Extensions and enable **Gloss**. A build that is not notarized needs "Allow unsigned extensions" in Safari's Develop menu. |
+| Safari | The extension is inside Gloss.app. Click **Turn on in Safari**: Safari opens its Settings › Extensions pane at Gloss, where you tick it; Gloss shows "Enabled" once that is done. A build that is not notarized needs "Allow unsigned extensions" in Safari's Develop menu. |
 
 Move Gloss to the Applications folder before installing: macOS runs a
 freshly downloaded app from a temporary location, and the path the browsers
@@ -30,9 +30,12 @@ are given would go stale.
 - Select text, then click the pill or use the context menu "Ask Gloss about…"
   (also Alt+Shift+G). The context menu works where the pill cannot appear,
   such as the PDF viewer, with the reply shown in a small window instead.
-- The popover streams the reply; ask follow-ups in it. Collapse hides it
-  (the mark dims), Remove deletes the ask, "Open in Gloss" shows the page in
-  the app.
+- The popover streams the reply; ask follow-ups in it. Close (×) or Escape
+  puts it away and keeps the note: the passage stays highlighted with a
+  mark beside it, and clicking the mark reopens the reply. Collapse (–)
+  does the same and dims the mark. "Remove…" asks first, then deletes the
+  note from the page and from Gloss. "Open in Gloss" shows the page in the
+  app.
 - The toolbar button lists this page's asks, including any whose passage is
   no longer found on the page, and recent pages.
 - Private windows are left alone. Hosts on the deny list in Gloss's settings
@@ -86,10 +89,14 @@ extension inside the app.
   before the bundler copies it into Gloss.app. Safari only works with
   a **signed** Gloss: the extension's sandbox can read the port and token
   from the App Group container alone, and macOS lets only an app signed with
-  the group entitlement write there (an unsigned build logs "could not write
-  bridge info" and Safari sees "Gloss isn't running"). For a local Safari
-  test, build with `scripts/build.sh --sign "Developer ID Application: …"`
-  and run that bundle.
+  the group entitlement write there, and only after the app has looked the
+  container up through `NSFileManager` (a plain write to the path is refused
+  with "Operation not permitted" even by an entitled app). An unsigned build
+  logs "could not write bridge info", Settings shows that error under the
+  Safari bridge toggle, and Safari's popover says why it cannot reach Gloss.
+  For a local Safari test, build with `scripts/build.sh --sign "Developer ID
+  Application: …"` and run that bundle. The extension's native handler logs
+  to the Console under the subsystem `sh.aay.gloss.extension`.
 - `gloss-engine serve --loopback` runs the bridge without the app;
   `node scripts/bridge-smoke.mjs` drives `gloss-bridge` like a browser;
   `gloss-engine page-ask --url … "question"` asks like the extension does.

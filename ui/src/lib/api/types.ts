@@ -205,6 +205,15 @@ export interface ExtensionStatus {
 	firefoxXpiPath: string | null;
 	safariAvailable: boolean;
 	loopbackPort: number | null;
+	/** The file the Safari extension reads the port and token from, when Gloss could write it. */
+	safariBridgeFile: string | null;
+	/** Why that file could not be written, when it could not. */
+	safariBridgeError: string | null;
+}
+
+/** Whether the Safari extension is turned on, as Safari reports it. */
+export interface SafariExtensionState {
+	enabled: boolean;
 }
 
 /** Sent when a page's asks changed or the page was deleted. */

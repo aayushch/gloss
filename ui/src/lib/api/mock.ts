@@ -760,7 +760,9 @@ export function mockApi(): Api {
 			chromeStoreUrl: 'https://chromewebstore.google.com/detail/gloss/mock',
 			firefoxXpiPath: '/Applications/Gloss.app/Contents/Resources/gloss.xpi',
 			safariAvailable: true,
-			loopbackPort: 47821
+			loopbackPort: 47821,
+			safariBridgeFile: '/Users/me/Library/Group Containers/BG78RT6D5Z.sh.aay.gloss/bridge.json',
+			safariBridgeError: null
 		}),
 		registerNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: b.installed, error: null })),
 		unregisterNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: false, error: null })),
@@ -769,6 +771,7 @@ export function mockApi(): Api {
 		},
 		installFirefoxExtension: async () => {},
 		openSafariExtensions: async () => {},
+		safariExtensionState: async () => ({ enabled: false }),
 		onPageEvent: async (cb) => {
 			pageListeners.add(cb);
 			return () => pageListeners.delete(cb);

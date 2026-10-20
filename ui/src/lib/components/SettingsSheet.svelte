@@ -41,14 +41,22 @@
 
 	const ext = $derived(app.extension);
 	const isMac = typeof document !== 'undefined' && document.documentElement.dataset.platform === 'macos';
+	/** The per-browser registration rows and the re-register actions, hidden unless asked for or something is wrong. */
+	let showDetails = $state(false);
+
+	/** The Chromium browsers found on this machine, by name. */
+	const chromiumInstalled = $derived((ext?.browsers ?? []).filter((b) => b.family === 'chromium' && b.installed).map((b) => b.name));
+	const firefoxInstalled = $derived((ext?.browsers ?? []).some((b) => b.family === 'firefox' && b.installed));
 
 	/** The Chrome Web Store serves every Chromium browser; the button names the one that is installed. */
 	const storeLabel = $derived.by(() => {
-		const installed = ext?.browsers.find((b) => b.family === 'chromium' && b.installed);
-		const name = installed?.name ?? 'Chrome';
+		const name = chromiumInstalled[0] ?? 'Chrome';
 		const known = ['Brave', 'Edge', 'Arc', 'Vivaldi', 'Chrome'].find((k) => name.includes(k));
 		return `Get for ${known ?? 'Chrome'}`;
 	});
+
+	/** True when a row would need the user's attention, so the details open on their own. */
+	const registrationProblem = $derived((ext?.browsers ?? []).some((b) => b.installed && (!b.registered || !!b.error)));
 
 	function browserStatus(b: BrowserRegistration): string {
 		if (!b.installed) return 'Not installed';
@@ -60,6 +68,30 @@
 		const name = s.browser ? s.browser.charAt(0).toUpperCase() + s.browser.slice(1) : 'Browser';
 		return `${name} ${s.extensionVersion} connected`;
 	}
+
+	/** A short list of names: "Chrome, Brave and Firefox". */
+	function joinNames(names: string[]): string {
+		if (names.length <= 1) return names[0] ?? '';
+		return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+	}
+
+	const registeredNames = $derived((ext?.browsers ?? []).filter((b) => b.installed && b.registered && !b.error).map((b) => b.name));
+
+	const safariState = $derived.by(() => {
+		if (app.safariEnabled === true) return { label: 'Enabled', ok: true };
+		if (app.safariEnabled === false) return { label: 'Off in Safari', ok: false };
+		return { label: app.safariError ? 'Not reported by Safari' : 'Checking…', ok: false };
+	});
+
+	// Safari reports the extension's state on request only, so while the
+	// sheet is open it is asked every few seconds; that is how the row
+	// flips to "Enabled" right after the user ticks it in Safari.
+	$effect(() => {
+		if (!isMac || !ext?.safariAvailable) return;
+		void app.refreshSafariState();
+		const timer = setInterval(() => void app.refreshSafariState(), 3000);
+		return () => clearInterval(timer);
+	});
 
 	/** The deny list as typed; saved on blur so every keystroke does not hit the engine. */
 	let denyText = $state(app.settings.pageDenyList.join('\n'));
@@ -176,23 +208,47 @@
 
 		<section>
 			<h3>Browser extension</h3>
-			<p class="intro">Highlight text on any web page and ask about it; the page and its asks appear under Pages in the rail. The extension talks to Gloss through a small native-messaging host that each browser must know about.</p>
+			<p class="intro">Highlight text on any web page and ask about it. The reply stays anchored to the passage, and every page you ask about appears under Pages in the rail.</p>
 			{#if !ext}
 				<p class="intro">Reading the extension status…</p>
 			{:else}
 				{#if ext.translocated}
 					<div class="warn">Move Gloss to the Applications folder so browsers can find it. macOS runs it from a temporary copy right now, and the registered paths point there.</div>
 				{/if}
-				<div class="rows">
-					{#each ext.browsers as b (b.id)}
-						<div class="row static" class:off={!b.installed}>
+				<div class="cards">
+					<div class="card">
+						<span class="text">
+							<span class="name">{chromiumInstalled.length ? joinNames(chromiumInstalled) : 'Chrome, Brave, Edge, Arc, Vivaldi'}</span>
+							<span class="cmd">Installs from the Chrome Web Store; these browsers take extensions from nowhere else.</span>
+						</span>
+						<button type="button" class="ibtn" onclick={() => app.openUrl(ext.chromeStoreUrl)}>{storeLabel}</button>
+					</div>
+					<div class="card" class:off={!firefoxInstalled}>
+						<span class="text">
+							<span class="name">Firefox</span>
+							<span class="cmd">{ext.xpiBundled ? 'The add-on ships inside Gloss; Firefox asks once to install it.' : 'This build of Gloss does not include the Firefox add-on.'}</span>
+						</span>
+						<button type="button" class="ibtn" disabled={!ext.xpiBundled} title={ext.firefoxXpiPath ?? ''} onclick={() => app.installFirefoxExtension()}>Install in Firefox</button>
+					</div>
+					{#if isMac}
+						<div class="card">
 							<span class="text">
-								<span class="name">{b.name}</span>
-								<span class="cmd" title={b.manifestPath}>{b.family === 'firefox' ? 'Firefox add-on' : 'Chrome Web Store'}</span>
+								<span class="name">Safari</span>
+								{#if ext.safariAvailable}
+									<span class="cmd">The extension ships inside Gloss; Safari keeps it off until you tick it under Settings › Extensions.</span>
+									{#if app.safariPrompted && app.safariEnabled !== true}
+										<span class="cmd hint">Safari's Extensions settings are open. Tick Gloss there; this row updates by itself.</span>
+									{/if}
+								{:else}
+									<span class="cmd">This build of Gloss does not include the Safari extension.</span>
+								{/if}
 							</span>
-							<span class="status" class:missing={b.installed && (!b.registered || !!b.error)} class:ok={b.installed && b.registered && !b.error}>{browserStatus(b)}</span>
+							{#if ext.safariAvailable}
+								<span class="status" class:ok={safariState.ok} class:missing={app.safariEnabled === false} title={app.safariError ?? ''}>{safariState.label}</span>
+								<button type="button" class="ibtn" onclick={() => app.openSafariExtensions()}>{app.safariEnabled ? 'Safari settings' : 'Turn on in Safari'}</button>
+							{/if}
 						</div>
-					{/each}
+					{/if}
 				</div>
 				{#if ext.sessions.length}
 					<ul class="sessions">
@@ -201,23 +257,39 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="intro quiet">No browser is connected right now.</p>
+					<p class="intro quiet">No browser is connected right now. A connected browser shows up here as soon as a page with the extension is open.</p>
 				{/if}
-				<div class="actions">
-					<button type="button" class="ibtn" onclick={() => app.openUrl(ext.chromeStoreUrl)}>{storeLabel}</button>
-					<button type="button" class="ibtn" disabled={!ext.xpiBundled} title={ext.xpiBundled ? (ext.firefoxXpiPath ?? '') : 'This build does not include the Firefox add-on'} onclick={() => app.installFirefoxExtension()}>Install in Firefox</button>
-					{#if ext.safariAvailable}
-						<button type="button" class="ibtn" onclick={() => app.openSafariExtensions()}>Safari extension</button>
+				<button type="button" class="details-toggle" aria-expanded={showDetails || registrationProblem} onclick={() => (showDetails = !showDetails)}>
+					<span class="chev" class:open={showDetails || registrationProblem}>›</span>
+					{#if registrationProblem}
+						A browser is not registered
+					{:else if registeredNames.length}
+						Registered with {joinNames(registeredNames)}
+					{:else}
+						How browsers reach Gloss
 					{/if}
-				</div>
-				{#if !ext.xpiBundled}
-					<p class="intro quiet">The Firefox add-on is not bundled with this build.</p>
+				</button>
+				{#if showDetails || registrationProblem}
+					<div class="details">
+						<p class="intro">Chrome-family browsers and Firefox reach Gloss through a small helper, <span class="mono">gloss-bridge</span>, that the browser starts itself. A browser only starts a helper listed in its native-messaging folder, so Gloss writes that entry for every browser it finds, at every launch. Nothing here needs doing unless a row says otherwise. Safari works differently: its extension talks to Gloss over a port open to this Mac only, with a token that changes at every launch.</p>
+						<div class="rows">
+							{#each ext.browsers as b (b.id)}
+								<div class="row static" class:off={!b.installed}>
+									<span class="text">
+										<span class="name">{b.name}</span>
+										<span class="cmd" title={b.manifestPath}>{b.family === 'firefox' ? 'Firefox add-on' : 'Chrome Web Store'}</span>
+									</span>
+									<span class="status" class:missing={b.installed && (!b.registered || !!b.error)} class:ok={b.installed && b.registered && !b.error}>{browserStatus(b)}</span>
+								</div>
+							{/each}
+						</div>
+						<div class="actions">
+							<button type="button" class="ibtn ghost" onclick={() => app.registerHosts()}>Re-register</button>
+							<button type="button" class="ibtn ghost" onclick={() => app.unregisterHosts()}>Unregister</button>
+							<span class="result mono path" title={ext.bridgePath}>{ext.bridgePath}</span>
+						</div>
+					</div>
 				{/if}
-				<div class="actions">
-					<button type="button" class="ibtn ghost" onclick={() => app.registerHosts()}>Re-register</button>
-					<button type="button" class="ibtn ghost" onclick={() => app.unregisterHosts()}>Unregister</button>
-					<span class="result mono path" title={ext.bridgePath}>{ext.bridgePath}</span>
-				</div>
 			{/if}
 			<div class="prefs">
 				<label class="toggle">
@@ -240,6 +312,9 @@
 						<span class="text">
 							<span class="name">Safari bridge</span>
 							<span class="cmd">Listen on this Mac only{ext?.loopbackPort ? ` (port ${ext.loopbackPort})` : ''} so the Safari extension can reach Gloss.</span>
+							{#if ext?.safariBridgeError}
+								<span class="cmd err">Safari cannot reach Gloss: the port and token could not be written where its extension reads them ({ext.safariBridgeError}).</span>
+							{/if}
 						</span>
 					</label>
 				{/if}
@@ -481,6 +556,67 @@
 		white-space: nowrap;
 		min-width: 0;
 		flex: 1;
+	}
+	.cards {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.card {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 9px 10px;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+	}
+	.card.off {
+		opacity: 0.6;
+	}
+	.card .text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.card .ibtn {
+		flex: none;
+	}
+	.cmd.hint,
+	.cmd.err {
+		color: var(--accent-text);
+	}
+	.details-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 10px;
+		padding: 2px 0;
+		border: 0;
+		background: none;
+		color: var(--text-2);
+		font-size: 12.5px;
+		cursor: pointer;
+	}
+	.details-toggle:hover {
+		color: var(--text);
+	}
+	.chev {
+		display: inline-block;
+		width: 10px;
+		font-size: 15px;
+		line-height: 1;
+		transition: transform 120ms ease;
+	}
+	.chev.open {
+		transform: rotate(90deg);
+	}
+	.details {
+		margin-top: 8px;
+		padding: 10px;
+		border: 1px dashed var(--line);
+		border-radius: 10px;
 	}
 	.prefs {
 		display: flex;

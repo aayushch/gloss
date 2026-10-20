@@ -48,8 +48,9 @@ pub async fn bind() -> Result<(TcpListener, u16)> {
 /// Missing parent folders are created; a path that cannot be written is
 /// logged and skipped, since the Safari copy lives in a folder that only
 /// exists once the extension has run.
-pub fn write_info(info: &BridgeInfo, paths: &[&Path]) {
+pub fn write_info(info: &BridgeInfo, paths: &[&Path]) -> Vec<WriteFailure> {
     let json = serde_json::to_string_pretty(info).unwrap_or_default();
+    let mut failures = Vec::new();
     for path in paths {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -67,8 +68,17 @@ pub fn write_info(info: &BridgeInfo, paths: &[&Path]) {
         });
         if let Err(e) = written {
             warn!(path = %path.display(), error = %e, "could not write bridge info");
+            failures.push(WriteFailure { path: path.to_path_buf(), error: e.to_string() });
         }
     }
+    failures
+}
+
+/// One location `write_info` could not write, with the OS error in words.
+#[derive(Debug, Clone)]
+pub struct WriteFailure {
+    pub path: std::path::PathBuf,
+    pub error: String,
 }
 
 /// Serves connections on `listener` until the task is dropped.
@@ -132,7 +142,7 @@ mod tests {
         assert_eq!(token.len(), 64);
         let info = BridgeInfo { port, token: token.clone(), protocol: super::super::PROTOCOL };
         let file = dir.path().join("sub").join("bridge.json");
-        write_info(&info, &[&file]);
+        let _ = write_info(&info, &[&file]);
         let back: BridgeInfo = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         assert_eq!(back, info);
         let server = tokio::spawn(serve(handler, listener, token.clone()));

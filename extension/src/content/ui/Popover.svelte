@@ -7,9 +7,13 @@
 
 	let { store, actions }: { store: UiStore; actions: Actions } = $props();
 
+	// The page state mutates its ask entries in place and ticks `version`.
+	// A fresh copy on every tick gives the template a value that changed,
+	// so it re-renders streamed text; the entry object itself never changes.
 	const entry = $derived.by(() => {
 		store.version;
-		return store.popover ? (store.page.asks.get(store.popover.askId) ?? null) : null;
+		const e = store.popover ? store.page.asks.get(store.popover.askId) : null;
+		return e ? { ...e } : null;
 	});
 	const askId = $derived(store.popover?.askId ?? '');
 	const streaming = $derived(entry ? isStreaming(entry) : false);
@@ -22,6 +26,8 @@
 	let height = $state(0);
 	let thread: HTMLDivElement | undefined = $state();
 	let text = $state('');
+	/** True while the footer asks to confirm removing the note. */
+	let confirmRemove = $state(false);
 	const WIDTH = 420;
 
 	const style = $derived.by(() => {
@@ -53,6 +59,12 @@
 		}
 	});
 
+	// Switching to another note drops a pending confirmation.
+	$effect(() => {
+		askId;
+		confirmRemove = false;
+	});
+
 	function submit() {
 		const t = text.trim();
 		if (!t || running || !entry) return;
@@ -78,8 +90,8 @@
 			<span class="gloss-popover-quote" title={entry.clarification.quote}>{quote}</span>
 			{#if entry.state === 'fuzzy'}<span class="gloss-badge" title="The passage changed since you asked; this is the closest match">approximate</span>{/if}
 			{#if entry.state === 'orphan'}<span class="gloss-badge" title="The passage is no longer on this page">not on page</span>{/if}
-			<button type="button" class="gloss-icon-btn" title="Collapse" aria-label="Collapse" onclick={() => actions.collapse(askId)}>–</button>
-			<button type="button" class="gloss-icon-btn" title="Remove" aria-label="Remove" onclick={() => actions.remove(askId)}>×</button>
+			<button type="button" class="gloss-icon-btn" title="Collapse: the note stays, its mark dims" aria-label="Collapse" onclick={() => actions.collapse(askId)}>–</button>
+			<button type="button" class="gloss-icon-btn" title="Close" aria-label="Close" onclick={() => actions.closePopover()}>×</button>
 		</div>
 		<div class="gloss-thread" bind:this={thread}>
 			{#each entry.turns as turn (turn.id)}
@@ -111,6 +123,12 @@
 		<div class="gloss-row gloss-popover-actions">
 			{#if streaming || running}
 				<button type="button" class="gloss-btn" onclick={() => actions.cancel(askId)}>Stop</button>
+			{:else if confirmRemove}
+				<span class="gloss-hint">Remove this note from the page and from Gloss?</span>
+				<button type="button" class="gloss-btn gloss-btn-danger" onclick={() => actions.remove(askId)}>Remove</button>
+				<button type="button" class="gloss-btn" onclick={() => (confirmRemove = false)}>Keep</button>
+			{:else}
+				<button type="button" class="gloss-btn gloss-btn-quiet" onclick={() => (confirmRemove = true)}>Remove…</button>
 			{/if}
 			<span class="gloss-spacer"></span>
 			<button type="button" class="gloss-btn" onclick={() => actions.openInGloss(askId)}>

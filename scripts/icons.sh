@@ -8,6 +8,8 @@
 # design/icon/Gloss.icon          Icon Composer package with a light and a dark
 #                                 appearance; macOS 26 and newer pick the one
 #                                 matching the system appearance
+# design/icon/tray.svg            the menu bar glyph, black on transparent;
+#                                 macOS tints it as a template image
 #
 # Outputs land in ui/src-tauri/icons/: the PNG/ICO set from `tauri icon`,
 # icon.icns (Apple's flattened render of the package, used by macOS 15 and
@@ -28,6 +30,10 @@ echo "== PNG and ICO set =="
 rsvg-convert -w 1024 -h 1024 "$REPO_ROOT/design/icon/gloss-dark.svg" -o "$TMP/gloss-1024.png"
 (cd "$REPO_ROOT/ui" && npx tauri icon "$TMP/gloss-1024.png" -o "$TMP/set" >/dev/null)
 find "$TMP/set" -maxdepth 1 -type f \( -name '*.png' -o -name '*.ico' \) -exec cp {} "$ICONS/" \;
+
+echo "== menu bar glyph =="
+# 36 px for an 18 pt menu bar slot, so Retina displays get a crisp 2x image.
+rsvg-convert -w 36 -h 36 "$REPO_ROOT/design/icon/tray.svg" -o "$ICONS/tray.png"
 
 echo "== macOS asset catalog =="
 mkdir -p "$TMP/car"

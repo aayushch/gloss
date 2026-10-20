@@ -222,7 +222,7 @@ async fn main() -> Result<()> {
                 let (listener, port) = bridge::loopback::bind().await?;
                 let token = bridge::loopback::new_token();
                 let info = bridge::loopback::BridgeInfo { port, token: token.clone(), protocol: bridge::PROTOCOL };
-                bridge::loopback::write_info(&info, &[&paths.bridge_json]);
+                let _ = bridge::loopback::write_info(&info, &[&paths.bridge_json]);
                 eprintln!("loopback listener on 127.0.0.1:{} (token in {})", port, paths.bridge_json.display());
                 let h = handler.clone();
                 tasks.push(tokio::spawn(async move {

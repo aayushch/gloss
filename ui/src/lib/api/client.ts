@@ -19,6 +19,7 @@ import type {
 	ModelInfo,
 	Project,
 	RequestAnswer,
+	SafariExtensionState,
 	SearchHit,
 	SendTurnRequest,
 	SendTurnResult,
@@ -107,8 +108,10 @@ export interface Api {
 	openUrl(url: string): Promise<void>;
 	/** Opens the bundled .xpi with Firefox, which offers to install it. */
 	installFirefoxExtension(): Promise<void>;
-	/** Opens Safari's extensions preferences. */
+	/** Opens Safari's Settings › Extensions at the Gloss extension. */
 	openSafariExtensions(): Promise<void>;
+	/** Asks Safari whether the bundled extension is turned on; rejects when Safari cannot say. */
+	safariExtensionState(): Promise<SafariExtensionState>;
 	onPageEvent(cb: (e: PageEvent) => void): Promise<() => void>;
 	onSettingsEvent(cb: (s: Settings) => void): Promise<() => void>;
 	onOpenPage(cb: (e: OpenPageEvent) => void): Promise<() => void>;
@@ -206,6 +209,7 @@ function tauriApi(): Api {
 		openUrl: (url) => call('open_url', { url }),
 		installFirefoxExtension: () => call('install_firefox_extension'),
 		openSafariExtensions: () => call('open_safari_extensions'),
+		safariExtensionState: () => call('safari_extension_state'),
 		onPageEvent: async (cb) => {
 			const { listen } = await import('@tauri-apps/api/event');
 			return listen<PageEvent>('page-event', (ev) => cb(ev.payload));

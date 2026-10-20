@@ -111,6 +111,12 @@ class AppState {
 	pageAsks = $state<Record<string, Clarification[]>>({});
 	/** Where the browser extension stands; null until Settings first asks for it. */
 	extension = $state<ExtensionStatus | null>(null);
+	/** Whether Safari has the bundled extension turned on; null until asked or when Safari cannot say. */
+	safariEnabled = $state<boolean | null>(null);
+	/** What Safari said when it could not report the extension's state. */
+	safariError = $state<string | null>(null);
+	/** True after Safari's settings were opened from here, until the extension shows as enabled. */
+	safariPrompted = $state(false);
 	/** Projects, most recently active first. */
 	projects = $state<Project[]>([]);
 	/** Paths of the projects whose conversations the rail shows. */
@@ -422,11 +428,25 @@ class AppState {
 		}
 	}
 
+	/** Opens Safari's Settings › Extensions at Gloss; the state refreshes while Settings stays open. */
 	async openSafariExtensions(): Promise<void> {
 		try {
 			await (await api()).openSafariExtensions();
+			this.safariPrompted = true;
 		} catch (e) {
 			this.flash(`Could not open Safari's settings: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	async refreshSafariState(): Promise<void> {
+		try {
+			const state = await (await api()).safariExtensionState();
+			this.safariEnabled = state.enabled;
+			this.safariError = null;
+			if (state.enabled) this.safariPrompted = false;
+		} catch (e) {
+			this.safariEnabled = null;
+			this.safariError = String(e).replace(/^Error:\s*/, '');
 		}
 	}
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+<!-- The menu bar glyph: the closing quotation mark from the app icon, black on transparent so macOS renders it as a template image. Drawn at 2x (18pt). -->
+<g transform="translate(3 8.75) scale(0.1596) translate(-136 -120)" fill="#000">
+<g transform="rotate(180 230 178)"><path d="M136 236 V176 Q136 120 192 120 H200 V156 H196 Q176 156 176 176 V184 H212 V236 Z"/><path d="M248 236 V176 Q248 120 304 120 H312 V156 H308 Q288 156 288 176 V184 H324 V236 Z"/></g>
+</g>
+</svg>

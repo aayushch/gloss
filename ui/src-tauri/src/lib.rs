@@ -4,6 +4,7 @@
 //! when the window closes, and registers the `gloss://` link scheme.
 
 mod native_host;
+mod safari;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -32,6 +33,9 @@ struct BridgeStatus {
     handler: Arc<BridgeHandler>,
     bridge_path: PathBuf,
     loopback: Mutex<Option<(u16, tauri::async_runtime::JoinHandle<()>)>>,
+    /// Why the port and token could not be written where the Safari
+    /// extension reads them, when that failed; None while it worked.
+    safari_bridge_error: Mutex<Option<String>>,
 }
 
 /// What the Settings sheet shows about the extension.
@@ -47,6 +51,17 @@ struct ExtensionStatus {
     firefox_xpi_path: Option<String>,
     safari_available: bool,
     loopback_port: Option<u16>,
+    /// The file the Safari extension reads the port and token from, when Gloss could write it.
+    safari_bridge_file: Option<String>,
+    /// Why that file could not be written, when it could not.
+    safari_bridge_error: Option<String>,
+}
+
+/// Whether the Safari extension is turned on, as Safari reports it.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct SafariExtensionState {
+    enabled: bool,
 }
 
 /// Errors cross to the webview as plain strings.
@@ -110,6 +125,31 @@ fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> Ext
         firefox_xpi_path: xpi.map(|p| p.to_string_lossy().to_string()),
         safari_available: safari_appex_path().is_some(),
         loopback_port: status.loopback.lock().unwrap().as_ref().map(|(port, _)| *port),
+        safari_bridge_file: match (status.loopback.lock().unwrap().as_ref(), status.safari_bridge_error.lock().unwrap().as_ref()) {
+            (Some(_), None) => app_group_dir().map(|d| d.join("bridge.json").to_string_lossy().to_string()),
+            _ => None,
+        },
+        safari_bridge_error: status.safari_bridge_error.lock().unwrap().clone(),
+    }
+}
+
+/// Asks Safari whether the bundled extension is enabled. Runs off the main
+/// thread because Safari answers on the main queue.
+#[tauri::command]
+async fn safari_extension_state() -> Result<SafariExtensionState, String> {
+    #[cfg(target_os = "macos")]
+    {
+        if safari_appex_path().is_none() {
+            return Err("this build of Gloss does not include the Safari extension".into());
+        }
+        tauri::async_runtime::spawn_blocking(safari::extension_enabled)
+            .await
+            .map_err(err)?
+            .map(|enabled| SafariExtensionState { enabled })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Safari extensions exist only on macOS".into())
     }
 }
 
@@ -176,12 +216,21 @@ fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
     }
 }
 
-/// Brings Safari forward so the user can enable the extension in
-/// Safari > Settings > Extensions.
+/// Opens Safari's Settings › Extensions pane at the Gloss extension so the
+/// user can turn it on. Falls back to bringing Safari forward when Safari
+/// does not know the extension yet (it learns of it the first time Gloss.app
+/// is launched from a fixed location).
 #[tauri::command]
-fn open_safari_extensions(app: AppHandle) -> Result<(), String> {
+async fn open_safari_extensions(app: AppHandle) -> Result<(), String> {
     if safari_appex_path().is_none() {
         return Err("this build of Gloss does not include the Safari extension".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        match tauri::async_runtime::spawn_blocking(safari::show_preferences).await.map_err(err)? {
+            Ok(()) => return Ok(()),
+            Err(reason) => tracing::warn!(reason, "Safari could not show the extension's settings"),
+        }
     }
     app.opener().open_path("/Applications/Safari.app", None::<&str>).map_err(err)
 }
@@ -271,6 +320,7 @@ fn apply_safari_bridge(app: &AppHandle, enabled: bool) {
         return;
     }
     let handler = status.handler.clone();
+    let status_for_task = status.clone();
     let json_path = engine.paths.bridge_json.clone();
     let (tx, rx) = std::sync::mpsc::channel::<Option<u16>>();
     let task = tauri::async_runtime::spawn(async move {
@@ -285,7 +335,13 @@ fn apply_safari_bridge(app: &AppHandle, enabled: bool) {
             targets.push(group.join("bridge.json"));
         }
         let refs: Vec<&std::path::Path> = targets.iter().map(|p| p.as_path()).collect();
-        bridge::loopback::write_info(&info, &refs);
+        let failures = bridge::loopback::write_info(&info, &refs);
+        // Only the App Group copy matters to Safari; the home copy serves tests.
+        let safari_failure = failures
+            .iter()
+            .find(|f| targets.len() > 1 && f.path == targets[1])
+            .map(|f| format!("{} ({})", f.error, f.path.display()));
+        *status_for_task.safari_bridge_error.lock().unwrap() = safari_failure;
         let _ = tx.send(Some(port));
         if let Err(e) = bridge::loopback::serve(handler, listener, token).await {
             tracing::warn!(error = %e, "loopback bridge stopped");
@@ -300,12 +356,23 @@ fn apply_safari_bridge(app: &AppHandle, enabled: bool) {
     }
 }
 
-/// The App Group container the Safari extension can read.
+/// The App Group container the Safari extension can read. The path is
+/// asked of NSFileManager rather than built by hand: macOS grants a
+/// non-sandboxed app access to its group container only once the app has
+/// looked the container up that way, and refuses a direct write before then.
 fn app_group_dir() -> Option<PathBuf> {
-    if !cfg!(target_os = "macos") {
-        return None;
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_foundation::{NSFileManager, NSString};
+        let group = NSString::from_str(APP_GROUP);
+        let url = NSFileManager::defaultManager().containerURLForSecurityApplicationGroupIdentifier(&group)?;
+        let path = url.path()?;
+        Some(PathBuf::from(path.to_string()))
     }
-    Some(dirs::home_dir()?.join("Library/Group Containers").join(APP_GROUP))
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
 }
 
 #[tauri::command]
@@ -643,7 +710,12 @@ pub fn run() {
             // host, host manifests so browsers can find that host, and the
             // loopback listener for Safari when the setting is on.
             let handler = Arc::new(BridgeHandler::new(engine.clone(), app.package_info().version.to_string().as_str()));
-            let status = Arc::new(BridgeStatus { handler: handler.clone(), bridge_path: bridge_binary_path(), loopback: Mutex::new(None) });
+            let status = Arc::new(BridgeStatus {
+                handler: handler.clone(),
+                bridge_path: bridge_binary_path(),
+                loopback: Mutex::new(None),
+                safari_bridge_error: Mutex::new(None),
+            });
             app.manage(status.clone());
             #[cfg(unix)]
             {
@@ -738,6 +810,7 @@ pub fn run() {
             open_url,
             install_firefox_extension,
             open_safari_extensions,
+            safari_extension_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -300,6 +300,20 @@ textarea {
 	filter: brightness(1.08);
 }
 
+.gloss-btn-quiet {
+	border-color: transparent;
+	color: var(--gloss-fg-muted);
+}
+
+.gloss-btn-quiet:hover {
+	color: var(--gloss-fg);
+}
+
+.gloss-btn-danger {
+	border-color: var(--gloss-accent);
+	color: var(--gloss-accent);
+}
+
 .gloss-icon-btn {
 	width: 24px;
 	height: 24px;

@@ -29,6 +29,8 @@ final class BridgeClient {
     /// Events Gloss pushed on the connection while a reply was awaited. The
     /// extension's JavaScript polls for turn text, so these are only logged.
     private var droppedEvents = 0
+    /// Why the last connection attempt failed, in words the extension can show.
+    private var lastFailure = "Gloss is not running"
 
     struct Info: Decodable {
         let port: UInt16
@@ -51,11 +53,17 @@ final class BridgeClient {
     }
 
     private func readInfo() -> Info? {
+        var reasons: [String] = []
         for url in infoCandidates() {
-            if let data = try? Data(contentsOf: url), let info = try? JSONDecoder().decode(Info.self, from: data) {
-                return info
+            do {
+                let data = try Data(contentsOf: url)
+                return try JSONDecoder().decode(Info.self, from: data)
+            } catch {
+                reasons.append("\(url.path): \(error.localizedDescription)")
             }
         }
+        lastFailure = "Gloss is not running, or has the Safari bridge turned off (no bridge file: \(reasons.joined(separator: "; ")))"
+        os_log(.info, log: log, "no bridge info: %{public}@", reasons.joined(separator: "; "))
         return nil
     }
 
@@ -73,7 +81,11 @@ final class BridgeClient {
         close()
         guard let info = readInfo() else { return false }
         let sock = socket(AF_INET, SOCK_STREAM, 0)
-        guard sock >= 0 else { return false }
+        guard sock >= 0 else {
+            lastFailure = "the Safari extension could not open a socket (\(String(cString: strerror(errno))))"
+            os_log(.error, log: log, "socket failed: %{public}@", lastFailure)
+            return false
+        }
         var addr = sockaddr_in()
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         addr.sin_family = sa_family_t(AF_INET)
@@ -83,13 +95,22 @@ final class BridgeClient {
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
         guard rc == 0 else {
+            let reason = String(cString: strerror(errno))
             Darwin.close(sock)
+            lastFailure = "Gloss is not listening on port \(info.port) (\(reason)); start Gloss, or turn the Safari bridge on in its settings"
+            os_log(.info, log: log, "connect to 127.0.0.1:%d failed: %{public}@", info.port, reason)
             return false
         }
         var timeout = timeval(tv_sec: 60, tv_usec: 0)
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         fd = sock
-        return writeLine("{\"token\":\"\(info.token)\"}")
+        if !writeLine("{\"token\":\"\(info.token)\"}") {
+            lastFailure = "the connection to Gloss closed before the token was sent"
+            os_log(.error, log: log, "token write failed")
+            return false
+        }
+        os_log(.info, log: log, "connected to Gloss on port %d", info.port)
+        return true
     }
 
     private func writeLine(_ line: String) -> Bool {
@@ -155,10 +176,14 @@ final class BridgeClient {
                         continue
                     }
                 }
+                // The reply loop ended without an answer: Gloss closed the
+                // connection, which also happens when it rejects the token.
+                lastFailure = "Gloss closed the connection without answering (a stale token after a restart, or the bridge was turned off)"
+                os_log(.info, log: log, "connection closed while awaiting reply to %{public}@", method)
                 close()
                 if attempt == 1 { break }
             }
-            return ["id": id, "error": ["code": "app_not_running", "message": "Gloss is not running"]]
+            return ["id": id, "error": ["code": "app_not_running", "message": lastFailure]]
         }
     }
 
