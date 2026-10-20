@@ -30,16 +30,15 @@ export type ClientMessage =
 	  };
 
 /** Background → client. */
-export type BackgroundMessage =
-	| { type: 'response'; id: string; result?: unknown; error?: BridgeError }
-	| { type: 'event'; event: string; data: unknown }
-	| { type: 'open-composer'; selectionText: string };
+export type BackgroundMessage = { type: 'response'; id: string; result?: unknown; error?: BridgeError } | { type: 'event'; event: string; data: unknown };
 
 /** Sent to a tab's content script with `tabs.sendMessage`; answered with a promise. */
 export type TabMessage =
 	| { type: 'focus-ask'; clarificationId: string }
 	| { type: 'page-text' }
-	| { type: 'ping' };
+	| { type: 'ping' }
+	/** Open the composer for the page's current selection. */
+	| { type: 'open-composer'; selectionText: string };
 
 export interface PageTextReply {
 	url: string;

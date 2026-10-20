@@ -13,10 +13,12 @@ export interface Client {
 	request<T = unknown>(method: string, params?: unknown): Promise<T>;
 	/** Pushed events (`turn`, `page`, `settings`, `app_state`, `shutdown`, `connection`). */
 	onEvent(handler: EventHandler): () => void;
-	/** Background commands that are not events, such as `open-composer`. */
-	onCommand(handler: (msg: BackgroundMessage) => void): () => void;
 	subscribe(keys: { urlKey: string | null; conversationId: string | null; askCount?: number }): void;
 	status(): Promise<ConnectionStatus>;
+	/** Drops the port without reconnecting, until `resume`. */
+	suspend(): void;
+	/** Connects again after `suspend`, replaying the subscription. */
+	resume(): void;
 	close(): void;
 }
 
@@ -28,11 +30,11 @@ interface Pending {
 export function connectClient(): Client {
 	let port: chrome.runtime.Port | null = null;
 	let closed = false;
+	let suspended = false;
 	let nextId = 1;
 	let reconnectDelay = 500;
 	const pending = new Map<string, Pending>();
 	const eventHandlers = new Set<EventHandler>();
-	const commandHandlers = new Set<(msg: BackgroundMessage) => void>();
 	let subscription: ClientMessage | null = null;
 
 	function onMessage(msg: BackgroundMessage) {
@@ -44,8 +46,6 @@ export function connectClient(): Client {
 			else p.resolve(msg.result);
 		} else if (msg.type === 'event') {
 			for (const h of eventHandlers) h(msg.event, msg.data);
-		} else {
-			for (const h of commandHandlers) h(msg);
 		}
 	}
 
@@ -53,13 +53,13 @@ export function connectClient(): Client {
 		port = null;
 		for (const p of pending.values()) p.reject(new BridgeFailure('internal', 'the background went away'));
 		pending.clear();
-		if (closed) return;
+		if (closed || suspended) return;
 		setTimeout(connect, reconnectDelay);
 		reconnectDelay = Math.min(reconnectDelay * 2, 10_000);
 	}
 
 	function connect() {
-		if (closed || port) return;
+		if (closed || suspended || port) return;
 		try {
 			port = browser.runtime.connect({ name: PORT_NAME });
 		} catch {
@@ -98,10 +98,6 @@ export function connectClient(): Client {
 			eventHandlers.add(handler);
 			return () => eventHandlers.delete(handler);
 		},
-		onCommand(handler) {
-			commandHandlers.add(handler);
-			return () => commandHandlers.delete(handler);
-		},
 		subscribe(keys) {
 			subscription = { type: 'subscribe', ...keys };
 			if (port) port.postMessage(subscription);
@@ -112,6 +108,16 @@ export function connectClient(): Client {
 			} catch (e) {
 				return { state: 'error', message: e instanceof Error ? e.message : String(e), settings: DEFAULT_SETTINGS };
 			}
+		},
+		suspend() {
+			suspended = true;
+			port?.disconnect();
+			port = null;
+		},
+		resume() {
+			suspended = false;
+			reconnectDelay = 500;
+			connect();
 		},
 		close() {
 			closed = true;

@@ -31,6 +31,12 @@ are given would go stale.
 - Select text, then click the pill or use the context menu "Ask Gloss about…"
   (also Alt+Shift+G). The context menu works where the pill cannot appear,
   such as the PDF viewer, with the reply shown in a small window instead.
+- PDFs: every browser renders them with its own viewer, where extensions
+  cannot run scripts, so there is no pill, no popover and no mark on the
+  page. Select the passage and use the context menu; the ask window opens
+  with the quote, and the note is kept in Gloss under the PDF's URL. The
+  keyboard shortcut does the same without a quote, as a question about the
+  whole document.
 - The popover streams the reply; ask follow-ups in it. Close (×) or Escape
   puts it away and keeps the note: the passage keeps its rounded tint, the
   same the app gives a quoted span, with the icon's quote mark in the

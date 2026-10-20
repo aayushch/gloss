@@ -16,6 +16,7 @@ import {
 	type PageEventData,
 	type TurnEventEnvelope,
 } from '../shared/protocol';
+import type { TabMessage } from '../shared/messages';
 import { NativePortTransport } from './native';
 import { SafariTransport } from './safari';
 import { ClientRegistry, type ClientEntry } from './tabs';
@@ -277,21 +278,35 @@ async function setupMenu(): Promise<void> {
 	}
 }
 
-/** Opens the composer in the tab, or the standalone ask window when the tab has no content script. */
+/** How long the tab's content script gets to take an ask before the ask window opens instead. */
+const CONTENT_REPLY_MS = 500;
+
+/**
+ * Opens the composer in the tab, or the standalone ask window when the
+ * tab's document has no content script (the PDF viewer, browser pages).
+ * The tab itself is asked, since the connected ports are no guide: a page
+ * parked in the back-forward cache keeps its port while the tab shows
+ * something else.
+ */
 async function askFromTab(tab: chrome.tabs.Tab | undefined, selectionText: string): Promise<void> {
 	if (!tab?.id) {
 		const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
 		tab = active;
 	}
 	if (!tab?.id) return;
-	const content = registry.contentOfTab(tab.id);
-	if (content) {
-		registry.send([content], { type: 'open-composer', selectionText });
-		return;
-	}
-	if (tab.incognito) return;
+	const opened = await Promise.race([
+		browser.tabs.sendMessage(tab.id, { type: 'open-composer', selectionText } satisfies TabMessage).then(() => true, () => false),
+		new Promise<boolean>((r) => setTimeout(() => r(false), CONTENT_REPLY_MS)),
+	]);
+	if (opened || tab.incognito) return;
 	const params = new URLSearchParams({ url: tab.url ?? '', title: tab.title ?? '', text: selectionText });
-	await browser.windows.create({ url: browser.runtime.getURL('ask.html') + '?' + params.toString(), type: 'popup', width: 420, height: 560 });
+	const url = browser.runtime.getURL('ask.html') + '?' + params.toString();
+	try {
+		await browser.windows.create({ url, type: 'popup', width: 420, height: 560 });
+	} catch (e) {
+		console.warn('gloss: could not open the ask window, opening a tab instead', e);
+		await browser.tabs.create({ url });
+	}
 }
 
 browser.runtime.onInstalled.addListener(() => void setupMenu());

@@ -30,11 +30,6 @@ export class ClientRegistry {
 	}
 
 	/** The content script of a tab, when one is connected. */
-	contentOfTab(tabId: number): ClientEntry | undefined {
-		for (const c of this.clients) if (c.isContent && c.tabId === tabId) return c;
-		return undefined;
-	}
-
 	byUrlKey(urlKey: string): ClientEntry[] {
 		return this.all().filter((c) => c.urlKey === urlKey);
 	}

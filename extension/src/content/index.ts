@@ -124,7 +124,15 @@ class ContentApp {
 
 		this.client = connectClient();
 		this.client.onEvent((event, data) => this.onEvent(event, data));
-		this.client.onCommand((msg) => this.onCommand(msg));
+		// A page the browser parks in its back-forward cache keeps running
+		// scripts' ports open, so the background would still count it as
+		// the tab's page; the port is let go while the page is parked.
+		this.listen(window, 'pagehide', (e) => {
+			if ((e as PageTransitionEvent).persisted) this.client.suspend();
+		});
+		this.listen(window, 'pageshow', (e) => {
+			if ((e as PageTransitionEvent).persisted) this.client.resume();
+		});
 
 		for (const type of GUARDED_EVENTS) this.listen(window, type, this.guardEvent, true);
 		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
@@ -705,13 +713,13 @@ class ContentApp {
 		if (isDeniedHost(location.hostname, settings.denyList)) this.dispose();
 	}
 
-	private onCommand(msg: BackgroundMessage): void {
-		if (msg.type === 'open-composer') this.openComposer();
-	}
-
 	private readonly onTabMessage = (msg: TabMessage, _sender: unknown, sendResponse: (r: unknown) => void): void => {
 		switch (msg.type) {
 			case 'ping':
+				sendResponse({ ok: true });
+				return;
+			case 'open-composer':
+				this.openComposer();
 				sendResponse({ ok: true });
 				return;
 			case 'page-text': {
