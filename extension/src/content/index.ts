@@ -9,6 +9,7 @@ import { connectClient, type Client } from '../shared/client';
 import type { BackgroundMessage, ConnectionStatus, PageTextReply, TabMessage } from '../shared/messages';
 import {
 	DEFAULT_SETTINGS,
+	BridgeFailure,
 	failureOf,
 	isDeniedHost,
 	type AnchorState,
@@ -430,6 +431,7 @@ class ContentApp {
 			const f = failureOf(e);
 			if (f.code === 'app_not_running') {
 				composer.phase = 'app_down';
+				composer.error = appDownReason(f);
 			} else {
 				composer.phase = 'idle';
 				composer.error =
@@ -666,11 +668,21 @@ function faviconUrl(): string | null {
 	}
 }
 
+/**
+ * The reason behind an `app_not_running` failure when the transport gave
+ * one beyond the bare fact, such as Safari's handler naming a missing
+ * bridge file; null for the plain case the composer already states.
+ */
+function appDownReason(f: BridgeFailure): string | null {
+	const generic = /^gloss is(n't| not) running\.?$/i;
+	return f.message && !generic.test(f.message.trim()) ? f.message : null;
+}
+
 function describeFailure(e: unknown): string {
 	const f = failureOf(e);
 	switch (f.code) {
 		case 'app_not_running':
-			return "Gloss isn't running.";
+			return appDownReason(f) ?? "Gloss isn't running.";
 		case 'busy':
 			return 'Gloss is still answering another question on this page.';
 		default:
