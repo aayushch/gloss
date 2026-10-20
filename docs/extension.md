@@ -83,7 +83,9 @@ extension inside the app.
   temporary add-on. The Chrome id is fixed by the `key` in the manifest and
   recorded in `extension/EXTENSION_ID`, which the app compiles into its host
   manifests.
-- `scripts/make-safari-project.sh` generates the Xcode project once;
+- `scripts/make-safari-project.sh` generates the Xcode project once; the
+  handler and entitlements under `safari/handler/` are the source, copied
+  into the project by `scripts/build-safari.sh` before each build;
   `scripts/build-safari.sh` builds `safari/build/Gloss Extension.appex`,
   which every `tauri build` runs on macOS (through `scripts/prepare-bundle.sh`)
   before the bundler copies it into Gloss.app. Safari only works with

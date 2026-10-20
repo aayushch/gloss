@@ -26,16 +26,46 @@ const ASK_METHODS = new Set(['ask', 'askPage', 'followUp']);
 /** Safari has no push: after launching Gloss the background greets it again on this schedule. */
 const LAUNCH_PROBE_MS = 2_000;
 const LAUNCH_PROBE_MAX_MS = 30_000;
+/** Safari, while Gloss is away: how often the background checks whether it is back. */
+const RECOVERY_PROBE_MS = 10_000;
 
 const registry = new ClientRegistry();
 const transport: Transport = __BROWSER__ === 'safari' ? new SafariTransport() : new NativePortTransport();
 let status: ConnectionStatus = { state: 'connecting', settings: DEFAULT_SETTINGS };
 let helloInFlight: Promise<void> | null = null;
 let launchProbe: ReturnType<typeof setInterval> | null = null;
+let recoveryProbe: ReturnType<typeof setInterval> | null = null;
 
 function setStatus(next: Partial<ConnectionStatus> & { state: ConnectionStatus['state'] }): void {
 	status = { settings: status.settings, ...next };
 	registry.broadcast({ type: 'event', event: 'connection', data: status });
+	if (!transport.pushesEvents) {
+		if (status.state === 'app_not_running') startRecoveryProbe();
+		else if (status.state === 'connected') stopRecoveryProbe();
+	}
+}
+
+/**
+ * Safari: nothing tells the background that Gloss started, so while the
+ * status says it is away the background greets it every few seconds. Each
+ * try is one native message that fails fast when Gloss is still away.
+ */
+function startRecoveryProbe(): void {
+	if (recoveryProbe) return;
+	recoveryProbe = setInterval(() => {
+		if (isConnected()) {
+			stopRecoveryProbe();
+			return;
+		}
+		void hello().then(() => {
+			if (isConnected()) registry.broadcast({ type: 'event', event: 'app_state', data: { running: true } satisfies AppStateEventData });
+		});
+	}, RECOVERY_PROBE_MS);
+}
+
+function stopRecoveryProbe(): void {
+	if (recoveryProbe) clearInterval(recoveryProbe);
+	recoveryProbe = null;
 }
 
 function setSettings(settings: ExtensionSettings): void {

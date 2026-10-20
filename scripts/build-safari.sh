@@ -16,6 +16,10 @@ if [ ! -d "$project" ]; then
   echo "safari/Gloss/Gloss.xcodeproj is missing; run scripts/make-safari-project.sh first" >&2
   exit 1
 fi
+# The project compiles its own copies of the handler and entitlements;
+# safari/handler is the source, so the copies are refreshed before each build.
+cp "$root/safari/handler/SafariWebExtensionHandler.swift" "$root/safari/Gloss/Gloss Extension/SafariWebExtensionHandler.swift"
+cp "$root/safari/handler/Gloss_Extension.entitlements" "$root/safari/Gloss/Gloss Extension/Gloss Extension.entitlements"
 out="$root/safari/build"
 rm -rf "$out"
 sign=(CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO)
