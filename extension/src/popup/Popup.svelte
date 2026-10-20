@@ -4,6 +4,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '../shared/browser';
 	import { connectClient, type Client } from '../shared/client';
+	import { MARK_SVG } from '../shared/mark';
 	import type { ConnectionStatus, PageTextReply, TabMessage } from '../shared/messages';
 	import {
 		DEFAULT_SETTINGS,
@@ -182,7 +183,7 @@
 </script>
 
 <div class="page popup">
-	<h1><span class="mark">“</span> Gloss</h1>
+	<h1><span class="mark">{@html MARK_SVG}</span> Gloss</h1>
 
 	<div class="status" class:is-ok={connected} class:is-bad={!connected && status.state !== 'connecting'}>
 		<span class="dot"></span>
@@ -203,7 +204,7 @@
 				<div class="list">
 					{#each asks as c (c.id)}
 						<button class="item" class:is-orphan={c.anchorState === 'orphan'} onclick={() => focusAsk(c)} title={c.quote}>
-							<span class="mark" style="font-size:15px">“</span>
+							<span class="mark" style="font-size:15px">{@html MARK_SVG}</span>
 							<span class="title">{shortQuote(c)}</span>
 							{#if c.anchorState === 'orphan'}<span class="badge">not found</span>{:else if c.anchorState === 'fuzzy'}<span class="badge">approx.</span>{/if}
 						</button>

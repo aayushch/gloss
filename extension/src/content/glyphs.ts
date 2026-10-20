@@ -1,4 +1,4 @@
-// The small quote marks that sit at the end of each asked passage. Glyphs
+// The small quote marks that sit beside each asked passage. Glyphs
 // live inside the extension's shadow root in a layer positioned at the
 // document origin, so their coordinates are page coordinates. The layer
 // re-measures every range on scroll, resize, body size changes and DOM
@@ -8,6 +8,8 @@
 const GLYPH_WIDTH = 16;
 /** Space between the text block's edge and the nearest mark. */
 const GUTTER_GAP = 6;
+
+import { MARK_SVG } from '../shared/mark';
 
 /** The first laid-out rect of a range, or null when it has none. */
 function firstRect(range: Range): DOMRect | null {
@@ -103,7 +105,7 @@ export class GlyphLayer {
 			el.type = 'button';
 			el.className = 'gloss-glyph';
 			el.setAttribute('aria-label', 'Gloss note');
-			el.textContent = '“';
+			el.innerHTML = MARK_SVG;
 			el.addEventListener('mousedown', (e) => e.preventDefault());
 			el.addEventListener('click', (e) => {
 				e.preventDefault();

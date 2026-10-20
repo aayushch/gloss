@@ -17,6 +17,13 @@ import {
 import { Emitter, type Transport, type TransportState } from './transport';
 
 const POLL_MS = 500;
+/**
+ * How long one native message may take. Gloss answers every request in
+ * well under a second, and the handler gives up on a silent connection
+ * after 20 s, so a message still unanswered after this is stuck in Safari
+ * or in the handler and the caller gets an error instead of waiting forever.
+ */
+const NATIVE_TIMEOUT_MS = 30_000;
 /** Polling stops after this long even if the turn never reports an end. */
 const POLL_MAX_MS = 10 * 60_000;
 
@@ -59,8 +66,9 @@ export class SafariTransport implements Transport {
 	private async sendNative(message: object): Promise<unknown> {
 		for (let attempt = 0; ; attempt++) {
 			try {
-				return await browser.runtime.sendNativeMessage('application.id', message);
+				return await withTimeout(browser.runtime.sendNativeMessage('application.id', message), NATIVE_TIMEOUT_MS);
 			} catch (e) {
+				if (e instanceof BridgeFailure) throw e;
 				const text = e instanceof Error ? e.message : String(e);
 				const interrupted = /SFErrorDomain error 3|interrupted/i.test(text);
 				if (interrupted && attempt < 2) {
@@ -127,6 +135,23 @@ export class SafariTransport implements Transport {
 		}
 		poll.timer = setTimeout(() => this.tick(turnId), POLL_MS);
 	}
+}
+
+/** Rejects with an `internal` failure when `p` has not settled within `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(new BridgeFailure('internal', `the Gloss handler did not answer within ${Math.round(ms / 1000)} s`)), ms);
+		p.then(
+			(v) => {
+				clearTimeout(timer);
+				resolve(v);
+			},
+			(e) => {
+				clearTimeout(timer);
+				reject(e);
+			},
+		);
+	});
 }
 
 function envelope(turn: Turn, event: TurnEventEnvelope['event']): TurnEventEnvelope {

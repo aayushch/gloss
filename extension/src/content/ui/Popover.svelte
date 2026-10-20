@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import { renderMarkdown } from '../markdown';
+	import { MARK_SVG } from '../../shared/mark';
 	import { isStreaming } from '../state';
 	import type { Actions } from './actions';
 	import type { UiStore } from './store.svelte';
@@ -86,7 +87,7 @@
 {#if entry}
 	<div class="gloss-card gloss-popover" {style} bind:clientHeight={height} role="dialog" aria-label="Gloss note">
 		<div class="gloss-popover-head">
-			<span class="gloss-mark">“</span>
+			<span class="gloss-mark">{@html MARK_SVG}</span>
 			<span class="gloss-popover-quote" title={entry.clarification.quote}>{quote}</span>
 			{#if entry.state === 'fuzzy'}<span class="gloss-badge" title="The passage changed since you asked; this is the closest match">approximate</span>{/if}
 			{#if entry.state === 'orphan'}<span class="gloss-badge" title="The passage is no longer on this page">not on page</span>{/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import type { PillState } from './store.svelte';
+	import { MARK_SVG } from '../../shared/mark';
 
 	let { pill, inert, onopen }: { pill: PillState; inert: boolean; onopen: () => void } = $props();
 
@@ -31,6 +32,6 @@
 	}}
 	onclick={(e) => e.preventDefault()}
 >
-	<span class="gloss-pill-mark">“</span>
+	<span class="gloss-pill-mark">{@html MARK_SVG}</span>
 	{inert ? 'Wait for the reply' : 'Ask about this'}
 </button>

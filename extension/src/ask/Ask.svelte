@@ -4,6 +4,7 @@
 	// gets a quote-only anchor and is an orphan on the page by design.
 	import { onDestroy, onMount } from 'svelte';
 	import { connectClient, type Client } from '../shared/client';
+	import { MARK_SVG } from '../shared/mark';
 	import type { ConnectionStatus } from '../shared/messages';
 	import {
 		DEFAULT_SETTINGS,
@@ -123,7 +124,7 @@
 </script>
 
 <div class="page">
-	<h1><span class="mark">“</span> Ask Gloss</h1>
+	<h1><span class="mark">{@html MARK_SVG}</span> Ask Gloss</h1>
 	{#if pageTitle || pageUrl}
 		<div class="muted" title={pageUrl}>{pageTitle || pageUrl}</div>
 	{/if}

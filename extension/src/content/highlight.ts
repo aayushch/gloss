@@ -1,84 +1,174 @@
-// Paints asked passages with the CSS Custom Highlight API. Two named
-// highlights exist: `gloss-ask` for every anchored passage and
-// `gloss-ask-active` for the one whose popover is open. Where the API is
-// missing the layer does nothing and passages stay unmarked.
+// Paints asked passages with rounded tinted boxes, one per line of the
+// passage, drawn in the extension's shadow root over the page text: the
+// same look the Gloss app gives a quoted span. The boxes let pointer
+// events through, so selecting or clicking the text underneath works as
+// before. The layer sits at the document origin, so each box is placed in
+// page coordinates and stays put while the page scrolls; it is repainted
+// whenever the glyph layer re-measures (scroll, resize, DOM changes).
 
-const HIGHLIGHT_CSS = `
-::highlight(gloss-ask) { background-color: rgba(194, 65, 12, 0.16); text-decoration: underline; text-decoration-color: rgba(194, 65, 12, 0.6); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-::highlight(gloss-ask-active) { background-color: rgba(194, 65, 12, 0.32); }
-@media (prefers-color-scheme: dark) {
-  ::highlight(gloss-ask) { background-color: rgba(251, 146, 60, 0.22); text-decoration-color: rgba(251, 146, 60, 0.7); }
-  ::highlight(gloss-ask-active) { background-color: rgba(251, 146, 60, 0.4); }
-}`;
-
-interface HighlightRegistry {
-	set(name: string, h: Highlight): void;
-	delete(name: string): void;
+/** A box in viewport coordinates. */
+export interface Box {
+	left: number;
+	top: number;
+	right: number;
+	bottom: number;
 }
 
-declare class Highlight {
-	constructor(...ranges: AbstractRange[]);
-	add(range: AbstractRange): this;
-	delete(range: AbstractRange): boolean;
-	clear(): void;
+/** How far apart (px) two rects on one line may be and still be one box. */
+const JOIN_GAP = 3;
+
+/**
+ * Joins the client rects of a range into one box per line. A range yields
+ * a rect per text node and inline element, so a line of mixed formatting
+ * comes back in pieces that would each get their own rounded corners.
+ * Rects are on one line when their vertical spans overlap by more than
+ * half of the shorter one; along a line, rects that touch or nearly touch
+ * become one box.
+ */
+export function mergeRects(rects: Iterable<Box>): Box[] {
+	const lines: Box[][] = [];
+	for (const r of rects) {
+		if (r.right <= r.left || r.bottom <= r.top) continue;
+		const line = lines.find((l) => sameLine(l[0], r));
+		if (line) line.push(r);
+		else lines.push([r]);
+	}
+	lines.sort((a, b) => a[0].top - b[0].top);
+	const out: Box[] = [];
+	for (const line of lines) {
+		line.sort((a, b) => a.left - b.left);
+		let box: Box | null = null;
+		for (const r of line) {
+			if (box && r.left <= box.right + JOIN_GAP) {
+				box.right = Math.max(box.right, r.right);
+				box.top = Math.min(box.top, r.top);
+				box.bottom = Math.max(box.bottom, r.bottom);
+			} else {
+				box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+				out.push(box);
+			}
+		}
+	}
+	return out;
 }
 
-export function supportsHighlights(): boolean {
-	return typeof Highlight === 'function' && typeof CSS !== 'undefined' && 'highlights' in CSS;
+function sameLine(a: Box, b: Box): boolean {
+	const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+	const shorter = Math.min(a.bottom - a.top, b.bottom - b.top);
+	return overlap > shorter / 2;
+}
+
+/** The part of `box` inside `clip`, or null when nothing is left. */
+export function clipBox(box: Box, clip: Box): Box | null {
+	const r = {
+		left: Math.max(box.left, clip.left),
+		top: Math.max(box.top, clip.top),
+		right: Math.min(box.right, clip.right),
+		bottom: Math.min(box.bottom, clip.bottom),
+	};
+	return r.right - r.left > 0.5 && r.bottom - r.top > 0.5 ? r : null;
+}
+
+/**
+ * The area a range may paint in: everything, cut down by every ancestor
+ * that clips its overflow, so a passage scrolled out of a panel does not
+ * paint outside it. Transforms and clip paths are not accounted for.
+ */
+function visibleArea(range: Range, win: Window): Box {
+	let clip: Box = { left: -1e9, top: -1e9, right: 1e9, bottom: 1e9 };
+	const start = range.commonAncestorContainer;
+	let el: Element | null = start.nodeType === Node.ELEMENT_NODE ? (start as Element) : start.parentElement;
+	const doc = win.document;
+	while (el && el !== doc.body && el !== doc.documentElement) {
+		const style = win.getComputedStyle(el);
+		if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+			const r = el.getBoundingClientRect();
+			clip = { left: Math.max(clip.left, r.left), top: Math.max(clip.top, r.top), right: Math.min(clip.right, r.right), bottom: Math.min(clip.bottom, r.bottom) };
+		}
+		el = el.parentElement;
+	}
+	return clip;
+}
+
+interface Painted {
+	range: Range;
+	boxes: HTMLElement[];
+	active: boolean;
 }
 
 export class HighlightLayer {
-	private readonly all: Highlight | null = null;
-	private readonly active: Highlight | null = null;
+	private readonly painted = new Map<Range, Painted>();
 	private activeRange: Range | null = null;
-	private sheet: CSSStyleSheet | null = null;
 
-	constructor(private readonly doc: Document) {
-		if (!supportsHighlights()) return;
-		this.all = new Highlight();
-		this.active = new Highlight();
-		const registry = (CSS as unknown as { highlights: HighlightRegistry }).highlights;
-		registry.set('gloss-ask', this.all);
-		registry.set('gloss-ask-active', this.active);
-		try {
-			this.sheet = new CSSStyleSheet();
-			this.sheet.replaceSync(HIGHLIGHT_CSS);
-			doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, this.sheet];
-		} catch {
-			this.sheet = null;
-		}
-	}
+	constructor(
+		private readonly container: HTMLElement,
+		private readonly win: Window = window,
+	) {}
 
 	add(range: Range): void {
-		this.all?.add(range);
+		if (this.painted.has(range)) return;
+		const p: Painted = { range, boxes: [], active: false };
+		this.painted.set(range, p);
+		this.paint(p);
 	}
 
 	remove(range: Range): void {
-		this.all?.delete(range);
-		if (this.activeRange === range) this.setActive(null);
+		const p = this.painted.get(range);
+		if (!p) return;
+		for (const b of p.boxes) b.remove();
+		this.painted.delete(range);
+		if (this.activeRange === range) this.activeRange = null;
 	}
 
 	/** Marks the passage whose popover is open; null clears the mark. */
 	setActive(range: Range | null): void {
-		if (!this.active) return;
-		this.active.clear();
 		this.activeRange = range;
-		if (range) this.active.add(range);
+		for (const p of this.painted.values()) {
+			p.active = p.range === range;
+			for (const b of p.boxes) b.classList.toggle('is-active', p.active);
+		}
+	}
+
+	/** Re-measures every passage; called whenever the glyphs are re-measured. */
+	repaint(): void {
+		for (const p of this.painted.values()) this.paint(p);
 	}
 
 	clear(): void {
-		this.all?.clear();
-		this.active?.clear();
+		for (const p of this.painted.values()) for (const b of p.boxes) b.remove();
+		this.painted.clear();
 		this.activeRange = null;
 	}
 
-	/** Removes the highlights and the stylesheet from the document. */
 	dispose(): void {
 		this.clear();
-		if (!supportsHighlights()) return;
-		const registry = (CSS as unknown as { highlights: HighlightRegistry }).highlights;
-		registry.delete('gloss-ask');
-		registry.delete('gloss-ask-active');
-		if (this.sheet) this.doc.adoptedStyleSheets = this.doc.adoptedStyleSheets.filter((s) => s !== this.sheet);
+	}
+
+	private paint(p: Painted): void {
+		const doc = this.win.document;
+		const range = p.range;
+		let boxes: Box[] = [];
+		if (!range.collapsed && doc.contains(range.startContainer) && doc.contains(range.endContainer)) {
+			const clip = visibleArea(range, this.win);
+			boxes = mergeRects(range.getClientRects())
+				.map((b) => clipBox(b, clip))
+				.filter((b): b is Box => b !== null);
+		}
+		while (p.boxes.length > boxes.length) p.boxes.pop()?.remove();
+		while (p.boxes.length < boxes.length) {
+			const el = doc.createElement('div');
+			el.className = 'gloss-hl';
+			el.classList.toggle('is-active', p.active);
+			this.container.appendChild(el);
+			p.boxes.push(el);
+		}
+		const sx = this.win.scrollX;
+		const sy = this.win.scrollY;
+		boxes.forEach((b, i) => {
+			const el = p.boxes[i];
+			el.style.transform = `translate(${Math.round(b.left + sx)}px, ${Math.round(b.top + sy)}px)`;
+			el.style.width = `${Math.round(b.right - b.left)}px`;
+			el.style.height = `${Math.round(b.bottom - b.top)}px`;
+		});
 	}
 }

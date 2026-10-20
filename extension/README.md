@@ -50,7 +50,7 @@ src/shared/messages.ts    messages between the background and its clients
 src/shared/client.ts      the runtime-port client used by content, popup and ask window
 src/background/           index.ts (session, routing, menu, badge), native.ts, safari.ts, tabs.ts
 src/content/              text.ts (normalised text index), anchor.ts (describe/resolve),
-                          urlwatch.ts, highlight.ts, glyphs.ts, markdown.ts, state.ts,
+                          urlwatch.ts, highlight.ts (rounded tint boxes), glyphs.ts (margin marks), markdown.ts, state.ts,
                           index.ts (the content script), ui/*.svelte, styles.css
 src/popup/                toolbar popup
 src/options/              options page

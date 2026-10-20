@@ -36,6 +36,11 @@ final class BridgeClient {
     private var droppedEvents = 0
     /// Why the last connection attempt failed, in words the extension can show.
     private var lastFailure = "Gloss is not running"
+    /// The last `hello` the extension sent, with its id. Gloss wants a hello
+    /// first on every connection, and the connection is replaced whenever
+    /// it dies while this process lives on, so each new one is greeted with
+    /// this before the request that needed it.
+    private var hello: (id: String, line: String)?
 
     struct Info: Decodable {
         let port: UInt16
@@ -80,9 +85,11 @@ final class BridgeClient {
         buffer.removeAll()
     }
 
-    /// Connects and authenticates. Returns false when Gloss is not running
-    /// or `bridge.json` is missing.
-    private func connect() -> Bool {
+    /// Connects, authenticates and, unless the request about to go out is
+    /// the hello itself, repeats the extension's last hello on the new
+    /// connection. Returns false when Gloss is not running or `bridge.json`
+    /// is missing.
+    private func connect(greet: Bool) -> Bool {
         close()
         guard let info = readInfo() else { return false }
         let sock = socket(AF_INET, SOCK_STREAM, 0)
@@ -106,7 +113,9 @@ final class BridgeClient {
             os_log(.default, log: log, "connect to 127.0.0.1:%d failed: %{public}@", info.port, reason)
             return false
         }
-        var timeout = timeval(tv_sec: 60, tv_usec: 0)
+        // Gloss answers in milliseconds; a reply this long in coming means
+        // the connection is dead without the kernel having noticed.
+        var timeout = timeval(tv_sec: 20, tv_usec: 0)
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         // A write to a connection Gloss has closed (it was restarted) must
         // fail with EPIPE so the relay reconnects; without this the kernel
@@ -121,6 +130,14 @@ final class BridgeClient {
             return false
         }
         os_log(.default, log: log, "connected to Gloss on port %d", info.port)
+        if greet, let hello = hello {
+            if !writeLine(hello.line) || awaitReply(id: hello.id) == nil {
+                lastFailure = "Gloss closed the connection while it was being greeted"
+                os_log(.error, log: log, "greeting the new connection failed")
+                close()
+                return false
+            }
+        }
         return true
     }
 
@@ -132,10 +149,28 @@ final class BridgeClient {
             let n = data.withUnsafeBytes { raw -> Int in
                 Darwin.send(fd, raw.baseAddress!.advanced(by: sent), data.count - sent, 0)
             }
-            if n <= 0 { return false }
+            if n <= 0 {
+                os_log(.default, log: log, "send failed: %{public}@", String(cString: strerror(errno)))
+                return false
+            }
             sent += n
         }
         return true
+    }
+
+    /// Reads lines until the reply with `id` arrives, skipping pushed
+    /// events. Nil when the connection closed or stayed silent first.
+    private func awaitReply(id: String) -> [String: Any]? {
+        while let reply = readLine() {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(reply.utf8)) as? [String: Any] else { continue }
+            if obj["id"] as? String == id {
+                return obj
+            }
+            if obj["event"] != nil {
+                droppedEvents += 1
+            }
+        }
+        return nil
     }
 
     /// The next complete line from the connection, or nil when it closed.
@@ -168,29 +203,31 @@ final class BridgeClient {
                   let line = String(data: data, encoding: .utf8) else {
                 return ["id": id, "error": ["code": "invalid", "message": "request is not JSON"]]
             }
+            let isHello = method == "hello"
+            if isHello {
+                hello = (id: id, line: line)
+            }
+            let started = Date()
             // One retry covers a connection Gloss closed since the last call.
             for attempt in 0..<2 {
-                if fd < 0 && !connect() {
+                if fd < 0 && !connect(greet: !isHello) {
                     break
                 }
                 if !writeLine(line) {
                     close()
                     continue
                 }
-                while let reply = readLine() {
-                    guard let obj = try? JSONSerialization.jsonObject(with: Data(reply.utf8)) as? [String: Any] else { continue }
-                    if obj["id"] as? String == id {
-                        return obj
+                if let reply = awaitReply(id: id) {
+                    let ms = Date().timeIntervalSince(started) * 1000
+                    if ms > 1000 || reply["error"] != nil {
+                        os_log(.default, log: log, "%{public}@ answered in %.0f ms%{public}@", method, ms, reply["error"] != nil ? " with an error" : "")
                     }
-                    if obj["event"] != nil {
-                        droppedEvents += 1
-                        continue
-                    }
+                    return reply
                 }
-                // The reply loop ended without an answer: Gloss closed the
-                // connection, which also happens when it rejects the token.
+                // No answer: Gloss closed the connection or went silent,
+                // which also happens when it rejects the token.
                 lastFailure = "Gloss closed the connection without answering (a stale token after a restart, or the bridge was turned off)"
-                os_log(.default, log: log, "connection closed while awaiting reply to %{public}@", method)
+                os_log(.default, log: log, "connection closed or silent while awaiting reply to %{public}@", method)
                 close()
                 if attempt == 1 { break }
             }

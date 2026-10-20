@@ -3,6 +3,7 @@
 	// explains where to find them and what the extension sends.
 	import { onDestroy, onMount } from 'svelte';
 	import { connectClient, type Client } from '../shared/client';
+	import { MARK_SVG } from '../shared/mark';
 	import type { ConnectionStatus } from '../shared/messages';
 	import { DEFAULT_SETTINGS } from '../shared/protocol';
 
@@ -26,7 +27,7 @@
 </script>
 
 <div class="page" style="max-width: 560px">
-	<h1><span class="mark">“</span> Gloss extension</h1>
+	<h1><span class="mark">{@html MARK_SVG}</span> Gloss extension</h1>
 
 	<section>
 		<h2>Keyboard shortcut</h2>

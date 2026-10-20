@@ -58,12 +58,41 @@ textarea {
 
 /* ---- glyphs ---------------------------------------------------------- */
 
-.gloss-glyphs {
+.gloss-glyphs,
+.gloss-hls {
 	position: absolute;
 	top: 0;
 	left: 0;
 	width: 0;
 	height: 0;
+}
+
+/* One line of an asked passage: a rounded tint under a hairline, as the
+   app draws a quoted span. Placed with a transform in page coordinates. */
+.gloss-hl {
+	position: absolute;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	border-radius: 3px;
+	background: rgba(194, 65, 12, 0.14);
+	border-bottom: 1.5px solid rgba(194, 65, 12, 0.55);
+	pointer-events: none;
+}
+
+.gloss-hl.is-active {
+	background: rgba(194, 65, 12, 0.26);
+}
+
+@media (prefers-color-scheme: dark) {
+	.gloss-hl {
+		background: rgba(251, 146, 60, 0.18);
+		border-bottom-color: rgba(251, 146, 60, 0.6);
+	}
+
+	.gloss-hl.is-active {
+		background: rgba(251, 146, 60, 0.32);
+	}
 }
 
 .gloss-glyph {
@@ -80,8 +109,7 @@ textarea {
 	border: 0;
 	background: transparent;
 	color: var(--gloss-accent);
-	font-size: 15px;
-	font-weight: 700;
+	font-size: 13px;
 	line-height: 1;
 	cursor: pointer;
 	pointer-events: auto;
@@ -114,7 +142,8 @@ textarea {
 .gloss-glyph.in-gutter {
 	justify-content: flex-end;
 	padding-right: 1px;
-	font-size: 14px;
+	padding-top: 2px;
+	font-size: 12px;
 	opacity: 0.8;
 }
 
@@ -123,7 +152,8 @@ textarea {
 	width: 12px;
 	height: 12px;
 	min-height: 0;
-	font-size: 11px;
+	font-size: 9px;
+	padding-top: 1px;
 	border-radius: 3px;
 	background: var(--gloss-bg);
 	box-shadow: 0 0 0 1px var(--gloss-border);
@@ -166,10 +196,17 @@ textarea {
 
 .gloss-pill-mark {
 	color: var(--gloss-accent);
-	font-size: 17px;
-	font-weight: 700;
+	font-size: 15px;
 	line-height: 1;
-	transform: translateY(2px);
+}
+
+/* The icon's quote mark, sized by the font size around it. */
+.gloss-mark-svg {
+	display: inline-block;
+	width: 1em;
+	height: auto;
+	fill: currentColor;
+	vertical-align: -0.05em;
 }
 
 @keyframes gloss-pop {
@@ -366,11 +403,9 @@ textarea {
 
 .gloss-mark {
 	color: var(--gloss-accent);
-	font-size: 15px;
-	font-weight: 600;
+	font-size: 13px;
 	line-height: 1;
 	opacity: 0.85;
-	transform: translateY(2px);
 }
 
 .gloss-popover-quote {

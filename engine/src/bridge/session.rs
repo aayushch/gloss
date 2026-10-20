@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{info, warn};
 
 use super::handler::{BridgeHandler, SessionState};
 use super::protocol::{ErrorCode, Outgoing};
@@ -37,11 +37,18 @@ where
 
     let mut events = handler.engine.subscribe();
     let mut state = SessionState::new(handler.next_session_id(), label);
+    info!(session = state.id, transport = label, "bridge session opened");
     let mut lines = reader.lines();
+    // Why the loop ended, for the log line that closes the session.
+    let mut reason = "the engine shut down";
     loop {
         tokio::select! {
             line = lines.next_line() => {
-                let Ok(Some(line)) = line else { break };
+                let line = match line {
+                    Ok(Some(line)) => line,
+                    Ok(None) => { reason = "the peer closed the connection"; break }
+                    Err(_) => { reason = "the connection failed"; break }
+                };
                 if line.trim().is_empty() {
                     continue;
                 }
@@ -50,6 +57,7 @@ where
                     Err(e) => Outgoing::err("", ErrorCode::Invalid, format!("malformed request: {}", e)),
                 };
                 if tx.send(encode(out)).is_err() {
+                    reason = "a write to the peer failed";
                     break;
                 }
             }
@@ -62,6 +70,7 @@ where
                     Ok(ev) => {
                         if let Some(out) = event_line(ev) {
                             if tx.send(encode(out)).is_err() {
+                                reason = "a write to the peer failed";
                                 break;
                             }
                         }
@@ -77,7 +86,7 @@ where
     handler.forget_session(state.id);
     drop(tx);
     let _ = writer_task.await;
-    debug!(session = state.id, "bridge session closed");
+    info!(session = state.id, transport = label, reason, "bridge session closed");
 }
 
 /// The line a session sends for an engine event, or None for events the

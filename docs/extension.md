@@ -32,8 +32,9 @@ are given would go stale.
   (also Alt+Shift+G). The context menu works where the pill cannot appear,
   such as the PDF viewer, with the reply shown in a small window instead.
 - The popover streams the reply; ask follow-ups in it. Close (×) or Escape
-  puts it away and keeps the note: the passage stays highlighted with a
-  mark in the margin, and clicking either reopens the reply. Collapse (–)
+  puts it away and keeps the note: the passage keeps its rounded tint, the
+  same the app gives a quoted span, with the icon's quote mark in the
+  margin, and clicking either reopens the reply. Collapse (–)
   does the same and dims the mark. "Remove…" asks first, then deletes the
   note from the page and from Gloss. "Open in Gloss" shows the page in the
   app.
@@ -105,7 +106,19 @@ extension inside the app.
   Safari bridge toggle, and Safari's popover says why it cannot reach Gloss.
   For a local Safari test, build with `scripts/build.sh --sign "Developer ID
   Application: …"` and run that bundle. The extension's native handler logs
-  to the Console under the subsystem `sh.aay.gloss.extension`.
+  to the Console under the subsystem `sh.aay.gloss.extension`: each
+  connection it opens, every send failure, any reply that took over a
+  second or came back as an error, and why a request got no answer. It
+  keeps one TCP connection to Gloss across requests; when that connection
+  has died between requests it opens a new one and repeats the extension's
+  last `hello` on it before the request, so the extension never sees the
+  "first request must be hello" error. A reply it waits more than 20 s for
+  counts as no reply, and the extension gives up on a native message after
+  30 s, so a stuck handler shows as an error in the composer rather than
+  as "Sending…" for ever.
+- Gloss itself logs to `~/.gloss/logs/gloss.log` (moved to `gloss.log.1`
+  once it passes 5 MB) as well as stderr; every bridge session's opening
+  and closing is there with the reason it closed.
 - `gloss-engine serve --loopback` runs the bridge without the app;
   `node scripts/bridge-smoke.mjs` drives `gloss-bridge` like a browser;
   `gloss-engine page-ask --url … "question"` asks like the extension does.

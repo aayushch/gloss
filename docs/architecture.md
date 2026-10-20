@@ -66,7 +66,7 @@ secrets. The frontend state lives in `ui/src/lib/state/updater.svelte.ts`.
   workspace/attachments/<id>/<name>   one directory per attached file
   pi-sessions/    Pi stores its session files here (--session-dir)
   artifacts/<id>/<name>   artifacts written out for "Open" in the browser; purged after 7 days
-  logs/
+  logs/gloss.log  the app's log (also on stderr); gloss.log.1 is the previous one
 ```
 
 Gloss owns the canonical transcript. The agents keep their own session files

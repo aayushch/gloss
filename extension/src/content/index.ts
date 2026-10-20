@@ -37,6 +37,11 @@ import { watchUrl } from './urlwatch';
 
 /** Shortest selection the pill appears for. */
 const MIN_SELECTION_CHARS = 3;
+/**
+ * Events the page never sees when they happen inside the Gloss UI: the
+ * ones focus-trap libraries watch, see `guardEvent`.
+ */
+const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keyup'];
 /** Characters of page text sent around the quote. */
 const CONTEXT_CHARS = 300;
 /** Page text sent with an ask is cut to the first 40k and last 20k characters. */
@@ -74,26 +79,25 @@ class ContentApp {
 	private readonly reresolveIds = new Set<string>();
 	private stopUrlWatch: (() => void) | null = null;
 	private disposed = false;
+	/** True while `guardEvent` dispatches its copy of an event. */
+	private replaying = false;
 	private readonly listeners: [EventTarget, string, EventListener, AddEventListenerOptions | boolean | undefined][] = [];
 
 	constructor(private settings: ExtensionSettings) {}
 
 	start(): void {
 		this.host = document.createElement(HOST_TAG);
-		// Modal dialogs on the page trap focus inside themselves and pull it
-		// back when it moves elsewhere, which would make the composer's box
-		// impossible to type into. react-focus-lock (Atlassian, many React
-		// apps) leaves focus alone inside an element carrying this attribute,
-		// and the two listeners below keep the focus events of the Gloss UI
-		// from reaching the document-level handlers other trap libraries
-		// install, since the document sees them as happening on the host.
+		// react-focus-lock (Atlassian, many React apps) leaves focus alone
+		// inside an element carrying this attribute; `guardEvent` below
+		// handles every other focus trap.
 		this.host.setAttribute('data-no-focus-lock', '');
-		this.host.addEventListener('focusin', (e) => e.stopPropagation());
-		this.host.addEventListener('focusout', (e) => e.stopPropagation());
 		this.shadow = this.host.attachShadow({ mode: 'closed' });
 		const style = document.createElement('style');
 		style.textContent = styles;
 		this.shadow.appendChild(style);
+		const highlightRoot = document.createElement('div');
+		highlightRoot.className = 'gloss-hls';
+		this.shadow.appendChild(highlightRoot);
 		const glyphRoot = document.createElement('div');
 		glyphRoot.className = 'gloss-glyphs';
 		this.shadow.appendChild(glyphRoot);
@@ -101,11 +105,14 @@ class ContentApp {
 		this.shadow.appendChild(uiRoot);
 		document.documentElement.appendChild(this.host);
 
-		this.highlights = new HighlightLayer(document);
+		this.highlights = new HighlightLayer(highlightRoot);
 		this.glyphs = new GlyphLayer(glyphRoot, {
 			onClick: (id) => this.togglePopover(id),
 			onDetached: (id) => this.queueReresolve(id),
-			onReposition: () => this.updateAnchorRect(),
+			onReposition: () => {
+				this.highlights.repaint();
+				this.updateAnchorRect();
+			},
 		});
 		this.mutations = new MutationObserver(() => (this.indexDirty = true));
 		this.mutations.observe(document.body, { childList: true, subtree: true, characterData: true });
@@ -116,6 +123,7 @@ class ContentApp {
 		this.client.onEvent((event, data) => this.onEvent(event, data));
 		this.client.onCommand((msg) => this.onCommand(msg));
 
+		for (const type of GUARDED_EVENTS) this.listen(window, type, this.guardEvent, true);
 		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'keyup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
@@ -370,6 +378,47 @@ class ContentApp {
 			if (!sel || sel.isCollapsed) this.store.pill = null;
 		}
 	}
+
+	/**
+	 * Keeps the page from seeing what happens inside the Gloss UI. Modal
+	 * dialogs trap focus: their libraries listen on the document, often in
+	 * the capture phase, cancel presses outside the dialog and pull focus
+	 * back, which would make the composer's box impossible to type into.
+	 * The window is the first stop of every event, so a trusted event
+	 * aimed inside the host is stopped there and a copy that does not
+	 * leave the shadow tree is dispatched in its place. The copy reaches
+	 * every listener of the Gloss UI; when one of them cancels it, the
+	 * original is cancelled too so the browser's default action follows.
+	 */
+	private readonly guardEvent = (e: Event): void => {
+		if (!e.isTrusted || this.replaying) return;
+		const path = e.composedPath();
+		if (!path.includes(this.host)) return;
+		const target = path[0];
+		if (!(target instanceof EventTarget) || target === this.host) return;
+		let copy: Event;
+		try {
+			const init: Record<string, unknown> = {};
+			for (const key in e) init[key] = (e as unknown as Record<string, unknown>)[key];
+			init.bubbles = true;
+			init.composed = false;
+			init.cancelable = e.cancelable;
+			copy = new (e.constructor as new (type: string, init: Record<string, unknown>) => Event)(e.type, init);
+		} catch {
+			return;
+		}
+		e.stopImmediatePropagation();
+		this.replaying = true;
+		try {
+			// The document-level Escape handling runs first, as it does for
+			// a key pressed on the page (it listens in the capture phase).
+			if (e.type === 'keydown') this.onDocumentKeyDown(copy as KeyboardEvent);
+			target.dispatchEvent(copy);
+		} finally {
+			this.replaying = false;
+		}
+		if (copy.defaultPrevented) e.preventDefault();
+	};
 
 	private onDocumentMouseDown(e: MouseEvent): void {
 		if (e.composedPath().includes(this.host)) return;

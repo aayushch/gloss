@@ -86,9 +86,16 @@ h2 {
 .mark {
 	color: var(--accent);
 	font-size: 20px;
-	font-weight: 700;
 	line-height: 1;
-	transform: translateY(3px);
+}
+
+/* The icon's quote mark, sized by the font size around it. */
+.gloss-mark-svg {
+	display: inline-block;
+	width: 1em;
+	height: auto;
+	fill: currentColor;
+	vertical-align: -0.05em;
 }
 
 .status {

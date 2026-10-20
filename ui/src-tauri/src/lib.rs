@@ -686,14 +686,32 @@ fn apply_native_theme(app: &AppHandle, theme: Theme) {
     }
 }
 
+/// Keeps the log file from growing without bound: once it passes this
+/// size at launch it is moved aside as `gloss.log.1`, replacing the last one.
+const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Opens `logs/gloss.log` under the Gloss home for appending, so what the
+/// app logs is readable after the fact even when it was launched from the
+/// Finder, where stderr goes nowhere. None when the file cannot be opened.
+fn open_log_file() -> Option<std::fs::File> {
+    let paths = GlossPaths::from_env();
+    std::fs::create_dir_all(&paths.logs).ok()?;
+    let file = paths.logs.join("gloss.log");
+    if std::fs::metadata(&file).map(|m| m.len() > LOG_ROTATE_BYTES).unwrap_or(false) {
+        let _ = std::fs::rename(&file, paths.logs.join("gloss.log.1"));
+    }
+    std::fs::OpenOptions::new().create(true).append(true).open(file).ok()
+}
+
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    use tracing_subscriber::fmt::writer::MakeWriterExt;
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let builder = tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false);
+    match open_log_file() {
+        Some(file) => builder.with_writer(std::io::stderr.and(std::sync::Mutex::new(file))).init(),
+        None => builder.with_writer(std::io::stderr).init(),
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
