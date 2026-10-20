@@ -213,6 +213,10 @@ browser.runtime.onConnect.addListener((port) => {
 		conversationId: null,
 	};
 	registry.add(entry);
+	// A transport without pushes (Safari) learns that Gloss came back only by
+	// asking, so a page opening while the status says "not running" is the
+	// moment to greet again; the other transports reconnect on their own.
+	if (!transport.pushesEvents && !isConnected() && !helloInFlight) void hello();
 	port.onMessage.addListener((raw: ClientMessage) => {
 		if (raw.type === 'subscribe') {
 			entry.urlKey = raw.urlKey;

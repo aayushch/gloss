@@ -2,9 +2,10 @@
 	// Left navigation rail: new chat, search, tag filters, the projects (each
 	// with its Gloss conversations and the sessions its agents recorded
 	// outside Gloss), the web pages asked about from the browser extension
-	// (each with its asks), the pinned and date-grouped list of the other
-	// conversations, clarification sub-items under the active conversation,
-	// full-text results while searching, and the footer.
+	// (each with its asks), the chats outside any project grouped by date,
+	// clarification sub-items under the active conversation, full-text
+	// results while searching, and the footer. Each of the three sections
+	// folds from its label.
 	import { api } from '$lib/api/client';
 	import { app, AGENT_NAMES, ORIGIN_LABELS, PROJECT_PAGE } from '$lib/state/app.svelte';
 	import type { AgentId, ConversationSummary, ExternalSession, Page, Project } from '$lib/api/types';
@@ -195,9 +196,14 @@
 		{:else}
 		<section class="projects" aria-label="Projects">
 			<div class="glabel prow">
-				<span>Projects</span>
+				<button type="button" class="sechead" aria-expanded={!app.railCollapsed.projects} onclick={() => app.toggleSection('projects')}>
+					<span class="schev"><Icon name={app.railCollapsed.projects ? 'chevron-right' : 'chevron-down'} size={11} /></span>Projects
+				</button>
 				<button type="button" class="act always" title="Add project" aria-label="Add project" onclick={() => app.addProject()}><Icon name="plus" size={12} /></button>
 			</div>
+			{#if app.railCollapsed.projects}
+				<!-- folded: only the header shows -->
+			{:else}
 			{#if !app.projects.length}
 				<button type="button" class="addproj" onclick={() => app.addProject()}>Add a folder as a project</button>
 			{/if}
@@ -240,12 +246,16 @@
 					</div>
 				{/if}
 			{/each}
+			{/if}
 		</section>
 		{#if app.pages.length}
 			<section class="pages" aria-label="Pages">
 				<div class="glabel prow">
-					<span class="plabel"><Icon name="globe" size={12} /> Pages</span>
+					<button type="button" class="sechead" aria-expanded={!app.railCollapsed.pages} onclick={() => app.toggleSection('pages')}>
+						<span class="schev"><Icon name={app.railCollapsed.pages ? 'chevron-right' : 'chevron-down'} size={11} /></span><span class="plabel"><Icon name="globe" size={12} /> Pages</span>
+					</button>
 				</div>
+				{#if !app.railCollapsed.pages}
 				{#each app.pages as p (p.urlKey)}
 					{@const open = !!app.pagesExpanded[p.urlKey]}
 					{@const current = app.active?.id === p.conversationId}
@@ -282,22 +292,35 @@
 						{/if}
 					{/if}
 				{/each}
+				{/if}
 			</section>
 		{/if}
-		{#if app.draft && !draftProject}
-			<div class="group">
-				<div class="glabel">Today</div>
-				<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
+		<section class="chats" aria-label="Chats">
+			<div class="glabel prow">
+				<button type="button" class="sechead" aria-expanded={!app.railCollapsed.chats} onclick={() => app.toggleSection('chats')}>
+					<span class="schev"><Icon name={app.railCollapsed.chats ? 'chevron-right' : 'chevron-down'} size={11} /></span>Chats
+				</button>
 			</div>
-		{/if}
-		{#each grouped as g (g.label)}
-			<div class="group">
-				<div class="glabel">{g.label}</div>
-				{#each g.items as c (c.id)}
-					{@render row(c)}
+			{#if !app.railCollapsed.chats}
+				{#if app.draft && !draftProject}
+					<div class="group">
+						<div class="glabel sub">Today</div>
+						<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
+					</div>
+				{/if}
+				{#each grouped as g (g.label)}
+					<div class="group">
+						<div class="glabel sub">{g.label}</div>
+						{#each g.items as c (c.id)}
+							{@render row(c)}
+						{/each}
+					</div>
 				{/each}
-			</div>
-		{/each}
+				{#if !grouped.length && !(app.draft && !draftProject)}
+					<div class="navitem none-sub">No chats yet</div>
+				{/if}
+			{/if}
+		</section>
 		{/if}
 	</div>
 
@@ -381,12 +404,41 @@
 		white-space: nowrap;
 	}
 	.projects,
-	.pages {
+	.pages,
+	.chats {
 		background: var(--bg);
 		border: 1px solid var(--line);
 		border-radius: 10px;
 		padding: 0 4px 6px;
 		margin-bottom: 6px;
+	}
+	/* The section's own label folds and unfolds it; it keeps the label's look. */
+	.sechead {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-left: -4px;
+		padding: 2px 4px;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-transform: inherit;
+		letter-spacing: inherit;
+		cursor: pointer;
+	}
+	.sechead:hover {
+		background: var(--surface-2);
+	}
+	.schev {
+		display: inline-flex;
+		color: var(--text-3);
+	}
+	.glabel.sub {
+		padding: 8px 10px 2px;
+		font-size: 10px;
+		color: var(--text-3);
 	}
 	.plabel {
 		display: inline-flex;

@@ -63,7 +63,7 @@ final class BridgeClient {
             }
         }
         lastFailure = "Gloss is not running, or has the Safari bridge turned off (no bridge file: \(reasons.joined(separator: "; ")))"
-        os_log(.info, log: log, "no bridge info: %{public}@", reasons.joined(separator: "; "))
+        os_log(.default, log: log, "no bridge info: %{public}@", reasons.joined(separator: "; "))
         return nil
     }
 
@@ -98,7 +98,7 @@ final class BridgeClient {
             let reason = String(cString: strerror(errno))
             Darwin.close(sock)
             lastFailure = "Gloss is not listening on port \(info.port) (\(reason)); start Gloss, or turn the Safari bridge on in its settings"
-            os_log(.info, log: log, "connect to 127.0.0.1:%d failed: %{public}@", info.port, reason)
+            os_log(.default, log: log, "connect to 127.0.0.1:%d failed: %{public}@", info.port, reason)
             return false
         }
         var timeout = timeval(tv_sec: 60, tv_usec: 0)
@@ -109,7 +109,7 @@ final class BridgeClient {
             os_log(.error, log: log, "token write failed")
             return false
         }
-        os_log(.info, log: log, "connected to Gloss on port %d", info.port)
+        os_log(.default, log: log, "connected to Gloss on port %d", info.port)
         return true
     }
 
@@ -179,7 +179,7 @@ final class BridgeClient {
                 // The reply loop ended without an answer: Gloss closed the
                 // connection, which also happens when it rejects the token.
                 lastFailure = "Gloss closed the connection without answering (a stale token after a restart, or the bridge was turned off)"
-                os_log(.info, log: log, "connection closed while awaiting reply to %{public}@", method)
+                os_log(.default, log: log, "connection closed while awaiting reply to %{public}@", method)
                 close()
                 if attempt == 1 { break }
             }

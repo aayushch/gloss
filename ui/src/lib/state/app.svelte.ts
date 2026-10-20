@@ -98,6 +98,24 @@ export const AGENT_NAMES: Record<AgentId, string> = {
 	cursor: 'Cursor Agent'
 };
 
+/** The foldable groups of the rail. */
+export type RailSection = 'projects' | 'pages' | 'chats';
+
+const RAIL_COLLAPSED_KEY = 'gloss.rail.collapsed';
+
+/** The folds saved by `toggleSection`; everything open when nothing is saved or storage is unavailable. */
+function readRailCollapsed(): Record<RailSection, boolean> {
+	const open = { projects: false, pages: false, chats: false };
+	try {
+		const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(RAIL_COLLAPSED_KEY) : null;
+		if (!raw) return open;
+		const saved = JSON.parse(raw) as Partial<Record<RailSection, boolean>>;
+		return { ...open, projects: !!saved.projects, pages: !!saved.pages, chats: !!saved.chats };
+	} catch {
+		return open;
+	}
+}
+
 class AppState {
 	agents = $state<AgentInfo[]>([]);
 	models = $state<Partial<Record<AgentId, ModelInfo[]>>>({});
@@ -121,6 +139,8 @@ class AppState {
 	projects = $state<Project[]>([]);
 	/** Paths of the projects whose conversations the rail shows. */
 	expanded = $state<Record<string, boolean>>({});
+	/** Rail sections the user folded shut. A view preference, so it lives in this window's storage rather than in settings. */
+	railCollapsed = $state<Record<RailSection, boolean>>(readRailCollapsed());
 	/** Sessions each agent recorded outside Gloss, by project path. Loaded when a project is expanded. */
 	outside = $state<Record<string, ExternalSession[]>>({});
 	/** The agent a project's list is narrowed to, by project path. */
@@ -260,6 +280,15 @@ class AppState {
 
 	/** Shows or hides a project's conversations in the rail. Showing one
 	 * also reloads the sessions its agents recorded outside Gloss. */
+	toggleSection(name: RailSection): void {
+		this.railCollapsed = { ...this.railCollapsed, [name]: !this.railCollapsed[name] };
+		try {
+			localStorage.setItem(RAIL_COLLAPSED_KEY, JSON.stringify(this.railCollapsed));
+		} catch {
+			// Storage can be unavailable; the fold then lasts for this window only.
+		}
+	}
+
 	toggleProject(path: string, open = !this.expanded[path]): void {
 		this.expanded = { ...this.expanded, [path]: open };
 		if (open) this.loadOutside(path);
