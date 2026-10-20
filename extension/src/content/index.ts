@@ -109,6 +109,7 @@ class ContentApp {
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
 		this.listen(document, 'mousedown', (e) => this.onDocumentMouseDown(e as MouseEvent), true);
 		this.listen(document, 'keydown', (e) => this.onDocumentKeyDown(e as KeyboardEvent), true);
+		this.listen(document, 'click', (e) => this.onDocumentClick(e as MouseEvent), true);
 		if (__BROWSER__ === 'safari') {
 			this.listen(document, 'visibilitychange', () => {
 				if (document.visibilityState === 'visible') void this.loadPage();
@@ -501,8 +502,20 @@ class ContentApp {
 	private updateAnchorRect(): void {
 		const open = this.store.popover;
 		if (!open) return;
-		const rect = this.glyphs.rectOf(open.askId);
+		const rect = this.glyphs.passageRectOf(open.askId) ?? this.glyphs.rectOf(open.askId);
 		this.store.anchorRect = rect ? rectOf(rect) : null;
+	}
+
+	/** A plain click on a highlighted passage opens its note, as the mark in the margin does. */
+	private onDocumentClick(e: MouseEvent): void {
+		if (e.button !== 0 || e.defaultPrevented || !this.glyphs) return;
+		if (e.composedPath().includes(this.host)) return;
+		const sel = document.getSelection();
+		if (sel && !sel.isCollapsed) return;
+		const target = e.target as Element | null;
+		if (target?.closest('a, button, input, textarea, select, [contenteditable]')) return;
+		const id = this.glyphs.askAt(e.clientX, e.clientY);
+		if (id) this.togglePopover(id);
 	}
 
 	private actions(): Actions {

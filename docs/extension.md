@@ -1,8 +1,9 @@
 # The Gloss browser extension
 
 Highlight text on any web page, click **Ask about this**, and the reply
-appears in a popover anchored to that text. A small Gloss mark stays on the
-passage; it comes back the next time the page is open. Every ask is kept by
+appears in a popover anchored to that text. The passage stays highlighted
+with a small Gloss mark in the margin beside its first line; both come back
+the next time the page is open, and clicking either reopens the reply. Every ask is kept by
 the Gloss app under **Pages** in the rail, one entry per page.
 
 The extension itself never calls an AI. It sends the highlighted passage,
@@ -32,7 +33,7 @@ are given would go stale.
   such as the PDF viewer, with the reply shown in a small window instead.
 - The popover streams the reply; ask follow-ups in it. Close (×) or Escape
   puts it away and keeps the note: the passage stays highlighted with a
-  mark beside it, and clicking the mark reopens the reply. Collapse (–)
+  mark in the margin, and clicking either reopens the reply. Collapse (–)
   does the same and dims the mark. "Remove…" asks first, then deletes the
   note from the page and from Gloss. "Open in Gloss" shows the page in the
   app.

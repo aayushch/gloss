@@ -28,7 +28,7 @@
 	let text = $state('');
 	/** True while the footer asks to confirm removing the note. */
 	let confirmRemove = $state(false);
-	const WIDTH = 420;
+	const WIDTH = 400;
 
 	const style = $derived.by(() => {
 		const vw = innerWidth.current ?? 1024;

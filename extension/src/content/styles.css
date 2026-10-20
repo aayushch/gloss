@@ -11,8 +11,8 @@
 	overflow: visible;
 	z-index: 2147483646;
 	font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-	font-size: 14px;
-	line-height: 1.45;
+	font-size: 13px;
+	line-height: 1.5;
 	color-scheme: light dark;
 
 	--gloss-accent: #c2410c;
@@ -21,8 +21,8 @@
 	--gloss-bg-muted: #f6f5f3;
 	--gloss-fg: #1c1917;
 	--gloss-fg-muted: #6b6560;
-	--gloss-border: rgba(0, 0, 0, 0.12);
-	--gloss-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+	--gloss-border: rgba(0, 0, 0, 0.1);
+	--gloss-shadow: 0 10px 32px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
 	--gloss-pill-bg: #1c1917;
 	--gloss-pill-fg: #ffffff;
 	--gloss-code-bg: rgba(0, 0, 0, 0.06);
@@ -34,10 +34,10 @@
 		--gloss-accent-soft: rgba(251, 146, 60, 0.16);
 		--gloss-bg: #1f1d1b;
 		--gloss-bg-muted: #2a2825;
-		--gloss-fg: #f3efea;
-		--gloss-fg-muted: #a39d96;
-		--gloss-border: rgba(255, 255, 255, 0.14);
-		--gloss-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+		--gloss-fg: #e8e3dd;
+		--gloss-fg-muted: #9c968f;
+		--gloss-border: rgba(255, 255, 255, 0.1);
+		--gloss-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
 		--gloss-pill-bg: #f3efea;
 		--gloss-pill-fg: #1c1917;
 		--gloss-code-bg: rgba(255, 255, 255, 0.08);
@@ -108,6 +108,27 @@ textarea {
 	opacity: 0.45;
 }
 
+/* In the margin beside the passage's first line: right-aligned so a left
+   gutter mark sits close to the text, with a hairline underneath the mark's
+   accent background on hover only. */
+.gloss-glyph.in-gutter {
+	justify-content: flex-end;
+	padding-right: 1px;
+	font-size: 14px;
+	opacity: 0.8;
+}
+
+/* Raised above the end of the passage when neither margin has room. */
+.gloss-glyph.is-raised {
+	width: 12px;
+	height: 12px;
+	min-height: 0;
+	font-size: 11px;
+	border-radius: 3px;
+	background: var(--gloss-bg);
+	box-shadow: 0 0 0 1px var(--gloss-border);
+}
+
 .gloss-glyph.is-fuzzy {
 	text-decoration: underline dotted;
 }
@@ -169,9 +190,9 @@ textarea {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	padding: 12px;
+	padding: 12px 14px;
 	border: 1px solid var(--gloss-border);
-	border-radius: 10px;
+	border-radius: 12px;
 	background: var(--gloss-bg);
 	color: var(--gloss-fg);
 	box-shadow: var(--gloss-shadow);
@@ -272,16 +293,18 @@ textarea {
 }
 
 .gloss-btn {
-	padding: 5px 11px;
+	padding: 4px 10px;
 	border: 1px solid var(--gloss-border);
 	border-radius: 7px;
 	background: var(--gloss-bg);
-	font-size: 13px;
+	color: var(--gloss-fg-muted);
+	font-size: 12px;
 	cursor: pointer;
 }
 
 .gloss-btn:hover {
 	background: var(--gloss-bg-muted);
+	color: var(--gloss-fg);
 }
 
 .gloss-btn:disabled {
@@ -315,14 +338,14 @@ textarea {
 }
 
 .gloss-icon-btn {
-	width: 24px;
-	height: 24px;
+	width: 22px;
+	height: 22px;
 	padding: 0;
 	border: 0;
 	border-radius: 6px;
 	background: transparent;
 	color: var(--gloss-fg-muted);
-	font-size: 16px;
+	font-size: 14px;
 	line-height: 1;
 	cursor: pointer;
 }
@@ -343,10 +366,11 @@ textarea {
 
 .gloss-mark {
 	color: var(--gloss-accent);
-	font-size: 18px;
-	font-weight: 700;
+	font-size: 15px;
+	font-weight: 600;
 	line-height: 1;
-	transform: translateY(3px);
+	opacity: 0.85;
+	transform: translateY(2px);
 }
 
 .gloss-popover-quote {
@@ -356,7 +380,7 @@ textarea {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--gloss-fg-muted);
-	font-size: 13px;
+	font-size: 12px;
 }
 
 .gloss-badge {
@@ -364,7 +388,7 @@ textarea {
 	border-radius: 999px;
 	background: var(--gloss-accent-soft);
 	color: var(--gloss-accent);
-	font-size: 11px;
+	font-size: 10.5px;
 	white-space: nowrap;
 }
 
@@ -378,19 +402,34 @@ textarea {
 }
 
 .gloss-turn-label {
-	margin-bottom: 2px;
+	margin-bottom: 3px;
 	color: var(--gloss-fg-muted);
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.04em;
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
+	opacity: 0.85;
+}
+
+.gloss-turn-text {
+	font-size: 12.5px;
+	line-height: 1.55;
 }
 
 .gloss-turn.is-user .gloss-turn-text {
-	padding: 6px 10px;
+	padding: 5px 9px;
 	border-radius: 7px;
 	background: var(--gloss-bg-muted);
+	color: var(--gloss-fg-muted);
 	white-space: pre-wrap;
+}
+
+/* Bold runs in a reply stay a step lighter than the page's own bold, so the
+   note reads as a quiet aside rather than a headline. */
+.gloss-md strong,
+.gloss-md b {
+	font-weight: 600;
+	color: var(--gloss-fg);
 }
 
 .gloss-md > :first-child {
@@ -406,7 +445,7 @@ textarea {
 .gloss-md ol,
 .gloss-md pre,
 .gloss-md blockquote {
-	margin: 0 0 8px;
+	margin: 0 0 7px;
 }
 
 .gloss-md ul,
@@ -419,7 +458,7 @@ textarea {
 	border-radius: 4px;
 	background: var(--gloss-code-bg);
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 12.5px;
+	font-size: 11.5px;
 }
 
 .gloss-md pre {
@@ -442,8 +481,8 @@ textarea {
 .gloss-md h2,
 .gloss-md h3,
 .gloss-md h4 {
-	margin: 10px 0 6px;
-	font-size: 14px;
+	margin: 8px 0 4px;
+	font-size: 12.5px;
 	font-weight: 600;
 }
 
@@ -455,7 +494,7 @@ textarea {
 
 .gloss-md table {
 	border-collapse: collapse;
-	font-size: 13px;
+	font-size: 12px;
 }
 
 .gloss-md th,
@@ -466,8 +505,8 @@ textarea {
 
 .gloss-cursor {
 	display: inline-block;
-	width: 7px;
-	height: 14px;
+	width: 6px;
+	height: 13px;
 	margin-left: 2px;
 	vertical-align: -2px;
 	background: var(--gloss-accent);
@@ -481,7 +520,8 @@ textarea {
 }
 
 .gloss-followup .gloss-textarea {
-	min-height: 34px;
+	min-height: 32px;
+	font-size: 12.5px;
 	resize: none;
 }
 
