@@ -57,6 +57,7 @@ jobs:
       # The shell's build script refuses to compile without the sidecar
       # binary and the bundled add-on slot it is configured to ship.
       - name: Build the bridge sidecar
+        shell: bash
         run: |
           bash scripts/build-bridge.sh --debug
           mkdir -p ui/src-tauri/resources
