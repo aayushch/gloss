@@ -54,6 +54,14 @@ jobs:
           npm test
           npm run build
 
+      # The shell's build script refuses to compile without the sidecar
+      # binary and the bundled add-on slot it is configured to ship.
+      - name: Build the bridge sidecar
+        run: |
+          bash scripts/build-bridge.sh --debug
+          mkdir -p ui/src-tauri/resources
+          [ -f ui/src-tauri/resources/gloss.xpi ] || : > ui/src-tauri/resources/gloss.xpi
+
       - name: Engine, bridge and shell tests
         run: cargo test -p gloss-engine -p gloss-bridge -p gloss-app
 
