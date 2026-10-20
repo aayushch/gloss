@@ -115,7 +115,7 @@ fn lists_each_agents_sessions_for_the_project_only() {
     let index = SessionIndex::default();
     let list = index.list(&homes, PROJECT);
     let mut found: Vec<(AgentId, &str, &str)> = list.iter().map(|s| (s.agent, s.id.as_str(), s.title.as_str())).collect();
-    found.sort_by(|a, b| a.1.cmp(b.1));
+    found.sort_by_key(|s| s.1);
     assert_eq!(
         found,
         vec![

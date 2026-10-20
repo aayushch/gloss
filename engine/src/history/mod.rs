@@ -93,7 +93,7 @@ impl SessionIndex {
         out.extend(self.collect(codex::files(&homes.codex), project, codex::scan));
         out.extend(self.collect(gemini::files(&homes.gemini, project), project, gemini::scan));
         out.extend(self.collect(pi::files(&homes.pi, project), project, pi::scan));
-        out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        out.sort_by_key(|s| std::cmp::Reverse(s.updated_at));
         out
     }
 
