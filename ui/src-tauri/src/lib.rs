@@ -133,10 +133,47 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 /// Hands the bundled Firefox add-on to Firefox, which asks to install it.
+/// Firefox is found by its usual locations on each platform, so the file
+/// never falls to whatever program owns `.xpi` files.
 #[tauri::command]
 fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
     let path = firefox_xpi_path(&app).ok_or("this build of Gloss does not include the Firefox add-on")?;
-    app.opener().open_path(path.to_string_lossy().to_string(), Some("Firefox")).map_err(err)
+    let xpi = path.to_string_lossy().to_string();
+    #[cfg(target_os = "macos")]
+    {
+        app.opener().open_path(xpi, Some("Firefox")).map_err(err)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
+            .iter()
+            .filter_map(|v| std::env::var_os(v))
+            .map(|base| PathBuf::from(base).join("Mozilla Firefox").join("firefox.exe"))
+            .chain(std::iter::once(PathBuf::from("firefox.exe")));
+        for exe in candidates {
+            if std::process::Command::new(&exe).arg(&xpi).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        Err("Firefox was not found; open the add-on file in Firefox yourself".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        for exe in ["firefox", "firefox-esr", "flatpak"] {
+            let mut cmd = std::process::Command::new(exe);
+            if exe == "flatpak" {
+                cmd.args(["run", "org.mozilla.firefox"]);
+            }
+            if cmd.arg(&xpi).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        Err("Firefox was not found; open the add-on file in Firefox yourself".into())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        app.opener().open_path(xpi, None::<&str>).map_err(err)
+    }
 }
 
 /// Brings Safari forward so the user can enable the extension in
