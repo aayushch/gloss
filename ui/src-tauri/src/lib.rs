@@ -115,6 +115,15 @@ fn delete_clarification(engine: State<'_, Eng>, id: String) -> Result<(), String
 #[tauri::command]
 fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> ExtensionStatus {
     let xpi = firefox_xpi_path(&app);
+    // Each lock is taken and released on its own line: a guard created
+    // inside the struct literal would live until the literal is complete,
+    // and a second lock of the same mutex there would never return.
+    let loopback_port = status.loopback.lock().unwrap().as_ref().map(|(port, _)| *port);
+    let safari_bridge_error = status.safari_bridge_error.lock().unwrap().clone();
+    let safari_bridge_file = match (loopback_port, &safari_bridge_error) {
+        (Some(_), None) => app_group_dir().map(|d| d.join("bridge.json").to_string_lossy().to_string()),
+        _ => None,
+    };
     ExtensionStatus {
         bridge_path: status.bridge_path.to_string_lossy().to_string(),
         translocated: native_host::translocated(&status.bridge_path),
@@ -124,12 +133,9 @@ fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> Ext
         chrome_store_url: format!("{}{}", native_host::CHROME_STORE_URL, native_host::CHROME_EXTENSION_ID.trim()),
         firefox_xpi_path: xpi.map(|p| p.to_string_lossy().to_string()),
         safari_available: safari_appex_path().is_some(),
-        loopback_port: status.loopback.lock().unwrap().as_ref().map(|(port, _)| *port),
-        safari_bridge_file: match (status.loopback.lock().unwrap().as_ref(), status.safari_bridge_error.lock().unwrap().as_ref()) {
-            (Some(_), None) => app_group_dir().map(|d| d.join("bridge.json").to_string_lossy().to_string()),
-            _ => None,
-        },
-        safari_bridge_error: status.safari_bridge_error.lock().unwrap().clone(),
+        loopback_port,
+        safari_bridge_file,
+        safari_bridge_error,
     }
 }
 
