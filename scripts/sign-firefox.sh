@@ -17,5 +17,5 @@ npx web-ext sign --source-dir dist/firefox --artifacts-dir dist/signed \
   --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
 mkdir -p "$root/ui/src-tauri/resources"
 cp dist/signed/*.xpi "$root/ui/src-tauri/resources/gloss.xpi"
-node -p 'require(process.argv[1]).version' package.json > "$root/ui/src-tauri/resources/gloss.xpi.version"
+node -p 'require(process.argv[1]).version' "$root/extension/package.json" > "$root/ui/src-tauri/resources/gloss.xpi.version"
 echo "signed add-on copied to ui/src-tauri/resources/gloss.xpi"
