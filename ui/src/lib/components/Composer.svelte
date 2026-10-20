@@ -132,7 +132,7 @@
 			bind:value
 			class="iinput"
 			rows="1"
-			placeholder={disabled ? 'Pick an available agent in Settings to start' : running ? 'Waiting for the reply…' : 'Message the agent…'}
+			placeholder={disabled ? 'Pick an available agent in Settings to start' : running ? 'Waiting for the reply…' : app.active?.pageKey ? 'Ask about this page…' : 'Message the agent…'}
 			disabled={disabled || running}
 			oninput={(e) => grow(e.currentTarget)}
 			onpaste={onPaste}

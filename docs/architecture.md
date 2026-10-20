@@ -27,9 +27,11 @@ collapsible thread. To the agent a clarification is just another turn.
    claude / codex / gemini / pi / cursor-agent   (cwd: ~/.gloss/workspace)
 ```
 
-The engine is Rust and linked straight into the shell. There is no sidecar,
-no local HTTP server and no second runtime to bootstrap: the shell starts, opens
-the database, captures the shell environment, and is ready.
+The engine is Rust and linked straight into the shell. There is no second
+runtime to bootstrap: the shell starts, opens the database, captures the shell
+environment, and is ready. The only things listening are for the browser
+extension (see below): a Unix socket in the Gloss home, and a token-guarded
+TCP listener on 127.0.0.1 for Safari.
 
 Updates come through Tauri's updater plugin. The app fetches `latest.json`
 from the newest GitHub release shortly after launch and every two hours, and
@@ -148,6 +150,45 @@ version. Previews of HTML, SVG and rendered diagrams load in an iframe with
 off until the user switches them on, and `allow-same-origin` is never set, so
 the frame cannot reach Tauri's IPC bridge. Markdown artifacts render with the
 app's own read-only renderer.
+
+## Browser extension
+
+The extension (`extension/`) brings the same gesture to any web page:
+highlight, ask, read the reply in a popover anchored to the text, and find a
+small glyph there on the next visit. It does no AI work; everything goes to
+the running app.
+
+```
+ page ──content script──▶ background ──┬─ Chrome/Firefox: native messaging ──▶ gloss-bridge ──▶ ~/.gloss/bridge.sock ─┐
+                                       └─ Safari: sendNativeMessage ──▶ Gloss Extension.appex ──▶ 127.0.0.1:<port> ──┤
+                                                                                                        engine/src/bridge ◀┘
+```
+
+- **Pages are conversations.** Each page (keyed by a canonical URL computed in
+  `engine/src/pages.rs`: tracking parameters dropped, query sorted, fragment
+  dropped unless it is a hash route) owns one conversation, so the agent keeps
+  the page in context across asks. Each ask is a clarification whose
+  `web_anchor` holds a W3C-style selector (exact quote with prefix and suffix,
+  character position, container hint); `anchor_block_id` is empty for those.
+  The page's readable text goes into the first prompt and again only when its
+  hash changes. The rail lists pages under **Pages**.
+- **One protocol, two transports.** `engine/src/bridge/` handles requests
+  and fans the engine's event broadcast out to every connection (`docs/api.md`
+  has the method table). The `gloss-bridge` sidecar (`bridge/`) is what
+  browsers spawn for native messaging; Gloss writes the host manifests for
+  every installed browser on each launch. Safari cannot use native messaging
+  from a Tauri app and blocks `ws://` from an extension, so the Safari
+  extension's own Swift handler (`safari/handler/`) relays each message over
+  loopback TCP, authenticated by a per-launch token in `bridge.json`, which
+  the sandboxed handler reads from the App Group container.
+- **Re-anchoring is the extension's job.** It resolves an anchor by exact
+  text at the stored position, then by prefix and suffix among repeats, then
+  inside the container, then fuzzily; what it finds (or not) is reported back
+  and shown in Gloss as "approximate" or "not on the page any more".
+- **The app stays up.** Closing the window hides Gloss to a menu-bar icon so
+  the bridge keeps answering; Quit is in the tray menu and the app menu. A
+  `gloss://pages/<url key>` link opens a page in the window, which is how the
+  extension launches the app when it is not running.
 
 ## Decisions
 

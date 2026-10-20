@@ -7,8 +7,14 @@ import type {
 	AgentInfo,
 	Attachment,
 	Conversation,
+	BrowserRegistration,
 	ConversationSummary,
+	ExtensionStatus,
 	ExternalSession,
+	OpenPageEvent,
+	Page,
+	PageDetail,
+	PageEvent,
 	SessionTurn,
 	ModelInfo,
 	Project,
@@ -84,6 +90,28 @@ export interface Api {
 	setClarificationOpen(id: string, open: boolean): Promise<void>;
 	setTheme(theme: Theme): Promise<void>;
 	onTurnEvent(cb: (e: TurnEventEnvelope) => void): Promise<() => void>;
+	/** Web pages asked about from the browser extension, most recently updated first. */
+	listPages(limit: number): Promise<Page[]>;
+	/** A page with its conversation, or null when Gloss has no such page. */
+	getPage(urlKey: string): Promise<PageDetail | null>;
+	/** Removes a page and the conversation that holds its asks. */
+	deletePage(urlKey: string): Promise<void>;
+	/** Removes one clarification with its turns; nested clarifications go with it. */
+	deleteClarification(id: string): Promise<void>;
+	/** Where the extension stands: registered browsers, connected sessions, install paths. */
+	extensionStatus(): Promise<ExtensionStatus>;
+	/** Writes the native-messaging manifests for every installed browser. */
+	registerNativeHosts(): Promise<BrowserRegistration[]>;
+	unregisterNativeHosts(): Promise<BrowserRegistration[]>;
+	/** Opens a URL in the default browser. */
+	openUrl(url: string): Promise<void>;
+	/** Opens the bundled .xpi with Firefox, which offers to install it. */
+	installFirefoxExtension(): Promise<void>;
+	/** Opens Safari's extensions preferences. */
+	openSafariExtensions(): Promise<void>;
+	onPageEvent(cb: (e: PageEvent) => void): Promise<() => void>;
+	onSettingsEvent(cb: (s: Settings) => void): Promise<() => void>;
+	onOpenPage(cb: (e: OpenPageEvent) => void): Promise<() => void>;
 }
 
 /** File types the picker offers; the engine still checks the content. */
@@ -167,6 +195,28 @@ function tauriApi(): Api {
 		onTurnEvent: async (cb) => {
 			const { listen } = await import('@tauri-apps/api/event');
 			return listen<TurnEventEnvelope>('turn-event', (ev) => cb(ev.payload));
+		},
+		listPages: (limit) => call('list_pages', { limit }),
+		getPage: (urlKey) => call('get_page', { urlKey }),
+		deletePage: (urlKey) => call('delete_page', { urlKey }),
+		deleteClarification: (id) => call('delete_clarification', { id }),
+		extensionStatus: () => call('extension_status'),
+		registerNativeHosts: () => call('register_native_hosts'),
+		unregisterNativeHosts: () => call('unregister_native_hosts'),
+		openUrl: (url) => call('open_url', { url }),
+		installFirefoxExtension: () => call('install_firefox_extension'),
+		openSafariExtensions: () => call('open_safari_extensions'),
+		onPageEvent: async (cb) => {
+			const { listen } = await import('@tauri-apps/api/event');
+			return listen<PageEvent>('page-event', (ev) => cb(ev.payload));
+		},
+		onSettingsEvent: async (cb) => {
+			const { listen } = await import('@tauri-apps/api/event');
+			return listen<Settings>('settings-event', (ev) => cb(ev.payload));
+		},
+		onOpenPage: async (cb) => {
+			const { listen } = await import('@tauri-apps/api/event');
+			return listen<OpenPageEvent>('open-page', (ev) => cb(ev.payload));
 		}
 	};
 }

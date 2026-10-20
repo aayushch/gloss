@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Set the app version everywhere it is recorded: the Tauri config, the Cargo
-# workspace and ui/package.json. Used by the release workflow with the tag
-# name, and by hand before tagging.
+# workspace, ui/package.json, and the browser extension's package.json and
+# manifests (which take the numeric part only, as Chrome requires). Used by
+# the release workflow with the tag name, and by hand before tagging.
 #
 #   scripts/set-version.sh 0.2.0
 set -euo pipefail
@@ -23,6 +24,24 @@ node -e '
     fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
   }
 ' "$VERSION" "$REPO_ROOT/ui/src-tauri/tauri.conf.json" "$REPO_ROOT/ui/package.json"
+
+# Browser manifests allow only dotted numbers; a prerelease suffix is dropped.
+NUMERIC="${VERSION%%-*}"
+EXT_FILES=()
+for f in "$REPO_ROOT/extension/package.json" "$REPO_ROOT"/extension/manifests/*.json; do
+    [ -f "$f" ] && EXT_FILES+=("$f")
+done
+if [ ${#EXT_FILES[@]} -gt 0 ]; then
+    node -e '
+      const fs = require("fs");
+      const [version, ...files] = process.argv.slice(1);
+      for (const file of files) {
+        const json = JSON.parse(fs.readFileSync(file, "utf8"));
+        json.version = version;
+        fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+      }
+    ' "$NUMERIC" "${EXT_FILES[@]}"
+fi
 
 # The workspace manifest is the single source for every crate's version.
 sed -i.bak -E "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$REPO_ROOT/Cargo.toml"

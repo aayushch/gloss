@@ -1,19 +1,21 @@
 <script lang="ts">
 	// Left navigation rail: new chat, search, tag filters, the projects (each
 	// with its Gloss conversations and the sessions its agents recorded
-	// outside Gloss), the pinned and date-grouped list of the other
+	// outside Gloss), the web pages asked about from the browser extension
+	// (each with its asks), the pinned and date-grouped list of the other
 	// conversations, clarification sub-items under the active conversation,
 	// full-text results while searching, and the footer.
 	import { api } from '$lib/api/client';
 	import { app, AGENT_NAMES, ORIGIN_LABELS, PROJECT_PAGE } from '$lib/state/app.svelte';
-	import type { AgentId, ConversationSummary, ExternalSession, Project } from '$lib/api/types';
-	import { agentsIn, groupOf, pad, projectItems, relativeTime, short, splitByProject, type Group } from '$lib/state/threads';
+	import type { AgentId, ConversationSummary, ExternalSession, Page, Project } from '$lib/api/types';
+	import { agentsIn, groupOf, hostOf, pad, projectItems, relativeTime, short, splitForRail, type Group } from '$lib/state/threads';
+	import ExtensionBanner from './ExtensionBanner.svelte';
 	import Icon from './Icon.svelte';
 	import UpdateBanner from './UpdateBanner.svelte';
 
 	const GROUPS: Group[] = ['Today', 'Yesterday', 'Last week', 'Older'];
 
-	const split = $derived(splitByProject(app.conversations, app.projects));
+	const split = $derived(splitForRail(app.conversations, app.projects));
 
 	/** Projects the rail lists. A tag filter hides those with no matching conversation. */
 	const shownProjects = $derived(app.tagFilter ? app.projects.filter((p) => split.byProject.get(p.path)?.length) : app.projects);
@@ -98,6 +100,25 @@
 	function newChatIn(e: MouseEvent, path: string) {
 		e.stopPropagation();
 		app.newChat(path);
+	}
+
+	/** The top-level asks of a page, for its expanded rows: the open conversation's own when it is the page's. */
+	function asksOf(p: Page) {
+		return app.active?.id === p.conversationId ? app.active.clarifications.filter((c) => c.webAnchor && !c.parentId) : (app.pageAsks[p.urlKey] ?? []);
+	}
+
+	function openInBrowser(e: MouseEvent, p: Page) {
+		e.stopPropagation();
+		app.openUrl(p.url);
+	}
+
+	function deletePage(e: MouseEvent, p: Page) {
+		e.stopPropagation();
+		app.deletePage(p.urlKey);
+	}
+
+	function orphanTip(n: number): string {
+		return `${n} ${n === 1 ? 'ask is' : 'asks are'} not found on the page any more`;
 	}
 
 	function pin(e: MouseEvent, id: string) {
@@ -220,6 +241,49 @@
 				{/if}
 			{/each}
 		</section>
+		{#if app.pages.length}
+			<section class="pages" aria-label="Pages">
+				<div class="glabel prow">
+					<span class="plabel"><Icon name="globe" size={12} /> Pages</span>
+				</div>
+				{#each app.pages as p (p.urlKey)}
+					{@const open = !!app.pagesExpanded[p.urlKey]}
+					{@const current = app.active?.id === p.conversationId}
+					<div class="navitem pagerow" class:on={current} role="button" tabindex="0" title={p.url} aria-current={current ? 'page' : undefined} onclick={() => app.openPage(p.urlKey)} onkeydown={(e) => e.key === 'Enter' && app.openPage(p.urlKey)}>
+						<button type="button" class="chev" title={open ? 'Hide asks' : 'Show asks'} aria-label={open ? 'Hide asks' : 'Show asks'} aria-expanded={open} onclick={(e) => { e.stopPropagation(); app.togglePage(p.urlKey); }}>
+							<Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
+						</button>
+						<span class="favicon">
+							{#if p.faviconUrl}
+								<img src={p.faviconUrl} alt="" width="14" height="14" />
+							{:else}
+								<span class="letter">{hostOf(p.url).charAt(0).toUpperCase()}</span>
+							{/if}
+						</span>
+						<span class="title">{p.title || hostOf(p.url)}</span>
+						{#if p.orphanCount > 0}
+							<span class="orphan" title={orphanTip(p.orphanCount)}></span>
+						{/if}
+						{#if p.askCount > 0}
+							<span class="countpill">{p.askCount}</span>
+						{/if}
+						<button type="button" class="act" title="Open in browser" aria-label="Open in browser" onclick={(e) => openInBrowser(e, p)}><Icon name="external" size={12} /></button>
+						<button type="button" class="act" title="Delete page" aria-label="Delete page" onclick={(e) => deletePage(e, p)}><Icon name="trash" size={12} /></button>
+					</div>
+					{#if open}
+						{#each asksOf(p) as cl (cl.id)}
+							<button type="button" class="navsub" onclick={() => app.openPage(p.urlKey, cl.id)}>
+								<span class="dot" class:gone={cl.anchorState === 'orphan'}></span>
+								<span class="sub">{short(cl.quote, 26)}{cl.anchorState === 'orphan' ? ' · not on page' : ''}</span>
+							</button>
+						{/each}
+						{#if !asksOf(p).length}
+							<div class="navsub none-sub">{p.askCount ? 'Loading…' : 'No asks yet'}</div>
+						{/if}
+					{/if}
+				{/each}
+			</section>
+		{/if}
 		{#if app.draft && !draftProject}
 			<div class="group">
 				<div class="glabel">Today</div>
@@ -237,6 +301,7 @@
 		{/if}
 	</div>
 
+	<ExtensionBanner />
 	<UpdateBanner />
 
 	<div class="foot">
@@ -315,12 +380,66 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.projects {
+	.projects,
+	.pages {
 		background: var(--bg);
 		border: 1px solid var(--line);
 		border-radius: 10px;
 		padding: 0 4px 6px;
 		margin-bottom: 6px;
+	}
+	.plabel {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+	}
+	.pagerow .chev {
+		padding: 2px;
+		margin: -2px;
+		border-radius: 4px;
+	}
+	.pagerow .chev:hover {
+		color: var(--text);
+		background: var(--surface);
+	}
+	.favicon {
+		width: 14px;
+		height: 14px;
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 3px;
+		overflow: hidden;
+		background: var(--accent-tint);
+	}
+	.favicon img {
+		display: block;
+	}
+	.letter {
+		font-size: 9px;
+		font-weight: 600;
+		line-height: 1;
+		color: var(--accent-text);
+	}
+	.orphan {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		border: 1px solid var(--text-3);
+		flex: none;
+	}
+	.dot.gone {
+		background: transparent;
+		border: 1px solid var(--text-3);
+	}
+	.none-sub {
+		color: var(--text-3);
+		cursor: default;
+	}
+	.none-sub:hover {
+		background: none;
+		color: var(--text-3);
 	}
 	.prow {
 		display: flex;

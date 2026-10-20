@@ -24,6 +24,10 @@ pub struct GlossPaths {
     /// directory per file, so the system can open them by path.
     pub artifacts: PathBuf,
     pub logs: PathBuf,
+    /// Unix socket the `gloss-bridge` native-messaging host connects to.
+    pub bridge_sock: PathBuf,
+    /// Port and token of the loopback listener, for the Safari extension.
+    pub bridge_json: PathBuf,
 }
 
 impl GlossPaths {
@@ -49,6 +53,8 @@ impl GlossPaths {
             pi_sessions: home.join("pi-sessions"),
             artifacts: home.join("artifacts"),
             logs: home.join("logs"),
+            bridge_sock: home.join("bridge.sock"),
+            bridge_json: home.join("bridge.json"),
         }
     }
 

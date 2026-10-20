@@ -2,7 +2,7 @@
 // list, and provides the small formatting helpers the transcript and rail
 // share.
 
-import type { AgentId, Clarification, Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
+import type { AgentId, AnchorState, Clarification, Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
 
 export interface ThreadTurn {
 	question: Turn;
@@ -103,21 +103,63 @@ export function wellsContaining(conv: Conversation, query: string): string[] {
 }
 
 /** Conversations split for the rail: those bound to one of `projects`, by
- * project path, and the rest. A conversation whose folder is not a project
- * (the project was removed) goes with the rest. Order within each list is
- * kept. */
-export function splitByProject(
+ * project path; those that hold a web page's asks (`pageKey` set), which
+ * the Pages section lists; and the rest, which go in the date groups. A
+ * conversation whose folder is not a project (the project was removed)
+ * goes with the rest. Order within each list is kept. */
+export function splitForRail(
 	conversations: ConversationSummary[],
 	projects: Project[]
-): { byProject: Map<string, ConversationSummary[]>; rest: ConversationSummary[] } {
+): { byProject: Map<string, ConversationSummary[]>; pages: ConversationSummary[]; rest: ConversationSummary[] } {
 	const byProject = new Map<string, ConversationSummary[]>(projects.map((p) => [p.path, []]));
+	const pages: ConversationSummary[] = [];
 	const rest: ConversationSummary[] = [];
 	for (const c of conversations) {
+		if (c.pageKey) {
+			pages.push(c);
+			continue;
+		}
 		const list = c.projectDir ? byProject.get(c.projectDir) : undefined;
 		if (list) list.push(c);
 		else rest.push(c);
 	}
+	return { byProject, pages, rest };
+}
+
+/** `splitForRail` without the page conversations. */
+export function splitByProject(
+	conversations: ConversationSummary[],
+	projects: Project[]
+): { byProject: Map<string, ConversationSummary[]>; rest: ConversationSummary[] } {
+	const { byProject, rest } = splitForRail(conversations, projects);
 	return { byProject, rest };
+}
+
+/** The asks made on a web page: the threads of the clarifications that
+ * carry a web anchor, in clarification order. */
+export function pageThreads(conv: Conversation): Thread[] {
+	return [...buildThreads(conv).values()].filter((th) => th.clarification.webAnchor);
+}
+
+/** Turns asked about the page as a whole rather than about one passage. */
+export function pageQuestions(conv: Conversation): Turn[] {
+	return conv.turns.filter((t) => !t.clarificationId);
+}
+
+/** The host of a URL without a leading "www.", or the URL itself when it does not parse. */
+export function hostOf(url: string): string {
+	try {
+		return new URL(url).hostname.replace(/^www\./, '') || url;
+	} catch {
+		return url;
+	}
+}
+
+/** What a page ask's anchor state means to the reader; empty when the passage was found exactly. */
+export function anchorLabel(state: AnchorState | null): string {
+	if (state === 'fuzzy') return 'approximate match';
+	if (state === 'orphan') return 'not on the page any more';
+	return '';
 }
 
 /** One entry in a project's rail list: a Gloss conversation, or a session

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["engine", "ui/src-tauri"]
+members = ["engine", "bridge", "ui/src-tauri"]
 
 [workspace.package]
 version = "1.0.1"
@@ -10,7 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "net", "signal"] }
 tokio-util = "0.7"
 anyhow = "1"
 thiserror = "2"

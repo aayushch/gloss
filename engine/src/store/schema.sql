@@ -63,10 +63,32 @@ CREATE TABLE IF NOT EXISTS clarifications (
     quote TEXT NOT NULL,
     parent_id TEXT,
     open INTEGER NOT NULL DEFAULT 1,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    -- JSON WebAnchor for an ask made on a web page; NULL for in-app clarifications.
+    web_anchor TEXT,
+    -- 'anchored', 'fuzzy' or 'orphan': how the extension last placed the anchor.
+    anchor_state TEXT
 );
 
 CREATE INDEX IF NOT EXISTS clarifications_by_conversation ON clarifications (conversation_id, number);
+
+-- Web pages asked about from the browser extension. Each page owns one
+-- conversation; the asks made on it are that conversation's clarifications.
+CREATE TABLE IF NOT EXISTS pages (
+    -- Canonical URL (see pages::url_key).
+    url_key TEXT PRIMARY KEY,
+    -- The URL as the browser last reported it.
+    url TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    favicon_url TEXT,
+    conversation_id TEXT NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
+    -- The readable text last sent to the agent and its hash, so the text is
+    -- sent again only when the page changed.
+    text TEXT,
+    text_hash TEXT,
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

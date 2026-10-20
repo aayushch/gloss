@@ -10,6 +10,7 @@
 	const RECENT_MS = 10 * 60_000;
 	import AskButton from './AskButton.svelte';
 	import AssistantTurn from './AssistantTurn.svelte';
+	import PageTranscript from './PageTranscript.svelte';
 	import SessionTurns from './SessionTurns.svelte';
 	import UserBubble from './UserBubble.svelte';
 
@@ -136,7 +137,9 @@
 </script>
 
 <div class="transcript" bind:this={container} onmouseup={onMouseUp} role="presentation">
-	{#if conv}
+	{#if conv?.pageKey}
+		<PageTranscript {conv} {threads} />
+	{:else if conv}
 		{#if app.earlier.length}
 			<SessionTurns turns={app.earlier} />
 			<div class="handover"><span>Continued in Gloss</span></div>

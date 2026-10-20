@@ -42,6 +42,15 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `cancel_turn` | `conversationId: string` | – | Kills the agent process; the turn ends with a `cancelled` event. |
 | `set_clarification_open` | `id: string, open: boolean` | – | Persists the collapsed state. |
 | `set_theme` | `theme: Theme` | – | Also switches the native window appearance and background colour (the transparent macOS title bar shows the latter). |
+| `list_pages` | `limit?: number` | `Page[]` | Web pages asked about from the browser extension, most recently active first. |
+| `get_page` | `urlKey: string` | `PageDetail \| null` | The page with its conversation; asks are the clarifications carrying a `webAnchor`, turns without a clarification are questions about the whole page. |
+| `delete_page` | `urlKey: string` | – | Deletes the page's conversation (and so the page, its asks and turns). |
+| `delete_clarification` | `id: string` | – | Removes one clarification with its turns and any clarification nested in its replies. |
+| `extension_status` | – | `ExtensionStatus` | Bridge path, whether the app runs translocated, per-browser host-manifest status, connected extensions, whether the Firefox add-on and Safari extension are bundled, the Chrome Web Store URL, the loopback port. |
+| `register_native_hosts` / `unregister_native_hosts` | – | `BrowserRegistration[]` | Writes or removes the native-messaging host manifests for every installed browser. Done at every launch too. |
+| `open_url` | `url: string` | – | Opens an http(s) link in the default browser. |
+| `install_firefox_extension` | – | – | Opens the bundled signed `.xpi` with Firefox, which asks to install it. Errors when this build has no add-on. |
+| `open_safari_extensions` | – | – | Brings Safari forward so the extension can be enabled under Settings › Extensions. |
 
 ## Event `turn-event`
 
@@ -66,6 +75,50 @@ says whether its prompts reach the user.
 `delta` appends; `replace` swaps the whole text. The frontend must tolerate a
 `replace` after deltas: some agents re-send a full message that does not
 extend the streamed prefix.
+
+## Other events
+
+- `page-event` `{ urlKey, deleted }`: a page's asks changed (created, removed,
+  opened or closed, re-anchored) or the page was deleted. The frontend
+  re-fetches the page list and, when it is open, the page.
+- `settings-event` `Settings`: the settings changed, from any side.
+- `open-page` `{ urlKey, clarificationId }`: the browser asked Gloss to show a
+  page (the extension's "Open in Gloss" button, or a `gloss://pages/<url key>?ask=<id>`
+  link). The window is already in front when the event arrives.
+
+## Bridge protocol (browser extension ↔ app)
+
+The browser extension talks to the running app through `engine/src/bridge/`.
+Chrome-family browsers and Firefox spawn the `gloss-bridge` native-messaging
+host, which relays frames to the Unix socket `~/.gloss/bridge.sock`; the
+Safari extension's native handler connects to a TCP listener on 127.0.0.1
+whose port and token are in `~/.gloss/bridge.json` (and the App Group
+container), and must send `{"token": "…"}` as its first line. Both carry
+the same protocol: one JSON object per line.
+
+- Request `{ id, method, params }`; reply `{ id, result }` or
+  `{ id, error: { code, message } }` with codes `protocol`, `unauthorized`,
+  `busy`, `not_found`, `denied`, `invalid`, `internal`, and `app_not_running`
+  (sent by `gloss-bridge` itself when no app is running).
+- Pushed events `{ event, data }`: `turn` (a `TurnEventEnvelope`), `page`
+  (`{ urlKey, deleted }`), `settings` (`{ sendPageText, denyList }`),
+  `shutdown`; `gloss-bridge` adds `app_state` (`{ running }`).
+- Methods: `hello` (must come first; `{ protocol, extensionVersion, browser }` →
+  `{ protocol, minProtocol, appVersion, settings, agent }`), `getPage`
+  (`PageMeta` → `{ urlKey, page }`), `getTurn` (`{ turnId }` → `{ turn, running,
+  request }`), `ask` (`PageAskRequest` → `PageAskResult`), `askPage` (same with
+  no anchor), `followUp` (`{ clarificationId, question }`), `setOpen`,
+  `cancel`, `deleteAsk`, `reportAnchors` (`{ states: { id: 'anchored' |
+  'fuzzy' | 'orphan' } }`), `listRecentPages`, `openInGloss`, and `launchApp`
+  (handled by the host, never by the app).
+- Every line the app writes stays under 900 KB, Chrome's frame limit; a page
+  whose replies would exceed it comes back with long turn texts cut and
+  `truncated: true` on those turns.
+
+Protocol constants live in `engine/src/bridge/mod.rs` and
+`extension/src/shared/protocol.ts`. The headless CLI speaks it too:
+`gloss-engine serve [--loopback]` runs the listeners and `gloss-engine
+bridge-call <method> [json]` sends one request.
 
 ## Attachments in the prompt
 

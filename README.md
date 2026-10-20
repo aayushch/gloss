@@ -20,6 +20,12 @@ full-text search across every conversation and find within the open one
 and export of a reply or a whole conversation as Markdown with the
 clarifications folded in under the sentences they were asked about.
 
+The same gesture works in the browser: the Gloss extension (Chrome-family,
+Firefox and Safari) puts "Ask about this" on any highlighted passage of a
+web page, shows the reply in a popover anchored to it, and leaves a mark
+that returns on the next visit. Every page you asked about is listed under
+**Pages** in Gloss. See `docs/extension.md`.
+
 ## Stack
 
 - Frontend: Svelte 5 (runes) + SvelteKit static build, plain CSS, Shiki
@@ -84,9 +90,14 @@ Set `GLOSS_HOME` to use a different data directory (default `~/.gloss`).
 ## Verify
 
 ```bash
-cargo test -p gloss-engine
+cargo test -p gloss-engine -p gloss-bridge -p gloss-app
 cd ui && npm run check && npm test && npm run build
+cd extension && npm run check && npm test && npm run build
 ```
+
+`gloss-engine serve --loopback` runs the browser bridge without the app and
+`node scripts/bridge-smoke.mjs` drives the native-messaging host like a
+browser would.
 
 ## Package
 
@@ -94,7 +105,14 @@ cd ui && npm run check && npm test && npm run build
 scripts/build.sh                     # installers for this machine's platform
 scripts/build.sh --universal         # macOS: one app for Apple Silicon and Intel
 scripts/build.sh --sign "Developer ID Application: …"   # signed macOS build
+scripts/build.sh --safari            # macOS: also build the Safari extension into Gloss.app (needs Xcode)
 ```
+
+The `gloss-bridge` sidecar is built and placed automatically before every
+`tauri dev` and `tauri build`. The Firefox add-on is bundled when
+`ui/src-tauri/resources/gloss.xpi` holds a signed file; the release workflow
+puts one there (with the `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` secrets), a
+local build ships an empty placeholder and the Firefox button stays off.
 
 Output lands in `target/release/bundle/` (`dmg/`, `macos/`, `nsis/`, `msi/`,
 `appimage/`, `deb/`, `rpm/`). Each platform can only package for itself.

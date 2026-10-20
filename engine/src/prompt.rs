@@ -1,6 +1,6 @@
 //! Text Gloss adds around what the user types before it reaches an agent.
 
-use crate::types::AgentId;
+use crate::types::{AgentId, AskContext};
 
 /// Short framing note given to every agent as (an addition to) its system
 /// prompt, so a coding agent answers like a chat assistant.
@@ -53,6 +53,73 @@ pub const ARTIFACT_TAG: &str = "<artifact id=";
 /// prepended to the first turn's prompt instead.
 pub fn has_system_prompt_flag(agent: AgentId) -> bool {
     matches!(agent, AgentId::Claude | AgentId::Pi)
+}
+
+/// The system note for a conversation that belongs to a web page: the agent
+/// is told it answers about a page open in the user's browser.
+pub fn page_system_note(title: &str, url: &str) -> String {
+    SYSTEM_NOTE.replace(
+        "You have no project or filesystem to work on: \
+do not offer to read, edit or create files, and do not propose running commands. ",
+        &format!(
+            "The user is reading a web page in their browser and asking about it through the Gloss browser extension. \
+The page is \"{}\" at {}. Each question quotes the passage the user highlighted, with the text around it; \
+the page's readable text is included with the first question and again whenever it changes. \
+Answer about the highlighted passage directly and briefly, in markdown. \
+You have no files to work on and cannot open other pages unless you have a web tool. ",
+            title.trim(),
+            url.trim()
+        ),
+    )
+}
+
+/// What a question about a highlighted passage of a web page becomes when
+/// sent to the agent. `page_text` is included when the page's text is new
+/// to the conversation; `page_changed` says it replaces an earlier copy.
+pub fn page_ask_prompt(
+    quote: &str,
+    context: &AskContext,
+    question: &str,
+    page_text: Option<&str>,
+    page_changed: bool,
+) -> String {
+    let mut p = format!(
+        "The user highlighted this passage on the page and is asking about it.\n\
+Answer about the passage directly, in markdown, without summarising the whole page.\n\n\
+> \"{}\"\n",
+        quote.trim()
+    );
+    let before = context.before.trim();
+    let after = context.after.trim();
+    if !before.is_empty() {
+        p.push_str(&format!("\nText just before it: \"…{}\"\n", before));
+    }
+    if !after.is_empty() {
+        p.push_str(&format!("\nText just after it: \"{}…\"\n", after));
+    }
+    p.push('\n');
+    p.push_str(question.trim());
+    append_page_text(&mut p, page_text, page_changed);
+    p
+}
+
+/// A question about the page as a whole, with no highlighted passage.
+pub fn page_question_prompt(question: &str, page_text: Option<&str>, page_changed: bool) -> String {
+    let mut p = format!("The user is asking about the page as a whole.\n\n{}", question.trim());
+    append_page_text(&mut p, page_text, page_changed);
+    p
+}
+
+fn append_page_text(p: &mut String, page_text: Option<&str>, page_changed: bool) {
+    if let Some(text) = page_text {
+        p.push_str("\n\n---\nThe page's readable text");
+        if page_changed {
+            p.push_str(", which has changed since last time");
+        }
+        p.push_str(":\n<page>\n");
+        p.push_str(text.trim());
+        p.push_str("\n</page>");
+    }
 }
 
 /// What a clarification question becomes when sent to the agent.
@@ -153,6 +220,32 @@ mod tests {
         assert!(!note.contains("no project or filesystem"));
         assert!(note.contains(ARTIFACT_TAG));
         assert_eq!(system_note(None), SYSTEM_NOTE);
+    }
+
+    #[test]
+    fn page_ask_prompt_quotes_context_and_page_text() {
+        let ctx = AskContext { before: "the cache ".into(), after: " is flushed".into() };
+        let p = page_ask_prompt("store buffer", &ctx, "Why?", Some("Full page"), false);
+        assert!(p.starts_with("The user highlighted this passage on the page"));
+        assert!(p.contains("> \"store buffer\""));
+        assert!(p.contains("Text just before it: \"…the cache\""));
+        assert!(p.contains("Text just after it: \"is flushed…\""));
+        assert!(p.contains("\nWhy?\n\n---\nThe page's readable text:\n<page>\nFull page\n</page>"));
+        let again = page_ask_prompt("x", &AskContext::default(), "q", Some("New"), true);
+        assert!(again.contains("which has changed since last time"));
+        assert!(!again.contains("Text just before"));
+        let none = page_ask_prompt("x", &AskContext::default(), "q", None, false);
+        assert!(!none.contains("<page>"));
+        assert!(none.ends_with("q"));
+        assert!(page_question_prompt("what is this", None, false).ends_with("what is this"));
+    }
+
+    #[test]
+    fn page_note_names_the_page_and_keeps_artifacts() {
+        let note = page_system_note("Rust Book", "https://doc.rust-lang.org/book/");
+        assert!(note.contains("\"Rust Book\" at https://doc.rust-lang.org/book/"));
+        assert!(!note.contains("no project or filesystem"));
+        assert!(note.contains(ARTIFACT_TAG));
     }
 
     #[test]

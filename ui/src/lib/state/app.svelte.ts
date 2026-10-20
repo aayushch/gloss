@@ -14,8 +14,12 @@ import type {
 	Clarification,
 	Conversation,
 	ConversationSummary,
+	ExtensionStatus,
 	ExternalSession,
 	ModelInfo,
+	Page,
+	PageDetail,
+	PageEvent,
 	Project,
 	SearchHit,
 	SessionOrigin,
@@ -29,7 +33,7 @@ import { copyText } from '$lib/clipboard';
 import { find } from '$lib/state/find.svelte';
 import { wellsContaining } from '$lib/state/threads';
 import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
-import { exportConversation, exportFileName, exportTurn } from '$lib/markdown/export';
+import { exportConversation, exportFileName, exportPage, exportTurn } from '$lib/markdown/export';
 
 /** Floating "Ask about this" button position and target. */
 export interface PendingAsk {
@@ -97,8 +101,16 @@ export const AGENT_NAMES: Record<AgentId, string> = {
 class AppState {
 	agents = $state<AgentInfo[]>([]);
 	models = $state<Partial<Record<AgentId, ModelInfo[]>>>({});
-	settings = $state<Settings>({ defaultAgent: 'claude', defaultModel: {}, theme: 'light', webSearch: true });
+	settings = $state<Settings>({ defaultAgent: 'claude', defaultModel: {}, theme: 'light', webSearch: true, sendPageText: true, pageDenyList: [], extensionBannerSeen: true, safariBridge: true, pageAgent: null });
 	conversations = $state<ConversationSummary[]>([]);
+	/** Web pages asked about from the browser extension, most recently updated first. */
+	pages = $state<Page[]>([]);
+	/** urlKeys of the pages whose asks the rail lists. */
+	pagesExpanded = $state<Record<string, boolean>>({});
+	/** Each expanded page's top-level asks, by urlKey, for the rail's rows. */
+	pageAsks = $state<Record<string, Clarification[]>>({});
+	/** Where the browser extension stands; null until Settings first asks for it. */
+	extension = $state<ExtensionStatus | null>(null);
 	/** Projects, most recently active first. */
 	projects = $state<Project[]>([]);
 	/** Paths of the projects whose conversations the rail shows. */
@@ -147,7 +159,9 @@ class AppState {
 	jumpTarget = $state<string | null>(null);
 	loadError = $state<string | null>(null);
 
-	private unlisten: (() => void) | null = null;
+	private unlisten: (() => void)[] = [];
+	/** urlKeys of deleted pages whose replacement conversation is being opened. */
+	private forgetting = new Set<string>();
 	private noticeTimer: ReturnType<typeof setTimeout> | undefined;
 	/** The last artifact the pane opened on its own while a reply streamed. */
 	private autoOpened: string | null = null;
@@ -192,14 +206,23 @@ class AppState {
 			this.projects = projects;
 			this.applyTheme(settings.theme, false);
 			this.refreshTags();
+			this.refreshPages();
 			await Promise.all(agents.map((ag) => this.loadModels(ag.id)));
 			if (conversations.length) await this.open(conversations[0].id);
 			else this.newChat();
 		} catch (e) {
 			this.loadError = String(e);
 		}
-		this.unlisten?.();
-		this.unlisten = await a.onTurnEvent((e) => this.applyEvent(e));
+		this.unlisten.forEach((u) => u());
+		this.unlisten = await Promise.all([
+			a.onTurnEvent((e) => this.applyEvent(e)),
+			a.onPageEvent((e) => this.applyPageEvent(e)),
+			a.onSettingsEvent((s) => {
+				this.settings = s;
+				this.applyTheme(s.theme, false);
+			}),
+			a.onOpenPage((e) => this.openPage(e.urlKey, e.clarificationId ?? undefined))
+		]);
 	}
 
 	async loadModels(agent: AgentId): Promise<void> {
@@ -283,6 +306,193 @@ class AppState {
 		await (await api()).removeProject(path);
 		this.projects = this.projects.filter((p) => p.path !== path);
 		if (this.draft?.projectDir === path) this.draft.projectDir = null;
+	}
+
+	// ── pages ───────────────────────────────────────────────────────────
+
+	/** The page whose asks the active conversation holds, if it is one. */
+	get activePage(): Page | null {
+		const key = this.active?.pageKey;
+		return key ? (this.pages.find((p) => p.urlKey === key) ?? null) : null;
+	}
+
+	async refreshPages(): Promise<void> {
+		try {
+			this.pages = await (await api()).listPages(200);
+		} catch {
+			// The rail keeps the pages it already shows.
+		}
+	}
+
+	/** Shows or hides a page's asks in the rail. Showing them loads the list. */
+	togglePage(urlKey: string, open = !this.pagesExpanded[urlKey]): void {
+		this.pagesExpanded = { ...this.pagesExpanded, [urlKey]: open };
+		if (open) this.loadPageAsks(urlKey);
+	}
+
+	/** Reloads the asks the rail lists under one page. A failure keeps the list it had. */
+	async loadPageAsks(urlKey: string): Promise<void> {
+		try {
+			const detail = await (await api()).getPage(urlKey);
+			if (detail) this.pageAsks = { ...this.pageAsks, [urlKey]: detail.conversation.clarifications.filter((c) => c.webAnchor && !c.parentId) };
+		} catch {
+			// The rail keeps the asks it already shows.
+		}
+	}
+
+	/** Opens the conversation that holds a page's asks and, when given, scrolls to one ask. */
+	async openPage(urlKey: string, clarificationId?: string): Promise<void> {
+		let detail: PageDetail | null;
+		try {
+			detail = await (await api()).getPage(urlKey);
+		} catch (e) {
+			this.flash(`Could not open the page: ${String(e).replace(/^Error:\s*/, '')}`);
+			return;
+		}
+		if (!detail) {
+			this.flash('That page is no longer in Gloss');
+			this.refreshPages();
+			return;
+		}
+		if (this.active?.id !== detail.conversation.id) await this.show(detail.conversation);
+		if (clarificationId) this.jumpTo(clarificationId);
+	}
+
+	/** Removes a page and its asks after the user confirms. */
+	async deletePage(urlKey: string): Promise<void> {
+		const a = await api();
+		const page = this.pages.find((p) => p.urlKey === urlKey);
+		const yes = await a.confirm(`Delete “${page?.title ?? urlKey}”?`, 'The page and every ask made on it are removed from Gloss. The page itself is untouched.', 'Delete');
+		if (!yes) return;
+		try {
+			await a.deletePage(urlKey);
+		} catch (e) {
+			this.flash(`Could not delete the page: ${String(e).replace(/^Error:\s*/, '')}`);
+			return;
+		}
+		await this.forgetPage(urlKey);
+	}
+
+	/** Drops a deleted page from the rail and moves on if it was open. The
+	 * engine's deleted event and the local delete can both land here; only
+	 * the first one to arrive opens the replacement. */
+	private async forgetPage(urlKey: string): Promise<void> {
+		this.pages = this.pages.filter((p) => p.urlKey !== urlKey);
+		this.conversations = this.conversations.filter((c) => c.pageKey !== urlKey);
+		if (this.active?.pageKey !== urlKey || this.forgetting.has(urlKey)) return;
+		this.forgetting.add(urlKey);
+		try {
+			if (this.conversations.length) await this.open(this.conversations[0].id);
+			else this.newChat();
+		} finally {
+			this.forgetting.delete(urlKey);
+		}
+	}
+
+	/** Removes one ask (with its follow-ups and nested asks) from the active page. */
+	async removeAsk(id: string): Promise<void> {
+		const conv = this.active;
+		if (!conv) return;
+		try {
+			await (await api()).deleteClarification(id);
+		} catch (e) {
+			this.flash(`Could not remove the ask: ${String(e).replace(/^Error:\s*/, '')}`);
+			return;
+		}
+		await this.reloadActive(conv.id);
+		this.refreshPages();
+		if (conv.pageKey) this.loadPageAsks(conv.pageKey);
+	}
+
+	/** Opens a link in the default browser. */
+	async openUrl(url: string): Promise<void> {
+		try {
+			await (await api()).openUrl(url);
+		} catch (e) {
+			this.flash(`Could not open the link: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	/** Hands the bundled Firefox add-on to Firefox, which offers to install it. */
+	async installFirefoxExtension(): Promise<void> {
+		try {
+			await (await api()).installFirefoxExtension();
+		} catch (e) {
+			this.flash(`Could not open Firefox: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	async openSafariExtensions(): Promise<void> {
+		try {
+			await (await api()).openSafariExtensions();
+		} catch (e) {
+			this.flash(`Could not open Safari's settings: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	async refreshExtensionStatus(): Promise<void> {
+		try {
+			this.extension = await (await api()).extensionStatus();
+		} catch (e) {
+			this.flash(`Could not read the extension status: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	/** Writes the native-messaging manifests so installed browsers can start the bridge. */
+	async registerHosts(): Promise<void> {
+		try {
+			const browsers = await (await api()).registerNativeHosts();
+			if (this.extension) this.extension.browsers = browsers;
+			this.flash('Native hosts registered');
+		} catch (e) {
+			this.flash(`Could not register: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	async unregisterHosts(): Promise<void> {
+		try {
+			const browsers = await (await api()).unregisterNativeHosts();
+			if (this.extension) this.extension.browsers = browsers;
+			this.flash('Native hosts removed');
+		} catch (e) {
+			this.flash(`Could not unregister: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
+	}
+
+	async dismissExtensionBanner(): Promise<void> {
+		await this.saveSettings({ extensionBannerSeen: true });
+	}
+
+	/** A page's asks changed elsewhere (in the browser, or another window) or the page was deleted. */
+	private async applyPageEvent(e: PageEvent): Promise<void> {
+		if (e.deleted) {
+			await this.forgetPage(e.urlKey);
+			return;
+		}
+		this.refreshPages();
+		this.refreshList();
+		if (this.pagesExpanded[e.urlKey]) this.loadPageAsks(e.urlKey);
+		if (this.active?.pageKey === e.urlKey) await this.reloadActive(this.active.id);
+	}
+
+	/** Replaces the active conversation with a fresh copy from the engine.
+	 * A turn still streaming keeps the text already shown when the engine's
+	 * copy is shorter, so the transcript does not jump back. */
+	private async reloadActive(id: string): Promise<void> {
+		let fresh: Conversation;
+		try {
+			fresh = await (await api()).getConversation(id);
+		} catch {
+			return;
+		}
+		const cur = this.active;
+		if (!cur || cur.id !== id) return;
+		for (const t of fresh.turns) {
+			const local = cur.turns.find((x) => x.id === t.id);
+			if (local && (t.status === 'pending' || t.status === 'streaming') && local.text.length > t.text.length) t.text = local.text;
+		}
+		this.active = fresh;
+		this.loadTurnState(fresh);
 	}
 
 	async refreshTags(): Promise<void> {
@@ -407,6 +617,14 @@ class AppState {
 		if (await copyText(exportConversation(this.active))) this.flash('Copied conversation as Markdown');
 	}
 
+	/** Copies a page conversation as notes: the page, then each ask with its answers. */
+	async copyPageMarkdown(): Promise<void> {
+		const conv = this.active;
+		if (!conv?.pageKey) return;
+		const page = this.activePage;
+		if (await copyText(exportPage(conv, page))) this.flash('Copied page notes as Markdown');
+	}
+
 	async saveConversationMarkdown(): Promise<void> {
 		if (!this.active) return;
 		const path = await (await api()).saveTextFile(exportFileName(this.active.title), exportConversation(this.active));
@@ -487,24 +705,34 @@ class AppState {
 	}
 
 	async open(id: string): Promise<void> {
+		await this.show(await (await api()).getConversation(id));
+	}
+
+	/** Makes a loaded conversation the active one and clears every draft, session and composer state. */
+	private async show(conv: Conversation): Promise<void> {
 		this.draft = null;
 		this.viewing = null;
 		this.pendingAsk = null;
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		const a = await api();
-		this.active = await a.getConversation(id);
-		if (this.active.projectDir) this.toggleProject(this.active.projectDir, true);
+		this.active = conv;
+		if (conv.projectDir) this.toggleProject(conv.projectDir, true);
+		if (conv.pageKey) this.togglePage(conv.pageKey, true);
 		this.earlier = [];
-		if (this.active.continuedFrom) {
-			const earlier = await a.conversationHistory(id).catch(() => []);
-			if (this.active?.id === id) this.earlier = earlier;
+		if (conv.continuedFrom) {
+			const earlier = await (await api()).conversationHistory(conv.id).catch(() => []);
+			if (this.active?.id === conv.id) this.earlier = earlier;
 		}
-		for (const t of this.active.turns) t.attachments.forEach((att) => this.loadThumb(att));
+		this.loadTurnState(conv);
+	}
+
+	/** Loads the attachment previews of a conversation and the request its running turn waits on. */
+	private loadTurnState(conv: Conversation): void {
+		for (const t of conv.turns) t.attachments.forEach((att) => this.loadThumb(att));
 		this.requests = {};
-		const pending = this.active.pendingRequest;
-		const waiting = pending && this.active.turns.find((t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming'));
+		const pending = conv.pendingRequest;
+		const waiting = pending && conv.turns.find((t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming'));
 		if (pending && waiting) this.requests = { [waiting.id]: pending };
 	}
 
@@ -681,7 +909,9 @@ class AppState {
 
 	async remove(id: string): Promise<void> {
 		await (await api()).deleteConversation(id);
+		const gone = this.conversations.find((c) => c.id === id);
 		this.conversations = this.conversations.filter((c) => c.id !== id);
+		if (gone?.pageKey) this.pages = this.pages.filter((p) => p.urlKey !== gone.pageKey);
 		if (this.active?.id === id) {
 			if (this.conversations.length) await this.open(this.conversations[0].id);
 			else this.newChat();
@@ -820,7 +1050,12 @@ class AppState {
 			return;
 		}
 		const idx = conv.turns.findIndex((t) => t.id === e.turnId);
-		if (idx < 0) return;
+		if (idx < 0) {
+			// A turn this window has not loaded, such as an ask made in the
+			// browser on the open page: fetch the conversation again.
+			if (e.event.type === 'started' || e.event.type === 'done' || e.event.type === 'failed' || e.event.type === 'cancelled') this.reloadActive(conv.id);
+			return;
+		}
 		const turn = conv.turns[idx];
 		switch (e.event.type) {
 			case 'started':
@@ -861,6 +1096,7 @@ class AppState {
 				this.autoOpenArtifact(e.event.turn);
 				this.refreshList();
 				if (conv.projectDir) this.refreshProjects();
+				if (conv.pageKey) this.refreshPages();
 				break;
 		}
 	}
@@ -884,6 +1120,7 @@ function summaryOf(c: Conversation): ConversationSummary {
 		clarificationCount: c.clarifications.length,
 		projectDir: c.projectDir,
 		mode: c.mode,
+		pageKey: c.pageKey,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	};

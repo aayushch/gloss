@@ -159,6 +159,52 @@ describe('app state against the mock api', () => {
 		expect(app.active?.mode).toBeNull();
 	});
 
+	it('lists pages, opens one at an ask, removes the ask and deletes the page', async () => {
+		await app.init();
+		await settle(10);
+		const page = app.pages.find((p) => p.urlKey === 'https://example.com/cpu/store-buffers')!;
+		expect(page.askCount).toBe(2);
+		expect(page.orphanCount).toBe(1);
+		expect(app.conversations.some((c) => c.pageKey === page.urlKey)).toBe(true);
+
+		await app.openPage(page.urlKey, 'cl_web2');
+		expect(app.active?.id).toBe(page.conversationId);
+		expect(app.active?.pageKey).toBe(page.urlKey);
+		expect(app.activePage?.title).toBe('Understanding store buffers');
+		expect(app.jumpTarget).toBe('well-cl_web2');
+		expect(app.active?.clarifications.find((c) => c.id === 'cl_web2')?.open).toBe(true);
+		expect(app.pagesExpanded[page.urlKey]).toBe(true);
+		await settle(10);
+		expect(app.pageAsks[page.urlKey]?.map((c) => c.id)).toEqual(['cl_web1', 'cl_web2']);
+
+		await app.removeAsk('cl_web2');
+		await settle(10);
+		expect(app.active?.clarifications.map((c) => c.id)).toEqual(['cl_web1']);
+		expect(app.active?.turns.some((t) => t.clarificationId === 'cl_web2')).toBe(false);
+		expect(app.pages.find((p) => p.urlKey === page.urlKey)?.askCount).toBe(1);
+
+		// jsdom has no dialogs; the mock's confirm goes through window.confirm.
+		window.confirm = () => true;
+		await app.deletePage(page.urlKey);
+		await settle(10);
+		expect(app.pages.some((p) => p.urlKey === page.urlKey)).toBe(false);
+		expect(app.conversations.some((c) => c.pageKey === page.urlKey)).toBe(false);
+		expect(app.active?.pageKey ?? null).toBeNull();
+	});
+
+	it('dismisses the extension banner and reads the extension status', async () => {
+		await app.init();
+		expect(app.settings.extensionBannerSeen).toBe(false);
+		await app.dismissExtensionBanner();
+		expect(app.settings.extensionBannerSeen).toBe(true);
+		await app.refreshExtensionStatus();
+		expect(app.extension?.sessions[0]).toMatchObject({ browser: 'chrome', extensionVersion: '1.0.1' });
+		await app.unregisterHosts();
+		expect(app.extension?.browsers.every((b) => !b.registered)).toBe(true);
+		await app.registerHosts();
+		expect(app.extension?.browsers.find((b) => b.id === 'chrome')?.registered).toBe(true);
+	});
+
 	it('creates a conversation from a draft on first send and cancels', async () => {
 		app.newChat();
 		expect(app.draft).not.toBeNull();

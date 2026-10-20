@@ -11,8 +11,12 @@ import type {
 	Clarification,
 	Conversation,
 	ConversationSummary,
+	ExtensionStatus,
 	ExternalSession,
 	ModelInfo,
+	OpenPageEvent,
+	Page,
+	PageEvent,
 	Project,
 	SessionTurn,
 	Settings,
@@ -129,6 +133,23 @@ interface Conv extends ConversationSummary {
 	clarifications: Clarification[];
 }
 
+/** A page's identity and when it was seen; counts are derived from its conversation. */
+interface PageRecord {
+	urlKey: string;
+	url: string;
+	title: string;
+	faviconUrl: string | null;
+	conversationId: string;
+	firstSeen: number;
+	lastSeen: number;
+}
+
+const STORE_BUFFER_URL = 'https://example.com/cpu/store-buffers';
+const STORE_BUFFER_ANSWER = `A store buffer sits between the core and its L1 cache. A store retires into the buffer immediately and drains to the cache later, so the core never waits for the cache line to arrive in an exclusive state.
+
+The cost is ordering: a later load from another core can see memory before the buffered store lands. That is exactly the reordering a full fence (\`MFENCE\`, or a locked instruction) rules out by draining the buffer first.`;
+const STORE_BUFFER_PAGE_ANSWER = `The page argues that store buffers are the reason x86 is only *mostly* sequentially consistent: stores can be delayed past later loads to different addresses. Everything else in the x86 memory model follows from that one allowance.`;
+
 function makeTurn(conv: Conv, role: Turn['role'], text: string, extra: Partial<Turn> = {}): Turn {
 	const t: Turn = {
 		id: nextId('turn'),
@@ -184,6 +205,7 @@ function seed(): Conv[] {
 		clarificationCount: 0,
 		projectDir: null,
 		mode: null,
+		pageKey: null,
 		createdAt: now() - 3600_000,
 		updatedAt: now() - 1800_000,
 		agentSessionId: '32bead75-3df0-42d1-a069-faae5a2370fe',
@@ -203,7 +225,9 @@ function seed(): Conv[] {
 		quote: 'Earlier loads and stores can’t be reordered past it',
 		parentId: null,
 		open: true,
-		createdAt: now() - 1000_000
+		createdAt: now() - 1000_000,
+		webAnchor: null,
+		anchorState: null
 	};
 	cas.clarifications.push(cl);
 	cas.clarificationCount = 1;
@@ -221,6 +245,7 @@ function seed(): Conv[] {
 		clarificationCount: 0,
 		projectDir: null,
 		mode: null,
+		pageKey: null,
 		createdAt: now() - DAY - 3600_000,
 		updatedAt: now() - DAY,
 		agentSessionId: null,
@@ -243,6 +268,7 @@ function seed(): Conv[] {
 		clarificationCount: 0,
 		projectDir: null,
 		mode: null,
+		pageKey: null,
 		createdAt: now() - 2 * DAY,
 		updatedAt: now() - 2 * DAY + 60_000,
 		agentSessionId: null,
@@ -258,8 +284,87 @@ function seed(): Conv[] {
 	return [cas, rust, page];
 }
 
+/** A web page asked about from the browser extension: one page-level
+ * question and two asks, one still found on the page and one orphaned. */
+function seedPage(): { conv: Conv; page: PageRecord } {
+	const conv: Conv = {
+		id: 'conv_webpage',
+		title: 'Understanding store buffers',
+		agent: 'claude',
+		model: 'sonnet',
+		webSearch: false,
+		pinned: false,
+		tags: [],
+		clarificationCount: 0,
+		projectDir: null,
+		mode: null,
+		pageKey: STORE_BUFFER_URL,
+		createdAt: now() - 5 * 3600_000,
+		updatedAt: now() - 900_000,
+		agentSessionId: null,
+		continuedFrom: null,
+		running: false,
+		turns: [],
+		clarifications: []
+	};
+	makeTurn(conv, 'user', 'What is the main claim of this page?', { createdAt: now() - 5 * 3600_000 });
+	makeTurn(conv, 'assistant', STORE_BUFFER_PAGE_ANSWER, { createdAt: now() - 5 * 3600_000 + 4000 });
+	const anchored: Clarification = {
+		id: 'cl_web1',
+		conversationId: conv.id,
+		number: 1,
+		anchorBlockId: '',
+		quote: 'a store retires into the buffer before the cache line is owned',
+		parentId: null,
+		open: true,
+		createdAt: now() - 4 * 3600_000,
+		webAnchor: {
+			quote: { exact: 'a store retires into the buffer before the cache line is owned', prefix: 'On every modern x86 core, ', suffix: ', which is what makes stores cheap.' },
+			position: { start: 1240, end: 1303 },
+			container: 'article > p:nth-of-type(3)'
+		},
+		anchorState: 'anchored'
+	};
+	const orphan: Clarification = {
+		id: 'cl_web2',
+		conversationId: conv.id,
+		number: 2,
+		anchorBlockId: '',
+		quote: 'the buffer drains in program order',
+		parentId: null,
+		open: false,
+		createdAt: now() - 2 * 3600_000,
+		webAnchor: {
+			quote: { exact: 'the buffer drains in program order', prefix: 'Because ', suffix: ', a core always sees its own stores in order.' },
+			position: null,
+			container: null
+		},
+		anchorState: 'orphan'
+	};
+	conv.clarifications.push(anchored, orphan);
+	conv.clarificationCount = 2;
+	makeTurn(conv, 'user', 'Why does it not wait for ownership first?', { clarificationId: anchored.id, promptText: `> "${anchored.quote}"\n\nWhy does it not wait for ownership first?` });
+	makeTurn(conv, 'assistant', STORE_BUFFER_ANSWER, { clarificationId: anchored.id });
+	makeTurn(conv, 'user', 'Is that true on ARM as well?', { clarificationId: orphan.id, promptText: `> "${orphan.quote}"\n\nIs that true on ARM as well?` });
+	makeTurn(conv, 'assistant', 'No. ARM lets the store buffer drain out of order to different addresses, so a core can observe its own stores out of program order unless it uses a barrier.', { clarificationId: orphan.id });
+	const page: PageRecord = {
+		urlKey: STORE_BUFFER_URL,
+		url: STORE_BUFFER_URL,
+		title: 'Understanding store buffers',
+		faviconUrl: null,
+		conversationId: conv.id,
+		firstSeen: now() - 5 * 3600_000,
+		lastSeen: now() - 900_000
+	};
+	return { conv, page };
+}
+
 export function mockApi(): Api {
 	const convs = seed();
+	const seeded = seedPage();
+	convs.push(seeded.conv);
+	/** urlKey → page record. */
+	const pageRecords = new Map<string, PageRecord>([[seeded.page.urlKey, seeded.page]]);
 	/** Project path → when it was added. */
 	const projects = new Map<string, number>();
 	const project = (path: string): Project => {
@@ -271,8 +376,11 @@ export function mockApi(): Api {
 		if (!projects.has(path)) projects.set(path, now());
 		return project(path);
 	};
-	let settings: Settings = { defaultAgent: 'claude', defaultModel: { claude: 'sonnet' }, theme: 'light', webSearch: true };
+	let settings: Settings = { defaultAgent: 'claude', defaultModel: { claude: 'sonnet' }, theme: 'light', webSearch: true, sendPageText: true, pageDenyList: ['*.bank.example'], extensionBannerSeen: false, safariBridge: true, pageAgent: null };
 	const listeners = new Set<(e: TurnEventEnvelope) => void>();
+	const pageListeners = new Set<(e: PageEvent) => void>();
+	const settingsListeners = new Set<(s: Settings) => void>();
+	const openPageListeners = new Set<(e: OpenPageEvent) => void>();
 	const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
 
 	const summary = (c: Conv): ConversationSummary => ({
@@ -286,9 +394,21 @@ export function mockApi(): Api {
 		clarificationCount: c.clarifications.length,
 		projectDir: c.projectDir,
 		mode: c.mode,
+		pageKey: c.pageKey,
 		createdAt: c.createdAt,
 		updatedAt: c.updatedAt
 	});
+	const pageOf = (r: PageRecord): Page => {
+		const c = convs.find((x) => x.id === r.conversationId);
+		const asks = c?.clarifications.filter((cl) => cl.webAnchor) ?? [];
+		return {
+			...r,
+			askCount: asks.length,
+			orphanCount: asks.filter((cl) => cl.anchorState === 'orphan').length,
+			updatedAt: c?.updatedAt ?? r.lastSeen
+		};
+	};
+	const emitPage = (urlKey: string, deleted: boolean) => pageListeners.forEach((l) => l({ urlKey, deleted }));
 	const staged = new Map<string, { att: Attachment; url: string }>();
 	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, continuedFrom: c.continuedFrom, running: c.running, pendingRequest: pending.get(c.id)?.request ?? null, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
 	const find = (id: string): Conv => {
@@ -335,7 +455,11 @@ export function mockApi(): Api {
 		listAgents: async () => AGENTS,
 		listModels: async (agent) => MODELS[agent],
 		getSettings: async () => settings,
-		updateSettings: async (s) => (settings = s),
+		updateSettings: async (s) => {
+			settings = s;
+			settingsListeners.forEach((l) => l(settings));
+			return settings;
+		},
 		listConversations: async (query, tag) => {
 			const q = (query ?? '').trim().toLowerCase();
 			return convs
@@ -453,6 +577,7 @@ export function mockApi(): Api {
 				clarificationCount: 0,
 				projectDir: projectDir ?? null,
 				mode: null,
+				pageKey: null,
 				createdAt: now(),
 				updatedAt: now(),
 				agentSessionId: null,
@@ -472,6 +597,11 @@ export function mockApi(): Api {
 		deleteConversation: async (id) => {
 			const i = convs.findIndex((c) => c.id === id);
 			if (i >= 0) convs.splice(i, 1);
+			for (const [key, r] of pageRecords) {
+				if (r.conversationId !== id) continue;
+				pageRecords.delete(key);
+				setTimeout(() => emitPage(key, true), 0);
+			}
 		},
 		setConversationModel: async (id, model) => {
 			const c = find(id);
@@ -513,7 +643,9 @@ export function mockApi(): Api {
 					quote: req.clarification.quote,
 					parentId: req.clarification.parentId,
 					open: true,
-					createdAt: now()
+					createdAt: now(),
+					webAnchor: null,
+					anchorState: null
 				};
 				c.clarifications.push(clarification);
 				clarificationId = clarification.id;
@@ -530,6 +662,8 @@ export function mockApi(): Api {
 			const assistantTurn = makeTurn(c, 'assistant', '', { clarificationId, status: 'pending', usage: null, completedAt: null });
 			c.updatedAt = now();
 			c.agentSessionId ??= nextId('sess');
+			// The engine's page event reaches the window after the command returns.
+			if (c.pageKey) setTimeout(() => emitPage(c.pageKey!, false), 0);
 			const reply = clarificationId ? CANNED_REPLY : req.text.toLowerCase().includes('rust') ? RUST_ANSWER : CAS_ANSWER;
 			// "[ask]" or "[write]" in the message makes the mock agent stop
 			// and wait for an answer, the way a real agent does.
@@ -575,6 +709,77 @@ export function mockApi(): Api {
 		onTurnEvent: async (cb) => {
 			listeners.add(cb);
 			return () => listeners.delete(cb);
+		},
+		listPages: async (limit) =>
+			[...pageRecords.values()]
+				.map(pageOf)
+				.sort((a, b) => b.updatedAt - a.updatedAt)
+				.slice(0, limit),
+		getPage: async (urlKey) => {
+			const r = pageRecords.get(urlKey);
+			if (!r) return null;
+			return { page: pageOf(r), conversation: full(find(r.conversationId)) };
+		},
+		deletePage: async (urlKey) => {
+			const r = pageRecords.get(urlKey);
+			if (!r) throw new Error(`no page ${urlKey}`);
+			await api.deleteConversation(r.conversationId);
+		},
+		deleteClarification: async (id) => {
+			for (const c of convs) {
+				if (!c.clarifications.some((x) => x.id === id)) continue;
+				// Nested clarifications hang off the removed one and go with it.
+				const gone = new Set([id]);
+				let grew = true;
+				while (grew) {
+					grew = false;
+					for (const cl of c.clarifications) {
+						if (cl.parentId && gone.has(cl.parentId) && !gone.has(cl.id)) {
+							gone.add(cl.id);
+							grew = true;
+						}
+					}
+				}
+				c.clarifications = c.clarifications.filter((x) => !gone.has(x.id));
+				c.turns = c.turns.filter((t) => !t.clarificationId || !gone.has(t.clarificationId));
+				c.clarificationCount = c.clarifications.length;
+				c.updatedAt = now();
+				if (c.pageKey) setTimeout(() => emitPage(c.pageKey!, false), 0);
+			}
+		},
+		extensionStatus: async (): Promise<ExtensionStatus> => ({
+			bridgePath: '/Applications/Gloss.app/Contents/MacOS/gloss-bridge',
+			translocated: false,
+			browsers: [
+				{ id: 'chrome', name: 'Google Chrome', family: 'chromium', installed: true, registered: true, manifestPath: '~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.gloss.bridge.json', error: null },
+				{ id: 'brave', name: 'Brave', family: 'chromium', installed: true, registered: false, manifestPath: '~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/com.gloss.bridge.json', error: 'Permission denied' },
+				{ id: 'firefox', name: 'Firefox', family: 'firefox', installed: false, registered: false, manifestPath: '~/Library/Application Support/Mozilla/NativeMessagingHosts/com.gloss.bridge.json', error: null }
+			],
+			sessions: [{ id: 1, transport: 'native', browser: 'chrome', extensionVersion: '1.0.1', connectedAt: now() - 600_000 }],
+			xpiBundled: true,
+			chromeStoreUrl: 'https://chromewebstore.google.com/detail/gloss/mock',
+			firefoxXpiPath: '/Applications/Gloss.app/Contents/Resources/gloss.xpi',
+			safariAvailable: true,
+			loopbackPort: 47821
+		}),
+		registerNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: b.installed, error: null })),
+		unregisterNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: false, error: null })),
+		openUrl: async (url) => {
+			if (typeof window !== 'undefined') window.open(url, '_blank');
+		},
+		installFirefoxExtension: async () => {},
+		openSafariExtensions: async () => {},
+		onPageEvent: async (cb) => {
+			pageListeners.add(cb);
+			return () => pageListeners.delete(cb);
+		},
+		onSettingsEvent: async (cb) => {
+			settingsListeners.add(cb);
+			return () => settingsListeners.delete(cb);
+		},
+		onOpenPage: async (cb) => {
+			openPageListeners.add(cb);
+			return () => openPageListeners.delete(cb);
 		}
 	};
 	return api;

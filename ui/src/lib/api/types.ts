@@ -34,6 +34,16 @@ export interface Settings {
 	defaultModel: Partial<Record<AgentId, string>>;
 	theme: Theme;
 	webSearch: boolean;
+	/** Whether the browser extension sends a page's readable text along with an ask. */
+	sendPageText: boolean;
+	/** Hosts the extension never asks about, one pattern per entry (`*.bank.com` allowed). */
+	pageDenyList: string[];
+	/** True once the rail's "install the extension" banner was dismissed. */
+	extensionBannerSeen: boolean;
+	/** Whether the engine listens on loopback for the Safari extension (macOS only). */
+	safariBridge: boolean;
+	/** The agent that answers page asks; null means the default agent. */
+	pageAgent: AgentId | null;
 }
 
 export type Role = 'user' | 'assistant';
@@ -62,6 +72,8 @@ export interface Turn {
 	completedAt: number | null;
 	/** User turns only: files sent with the message. */
 	attachments: Attachment[];
+	/** Set when the engine cut the text the browser extension receives. */
+	truncated?: boolean;
 }
 
 export type AttachmentKind = 'image' | 'text';
@@ -95,12 +107,116 @@ export interface Clarification {
 	id: string;
 	conversationId: string;
 	number: number;
-	/** `<turnId>:<blockIndex>` of the block that contains the quote. */
+	/** `<turnId>:<blockIndex>` of the block that contains the quote; "" for an ask on a web page. */
 	anchorBlockId: string;
 	quote: string;
 	parentId: string | null;
 	open: boolean;
 	createdAt: number;
+	/** Where the quote sits on a web page; set only for asks made from the browser extension. */
+	webAnchor: WebAnchor | null;
+	/** How the extension last managed to place the anchor on its page. */
+	anchorState: AnchorState | null;
+}
+
+/** The highlighted passage with the text just before and after it, so it can be found again. */
+export interface TextQuoteSelector {
+	exact: string;
+	prefix: string;
+	suffix: string;
+}
+
+/** Character offsets of the passage in the page's text. */
+export interface TextPositionSelector {
+	start: number;
+	end: number;
+}
+
+/** Where an ask's quote sits on its web page. */
+export interface WebAnchor {
+	quote: TextQuoteSelector;
+	position: TextPositionSelector | null;
+	/** A CSS selector for the element the passage is in, when the extension recorded one. */
+	container: string | null;
+}
+
+/** anchored: the exact quote was found; fuzzy: only an approximate match; orphan: the passage is gone. */
+export type AnchorState = 'anchored' | 'fuzzy' | 'orphan';
+
+/** Text around the highlighted passage, sent with a web-page ask so the agent sees it in context. */
+export interface AskContext {
+	before: string;
+	after: string;
+}
+
+/** A web page the user asked about from the browser extension. */
+export interface Page {
+	/** Normalised URL that identifies the page; the pageKey of its conversation. */
+	urlKey: string;
+	url: string;
+	title: string;
+	faviconUrl: string | null;
+	conversationId: string;
+	askCount: number;
+	/** Asks whose passage is no longer found on the page. */
+	orphanCount: number;
+	firstSeen: number;
+	lastSeen: number;
+	updatedAt: number;
+}
+
+export interface PageDetail {
+	page: Page;
+	conversation: Conversation;
+}
+
+/** A browser's native-messaging host registration, as the engine sees it. */
+export interface BrowserRegistration {
+	id: string;
+	name: string;
+	family: 'chromium' | 'firefox';
+	installed: boolean;
+	registered: boolean;
+	manifestPath: string;
+	error: string | null;
+}
+
+/** One browser extension connected to the engine. */
+export interface SessionInfo {
+	id: number;
+	/** "native" (Unix socket) or "loopback" (Safari). */
+	transport: string;
+	/** The browser named in the extension's hello, such as "chrome" or "firefox". */
+	browser: string;
+	extensionVersion: string;
+	connectedAt: number;
+}
+
+export interface ExtensionStatus {
+	/** Path of the native-messaging bridge binary browsers launch. */
+	bridgePath: string;
+	/** True when macOS runs Gloss from a quarantine copy, so registered paths will not resolve. */
+	translocated: boolean;
+	browsers: BrowserRegistration[];
+	sessions: SessionInfo[];
+	/** True when the app bundles the Firefox .xpi. */
+	xpiBundled: boolean;
+	chromeStoreUrl: string;
+	firefoxXpiPath: string | null;
+	safariAvailable: boolean;
+	loopbackPort: number | null;
+}
+
+/** Sent when a page's asks changed or the page was deleted. */
+export interface PageEvent {
+	urlKey: string;
+	deleted: boolean;
+}
+
+/** Sent when the browser asks Gloss to show a page, optionally at one ask. */
+export interface OpenPageEvent {
+	urlKey: string;
+	clarificationId: string | null;
 }
 
 export interface ConversationSummary {
@@ -116,6 +232,8 @@ export interface ConversationSummary {
 	projectDir: string | null;
 	/** The agent's working mode inside the folder, an id from AgentInfo.modes; null is read-only. */
 	mode: string | null;
+	/** The urlKey of the web page this conversation holds the asks for; null for an ordinary chat. */
+	pageKey: string | null;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -173,7 +291,9 @@ export interface Conversation extends ConversationSummary {
 
 export type ClarificationTarget =
 	| { kind: 'new'; anchorBlockId: string; quote: string; parentId: string | null }
-	| { kind: 'existing'; clarificationId: string };
+	| { kind: 'existing'; clarificationId: string }
+	/** An ask from the browser extension; only the extension sends this. */
+	| { kind: 'web'; quote: string; anchor: WebAnchor; context: AskContext };
 
 export interface SendTurnRequest {
 	conversationId: string;

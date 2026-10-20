@@ -88,6 +88,50 @@ enum Cmd {
     Session { folder: String, agent: String, id: String },
     /// Continue one of those sessions in a new conversation and print its id.
     Continue { folder: String, agent: String, id: String },
+    /// Serve the browser bridge on the Gloss home's Unix socket until Ctrl-C.
+    Serve {
+        /// Socket path; defaults to `<gloss home>/bridge.sock`.
+        #[arg(long)]
+        socket: Option<std::path::PathBuf>,
+        /// Also listen on 127.0.0.1 with a token, as the app does for Safari,
+        /// and write bridge.json next to the socket.
+        #[arg(long)]
+        loopback: bool,
+    },
+    /// List the web pages asked about from the browser.
+    Pages,
+    /// Print a page's asks and replies.
+    Page { url_key: String },
+    /// Ask about a web page the way the extension does, and stream the reply.
+    PageAsk {
+        #[arg(long)]
+        url: String,
+        #[arg(long, default_value = "")]
+        title: String,
+        /// The highlighted passage; omitted for a question about the whole page.
+        #[arg(long)]
+        quote: Option<String>,
+        #[arg(long, default_value = "")]
+        before: String,
+        #[arg(long, default_value = "")]
+        after: String,
+        /// File whose contents stand in for the page's readable text.
+        #[arg(long)]
+        text_file: Option<std::path::PathBuf>,
+        question: String,
+    },
+    /// Send one request to a running bridge over its socket and print what comes back.
+    BridgeCall {
+        method: String,
+        /// JSON parameters.
+        #[arg(default_value = "{}")]
+        params: String,
+        #[arg(long)]
+        socket: Option<std::path::PathBuf>,
+        /// Keep reading events for this many seconds after the reply.
+        #[arg(long, default_value_t = 0)]
+        follow: u64,
+    },
 }
 
 #[tokio::main]
@@ -160,86 +204,136 @@ async fn main() -> Result<()> {
             let s = engine.set_tags(&conversation, &tags)?;
             println!("{} tags={}", s.id, s.tags.join(","));
         }
-        Cmd::Send { conversation, text, quote, block, clarification, attach, auto_answer } => {
-            let mut attachments = Vec::new();
-            for path in attach {
-                let bytes = std::fs::read(&path)?;
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                let att = engine.add_attachment(&name, "", &bytes)?;
-                eprintln!("attached {} ({:?}, {} bytes) as {}", att.name, att.kind, att.size, att.id);
-                attachments.push(att.id);
+        Cmd::Serve { socket, loopback } => {
+            let handler = Arc::new(bridge::BridgeHandler::new(engine.clone(), env!("CARGO_PKG_VERSION")));
+            let sock = socket.unwrap_or_else(|| paths.bridge_sock.clone());
+            let mut tasks = Vec::new();
+            #[cfg(unix)]
+            {
+                let h = handler.clone();
+                let s = sock.clone();
+                tasks.push(tokio::spawn(async move {
+                    if let Err(e) = bridge::unix::serve(h, &s).await {
+                        eprintln!("bridge socket failed: {}", e);
+                    }
+                }));
             }
-            let target = match (quote, block, clarification) {
-                (Some(q), Some(b), _) => Some(ClarificationTarget::New { anchor_block_id: b, quote: q, parent_id: None }),
-                (_, _, Some(c)) => Some(ClarificationTarget::Existing { clarification_id: c }),
-                (Some(_), None, _) => return Err(anyhow!("--quote needs --block")),
-                _ => None,
-            };
+            if loopback {
+                let (listener, port) = bridge::loopback::bind().await?;
+                let token = bridge::loopback::new_token();
+                let info = bridge::loopback::BridgeInfo { port, token: token.clone(), protocol: bridge::PROTOCOL };
+                bridge::loopback::write_info(&info, &[&paths.bridge_json]);
+                eprintln!("loopback listener on 127.0.0.1:{} (token in {})", port, paths.bridge_json.display());
+                let h = handler.clone();
+                tasks.push(tokio::spawn(async move {
+                    if let Err(e) = bridge::loopback::serve(h, listener, token).await {
+                        eprintln!("loopback listener failed: {}", e);
+                    }
+                }));
+            }
+            eprintln!("bridge listening on {}; Ctrl-C stops", sock.display());
+            let mut events = engine.subscribe();
+            loop {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => break,
+                    ev = events.recv() => {
+                        if let Ok(ev) = ev { eprintln!("[event] {}", serde_json::to_string(&ev).unwrap_or_default()); }
+                    }
+                }
+            }
+            engine.publish(AppEvent::Shutdown);
+            for t in tasks {
+                t.abort();
+            }
+            let _ = std::fs::remove_file(&sock);
+        }
+        Cmd::Pages => {
+            for p in engine.list_pages(100)? {
+                println!("{:<50} {:>3} asks {:>2} orphans  {}", p.url_key, p.ask_count, p.orphan_count, p.title);
+            }
+        }
+        Cmd::Page { url_key } => {
+            let Some(d) = engine.get_page(&url_key)? else { return Err(anyhow!("no page {}", url_key)) };
+            println!("{} [{}] conversation={}", d.page.title, d.page.url, d.page.conversation_id);
+            for cl in &d.conversation.clarifications {
+                let state = cl.anchor_state.map(|s| s.as_str()).unwrap_or("unplaced");
+                println!("### ask {} #{} {:?} ({})", cl.id, cl.number, cl.quote, state);
+                for t in d.conversation.turns.iter().filter(|t| t.clarification_id.as_deref() == Some(cl.id.as_str())) {
+                    println!("--- {} {:?}\n{}", t.role.as_str(), t.status, t.text);
+                }
+            }
+            for t in d.conversation.turns.iter().filter(|t| t.clarification_id.is_none()) {
+                println!("--- page question {} {:?}\n{}", t.role.as_str(), t.status, t.text);
+            }
+        }
+        Cmd::PageAsk { url, title, quote, before, after, text_file, question } => {
+            let page_text = text_file.map(std::fs::read_to_string).transpose()?;
+            let anchor = quote.map(|q| WebAnchor {
+                quote: TextQuoteSelector { exact: q, prefix: before.chars().rev().take(32).collect::<String>().chars().rev().collect(), suffix: after.chars().take(32).collect() },
+                position: None,
+                container: None,
+            });
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<TurnEventEnvelope>();
             let sink: engine::EventSink = Arc::new(move |e| {
                 let _ = tx.send(e);
             });
             let res = engine
-                .send_turn(SendTurnRequest { conversation_id: conversation, text, clarification: target, attachments }, sink)
+                .page_ask(
+                    PageAskRequest {
+                        page: PageMeta { url, title, favicon_url: None },
+                        anchor,
+                        context: AskContext { before, after },
+                        question,
+                        page_text,
+                        private: false,
+                    },
+                    sink,
+                )
                 .await?;
-            eprintln!("user turn {}  assistant turn {}", res.user_turn.id, res.assistant_turn.id);
-            if let Some(cl) = res.clarification {
-                eprintln!("clarification {} #{}", cl.id, cl.number);
+            eprintln!("page {}  conversation {}  user turn {}  assistant turn {}", res.url_key, res.conversation_id, res.user_turn.id, res.assistant_turn.id);
+            if let Some(cl) = &res.clarification {
+                eprintln!("ask {} #{}", cl.id, cl.number);
             }
-            let mut out = std::io::stdout();
-            while let Some(env) = rx.recv().await {
-                match env.event {
-                    TurnEvent::Started { session_id, model } => {
-                        eprintln!("[started] session={} model={}", session_id.unwrap_or_default(), model.unwrap_or_default())
-                    }
-                    TurnEvent::Delta { text } => {
-                        out.write_all(text.as_bytes())?;
-                        out.flush()?;
-                    }
-                    TurnEvent::Replace { text } => {
-                        eprintln!("\n[replace]");
-                        out.write_all(text.as_bytes())?;
-                        out.flush()?;
-                    }
-                    TurnEvent::Activity { kind, label } => eprintln!("[{:?}] {}", kind, label),
-                    TurnEvent::Request { request } => {
-                        eprintln!("[request] {}", serde_json::to_string(&request).unwrap_or_default());
-                        if !auto_answer {
-                            eprintln!("[request] waiting; rerun with --auto-answer or answer from the app");
-                            continue;
+            stream_reply(&engine, &mut rx, false).await?;
+        }
+        Cmd::BridgeCall { method, params, socket, follow } => {
+            #[cfg(unix)]
+            {
+                use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+                let sock = socket.unwrap_or_else(|| paths.bridge_sock.clone());
+                let stream = tokio::net::UnixStream::connect(&sock).await?;
+                let (r, mut w) = stream.into_split();
+                let mut lines = tokio::io::BufReader::new(r).lines();
+                let hello = serde_json::json!({"id": "hello", "method": "hello", "params": {"protocol": bridge::PROTOCOL, "browser": "cli", "extensionVersion": env!("CARGO_PKG_VERSION")}});
+                w.write_all(format!("{}\n", hello).as_bytes()).await?;
+                let params: serde_json::Value = serde_json::from_str(&params)?;
+                let req = serde_json::json!({"id": "1", "method": method, "params": params});
+                w.write_all(format!("{}\n", req).as_bytes()).await?;
+                let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(follow);
+                let mut answered = false;
+                loop {
+                    let next = if answered && follow > 0 {
+                        match tokio::time::timeout_at(deadline, lines.next_line()).await {
+                            Ok(l) => l?,
+                            Err(_) => break,
                         }
-                        let answer = match &request.kind {
-                            RequestKind::Permission { .. } => RequestAnswer::Permission { allow: true, message: None, set_mode: None },
-                            RequestKind::Question { questions } => RequestAnswer::Question {
-                                answers: questions
-                                    .iter()
-                                    .map(|q| (q.question.clone(), q.options.first().map(|o| o.label.clone()).unwrap_or_else(|| "yes".into())))
-                                    .collect(),
-                            },
-                        };
-                        engine.answer_request(&env.conversation_id, &request.id, answer)?;
-                    }
-                    TurnEvent::RequestResolved { request_id } => eprintln!("[request] {} answered", request_id),
-                    TurnEvent::Done { turn } => {
-                        println!();
-                        eprintln!(
-                            "[done] model={} usage={}",
-                            turn.model.unwrap_or_default(),
-                            serde_json::to_string(&turn.usage).unwrap_or_default()
-                        );
-                        break;
-                    }
-                    TurnEvent::Failed { error, .. } => {
-                        println!();
-                        eprintln!("[failed] {}", error);
-                        std::process::exit(1);
-                    }
-                    TurnEvent::Cancelled { .. } => {
-                        println!();
-                        eprintln!("[cancelled]");
-                        break;
+                    } else {
+                        lines.next_line().await?
+                    };
+                    let Some(line) = next else { break };
+                    println!("{}", line);
+                    if line.contains("\"id\":\"1\"") {
+                        answered = true;
+                        if follow == 0 {
+                            break;
+                        }
                     }
                 }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = (method, params, socket, follow);
+                return Err(anyhow!("bridge-call needs a Unix socket"));
             }
         }
         Cmd::Cancel { conversation } => engine.cancel_turn(&conversation),
@@ -285,6 +379,99 @@ async fn main() -> Result<()> {
             }
             for cl in &c.clarifications {
                 println!("### clarification {} #{} anchor={} quote={:?} parent={}", cl.id, cl.number, cl.anchor_block_id, cl.quote, cl.parent_id.clone().unwrap_or_default());
+            }
+        }
+        Cmd::Send { conversation, text, quote, block, clarification, attach, auto_answer } => {
+            let mut attachments = Vec::new();
+            for path in attach {
+                let bytes = std::fs::read(&path)?;
+                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let att = engine.add_attachment(&name, "", &bytes)?;
+                eprintln!("attached {} ({:?}, {} bytes) as {}", att.name, att.kind, att.size, att.id);
+                attachments.push(att.id);
+            }
+            let target = match (quote, block, clarification) {
+                (Some(q), Some(b), _) => Some(ClarificationTarget::New { anchor_block_id: b, quote: q, parent_id: None }),
+                (_, _, Some(c)) => Some(ClarificationTarget::Existing { clarification_id: c }),
+                (Some(_), None, _) => return Err(anyhow!("--quote needs --block")),
+                _ => None,
+            };
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<TurnEventEnvelope>();
+            let sink: engine::EventSink = Arc::new(move |e| {
+                let _ = tx.send(e);
+            });
+            let res = engine
+                .send_turn(SendTurnRequest { conversation_id: conversation, text, clarification: target, attachments }, sink)
+                .await?;
+            eprintln!("user turn {}  assistant turn {}", res.user_turn.id, res.assistant_turn.id);
+            if let Some(cl) = res.clarification {
+                eprintln!("clarification {} #{}", cl.id, cl.number);
+            }
+            stream_reply(&engine, &mut rx, auto_answer).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Prints streamed turn events until the turn ends. With `auto_answer`,
+/// the agent's requests are granted without asking.
+async fn stream_reply(
+    engine: &Engine,
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<TurnEventEnvelope>,
+    auto_answer: bool,
+) -> Result<()> {
+    let mut out = std::io::stdout();
+    while let Some(env) = rx.recv().await {
+        match env.event {
+            TurnEvent::Started { session_id, model } => {
+                eprintln!("[started] session={} model={}", session_id.unwrap_or_default(), model.unwrap_or_default())
+            }
+            TurnEvent::Delta { text } => {
+                out.write_all(text.as_bytes())?;
+                out.flush()?;
+            }
+            TurnEvent::Replace { text } => {
+                eprintln!("\n[replace]");
+                out.write_all(text.as_bytes())?;
+                out.flush()?;
+            }
+            TurnEvent::Activity { kind, label } => eprintln!("[{:?}] {}", kind, label),
+            TurnEvent::Request { request } => {
+                eprintln!("[request] {}", serde_json::to_string(&request).unwrap_or_default());
+                if !auto_answer {
+                    eprintln!("[request] waiting; rerun with --auto-answer or answer from the app");
+                    continue;
+                }
+                let answer = match &request.kind {
+                    RequestKind::Permission { .. } => RequestAnswer::Permission { allow: true, message: None, set_mode: None },
+                    RequestKind::Question { questions } => RequestAnswer::Question {
+                        answers: questions
+                            .iter()
+                            .map(|q| (q.question.clone(), q.options.first().map(|o| o.label.clone()).unwrap_or_else(|| "yes".into())))
+                            .collect(),
+                    },
+                };
+                engine.answer_request(&env.conversation_id, &request.id, answer)?;
+            }
+            TurnEvent::RequestResolved { request_id } => eprintln!("[request] {} answered", request_id),
+            TurnEvent::Done { turn } => {
+                println!();
+                eprintln!(
+                    "[done] model={} usage={}",
+                    turn.model.unwrap_or_default(),
+                    serde_json::to_string(&turn.usage).unwrap_or_default()
+                );
+                break;
+            }
+            TurnEvent::Failed { error, .. } => {
+                println!();
+                eprintln!("[failed] {}", error);
+                std::process::exit(1);
+            }
+            TurnEvent::Cancelled { .. } => {
+                println!();
+                eprintln!("[cancelled]");
+                break;
             }
         }
     }

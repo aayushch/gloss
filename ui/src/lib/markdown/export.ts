@@ -4,7 +4,7 @@
 // The output is built from the same blocks the transcript renders, so what
 // is exported matches what the user saw.
 
-import type { Clarification, Conversation, Turn } from '$lib/api/types';
+import type { Clarification, Conversation, Page, Turn } from '$lib/api/types';
 import { AGENT_NAMES } from '$lib/state/app.svelte';
 import { parseBlocks, type Block, type Run } from './blocks';
 
@@ -151,6 +151,31 @@ export function exportConversation(conv: Conversation): string {
 			if (t.attachments.length) parts.push(`_Attached: ${t.attachments.map((a) => a.name).join(', ')}_`);
 		} else {
 			parts.push(`## ${agent}`, turnBody(ctx, t) || '_No reply._');
+		}
+	}
+	return parts.join('\n\n').trim() + '\n';
+}
+
+/** The asks made on a web page as notes: the page's title and URL, the
+ * questions asked about the page as a whole, then each ask as its quoted
+ * passage followed by its question/answer pairs. `page` is null when only
+ * the conversation is at hand; the URL then comes from its pageKey. */
+export function exportPage(conv: Conversation, page: Page | null): string {
+	const ctx = context(conv);
+	const title = page?.title || conv.title;
+	const url = page?.url ?? conv.pageKey ?? '';
+	const parts: string[] = [`# ${title}`];
+	if (url) parts.push(`<${url}>`);
+	const answer = (t: Turn) => turnBody(ctx, t) || (t.status === 'error' ? `_The agent failed: ${t.error ?? 'no details'}_` : '_No reply._');
+	for (const t of conv.turns) {
+		if (t.clarificationId) continue;
+		parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));
+	}
+	for (const cl of conv.clarifications) {
+		if (!cl.webAnchor || cl.parentId) continue;
+		parts.push(quoteLines(cl.quote.replace(/\s+/g, ' ').trim()));
+		for (const t of ctx.byClarification.get(cl.id) ?? []) {
+			parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));
 		}
 	}
 	return parts.join('\n\n').trim() + '\n';

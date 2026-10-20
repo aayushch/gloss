@@ -21,3 +21,13 @@ ui/src-tauri/target/
 # Local env
 .env
 .env.local
+
+# Built sidecars and bundled resources
+ui/src-tauri/binaries/
+ui/src-tauri/resources/
+
+# Safari extension build output
+safari/build/
+safari/Gloss/Gloss.xcodeproj/xcuserdata/
+safari/Gloss/Gloss.xcodeproj/project.xcworkspace/xcuserdata/
+safari/Gloss/build/

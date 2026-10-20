@@ -192,6 +192,31 @@ pub struct Settings {
     pub theme: Theme,
     /// Whether new conversations start with web search enabled.
     pub web_search: bool,
+    /// Whether the browser extension sends a page's readable text to the
+    /// agent along with the highlighted passage.
+    #[serde(default = "default_true")]
+    pub send_page_text: bool,
+    /// Hosts the extension never asks about: exact names or `*.example.com`.
+    #[serde(default)]
+    pub page_deny_list: Vec<String>,
+    /// The rail's "install the browser extension" card was dismissed.
+    #[serde(default)]
+    pub extension_banner_seen: bool,
+    /// Run the loopback listener the Safari extension connects to.
+    #[serde(default = "default_safari_bridge")]
+    pub safari_bridge: bool,
+    /// Agent for new page conversations; None means `default_agent`.
+    #[serde(default)]
+    pub page_agent: Option<AgentId>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Safari exists on macOS only, so the listener is off elsewhere by default.
+fn default_safari_bridge() -> bool {
+    cfg!(target_os = "macos")
 }
 
 impl Default for Settings {
@@ -201,6 +226,11 @@ impl Default for Settings {
             default_model: HashMap::new(),
             theme: Theme::Light,
             web_search: true,
+            send_page_text: true,
+            page_deny_list: Vec::new(),
+            extension_banner_seen: false,
+            safari_bridge: default_safari_bridge(),
+            page_agent: None,
         }
     }
 }
@@ -302,6 +332,10 @@ pub struct Turn {
     /// User turns only: files sent with the message.
     #[serde(default)]
     pub attachments: Vec<Attachment>,
+    /// True when `text` was cut to fit a transport limit (the browser bridge
+    /// caps a reply); the full text is in Gloss.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 /// A thread anchored to a highlighted span of an assistant turn.
@@ -321,6 +355,186 @@ pub struct Clarification {
     pub parent_id: Option<String>,
     pub open: bool,
     pub created_at: i64,
+    /// For an ask made on a web page: where the quote sits in the page.
+    /// `anchor_block_id` is empty for those.
+    #[serde(default)]
+    pub web_anchor: Option<WebAnchor>,
+    /// Whether the extension last found the web anchor on the page.
+    #[serde(default)]
+    pub anchor_state: Option<AnchorState>,
+}
+
+/// The highlighted text with a little of what surrounds it, in the W3C Web
+/// Annotation `TextQuoteSelector` shape. The extension matches `exact` and
+/// uses the prefix and suffix to tell repeated passages apart.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextQuoteSelector {
+    pub exact: String,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+}
+
+/// Character offsets of the quote in the page's normalised text, the
+/// W3C `TextPositionSelector`. Only a hint: pages change.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextPositionSelector {
+    pub start: u32,
+    pub end: u32,
+}
+
+/// Where a web-page ask is anchored. The engine stores it as JSON without
+/// interpreting it; the extension creates it from a selection and resolves
+/// it again when the page is reopened.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WebAnchor {
+    pub quote: TextQuoteSelector,
+    #[serde(default)]
+    pub position: Option<TextPositionSelector>,
+    /// CSS path of the block element that contained the selection start.
+    #[serde(default)]
+    pub container: Option<String>,
+}
+
+/// How the extension last managed to place an anchor on its page.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum AnchorState {
+    /// The exact quote was found.
+    Anchored,
+    /// Only an approximate match was found.
+    Fuzzy,
+    /// The passage is no longer on the page.
+    Orphan,
+}
+
+impl AnchorState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AnchorState::Anchored => "anchored",
+            AnchorState::Fuzzy => "fuzzy",
+            AnchorState::Orphan => "orphan",
+        }
+    }
+    pub fn parse(s: &str) -> Option<AnchorState> {
+        match s {
+            "anchored" => Some(AnchorState::Anchored),
+            "fuzzy" => Some(AnchorState::Fuzzy),
+            "orphan" => Some(AnchorState::Orphan),
+            _ => None,
+        }
+    }
+}
+
+/// Text around the highlighted passage, sent with a web-page ask so the
+/// agent sees the passage in context.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AskContext {
+    #[serde(default)]
+    pub before: String,
+    #[serde(default)]
+    pub after: String,
+}
+
+/// A web page the user asked about from the browser. Each page owns one
+/// conversation, whose clarifications are the asks made on it.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Page {
+    /// Canonical URL, see `pages::url_key`.
+    pub url_key: String,
+    /// The URL as last seen in the browser.
+    pub url: String,
+    pub title: String,
+    pub favicon_url: Option<String>,
+    pub conversation_id: String,
+    /// Asks anchored on the page.
+    pub ask_count: u32,
+    /// Asks whose passage the extension could not find on the page any more.
+    pub orphan_count: u32,
+    pub first_seen: i64,
+    pub last_seen: i64,
+    /// When the page's conversation last changed.
+    pub updated_at: i64,
+}
+
+/// A page with its conversation: the asks are the clarifications that carry
+/// a `web_anchor`; turns without a clarification are questions about the
+/// page as a whole.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageDetail {
+    pub page: Page,
+    pub conversation: Conversation,
+}
+
+/// What the browser knows about the page it is on.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PageMeta {
+    pub url: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub favicon_url: Option<String>,
+}
+
+/// A question asked from the browser, about a highlighted passage when
+/// `anchor` is set and about the whole page otherwise.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageAskRequest {
+    pub page: PageMeta,
+    #[serde(default)]
+    pub anchor: Option<WebAnchor>,
+    #[serde(default)]
+    pub context: AskContext,
+    pub question: String,
+    /// The page's readable text, when the extension may send it.
+    #[serde(default)]
+    pub page_text: Option<String>,
+    /// True in a private window; such asks are refused.
+    #[serde(default)]
+    pub private: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageAskResult {
+    pub url_key: String,
+    pub conversation_id: String,
+    pub clarification: Option<Clarification>,
+    pub user_turn: Turn,
+    pub assistant_turn: Turn,
+}
+
+/// Everything the engine tells its listeners about: the Tauri shell forwards
+/// these to the window, and every bridge session forwards them to its browser.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AppEvent {
+    Turn(Box<TurnEventEnvelope>),
+    /// A page's asks changed (created, removed, opened, closed) or the page
+    /// was deleted; listeners re-fetch it.
+    Page {
+        #[serde(rename = "urlKey")]
+        url_key: String,
+        deleted: bool,
+    },
+    Settings(Box<Settings>),
+    /// The browser asked Gloss to show a page; the window comes to the front.
+    Focus {
+        #[serde(rename = "urlKey")]
+        url_key: String,
+        #[serde(rename = "clarificationId")]
+        clarification_id: Option<String>,
+    },
+    Shutdown,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -343,6 +557,9 @@ pub struct ConversationSummary {
     /// The agent's working mode inside the project folder, one of the ids in
     /// `AgentInfo::modes`; None is read-only. Ignored without a project folder.
     pub mode: Option<String>,
+    /// Set when the conversation belongs to a web page (its `url_key`).
+    #[serde(default)]
+    pub page_key: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -504,6 +721,13 @@ pub enum ClarificationTarget {
     Existing {
         #[serde(rename = "clarificationId")]
         clarification_id: String,
+    },
+    /// Start a clarification anchored on a web page, from the browser.
+    Web {
+        quote: String,
+        anchor: WebAnchor,
+        #[serde(default)]
+        context: AskContext,
     },
 }
 

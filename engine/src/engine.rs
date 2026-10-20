@@ -13,6 +13,7 @@ use crate::agents::{self, AgentEvent, ImageAttachment, SpawnRequest};
 use crate::attach;
 use crate::env::ShellEnv;
 use crate::history::{self, AgentHomes, SessionIndex};
+use crate::pages;
 use crate::paths::GlossPaths;
 use crate::prompt;
 use crate::store::Store;
@@ -36,6 +37,8 @@ pub struct Engine {
     /// One cancellation token per conversation with a live agent process.
     running: Mutex<HashMap<String, RunningTurn>>,
     idle_timeout: Duration,
+    /// Everything that happens, for the shell window and the browser bridge.
+    events: tokio::sync::broadcast::Sender<AppEvent>,
 }
 
 impl Engine {
@@ -66,7 +69,26 @@ impl Engine {
             store,
             running: Mutex::new(HashMap::new()),
             idle_timeout: DEFAULT_IDLE_TIMEOUT,
+            events: tokio::sync::broadcast::channel(4096).0,
         })
+    }
+
+    /// A receiver of every `AppEvent` from now on. A slow receiver that
+    /// falls more than the channel's capacity behind skips events.
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<AppEvent> {
+        self.events.subscribe()
+    }
+
+    /// Tells every subscriber. Nothing happens when there is none.
+    pub fn publish(&self, event: AppEvent) {
+        let _ = self.events.send(event);
+    }
+
+    /// Publishes a `Page` event when the conversation belongs to a page.
+    fn publish_page_change(&self, conversation_id: &str) {
+        if let Ok(Some(page)) = self.store.page_of_conversation(conversation_id) {
+            self.publish(AppEvent::Page { url_key: page.url_key, deleted: false });
+        }
     }
 
     /// Reads agent history from `homes` instead of the user's home folders.
@@ -98,6 +120,7 @@ impl Engine {
 
     pub fn update_settings(&self, settings: Settings) -> Result<Settings> {
         self.store.save_settings(&settings)?;
+        self.publish(AppEvent::Settings(Box::new(settings.clone())));
         Ok(settings)
     }
 
@@ -313,7 +336,12 @@ impl Engine {
         for att in self.store.attachments_of_conversation(id)? {
             remove_attachment_files(&att);
         }
-        self.store.delete_conversation(id)
+        let page = self.store.page_of_conversation(id)?;
+        self.store.delete_conversation(id)?;
+        if let Some(page) = page {
+            self.publish(AppEvent::Page { url_key: page.url_key, deleted: true });
+        }
+        Ok(())
     }
 
     pub fn set_conversation_model(&self, id: &str, model: &str) -> Result<ConversationSummary> {
@@ -325,7 +353,145 @@ impl Engine {
     }
 
     pub fn set_clarification_open(&self, id: &str, open: bool) -> Result<()> {
-        self.store.set_clarification_open(id, open)
+        self.store.set_clarification_open(id, open)?;
+        let cl = self.store.get_clarification(id)?;
+        self.publish_page_change(&cl.conversation_id);
+        Ok(())
+    }
+
+    /// Removes a clarification with its thread and nested clarifications,
+    /// and the files of any attachment those turns carried.
+    pub fn delete_clarification(&self, id: &str) -> Result<()> {
+        let cl = self.store.get_clarification(id)?;
+        for att in self.store.delete_clarification(id)? {
+            remove_attachment_files(&att);
+        }
+        self.publish_page_change(&cl.conversation_id);
+        Ok(())
+    }
+
+    // ── pages ───────────────────────────────────────────────────────────
+
+    /// The page a browser URL maps to: its key, and its detail when Gloss
+    /// has it. With `touch`, a known page's URL, title, favicon and
+    /// last-seen time are refreshed from `meta`.
+    pub fn get_page_by_url(&self, meta: &PageMeta, touch: bool) -> Result<(String, Option<PageDetail>)> {
+        let url_key = pages::url_key(&meta.url)?;
+        let Some(page) = self.store.get_page(&url_key)? else { return Ok((url_key, None)) };
+        let page = if touch {
+            self.store
+                .upsert_page(&url_key, &meta.url, &meta.title, meta.favicon_url.as_deref(), &page.conversation_id)?
+        } else {
+            page
+        };
+        let conversation = self.get_conversation(&page.conversation_id)?;
+        Ok((url_key, Some(PageDetail { page, conversation })))
+    }
+
+    pub fn get_page(&self, url_key: &str) -> Result<Option<PageDetail>> {
+        let Some(page) = self.store.get_page(url_key)? else { return Ok(None) };
+        let conversation = self.get_conversation(&page.conversation_id)?;
+        Ok(Some(PageDetail { page, conversation }))
+    }
+
+    pub fn list_pages(&self, limit: usize) -> Result<Vec<Page>> {
+        self.store.list_pages(limit)
+    }
+
+    /// Removes a page and its conversation.
+    pub fn delete_page(&self, url_key: &str) -> Result<()> {
+        let Some(page) = self.store.get_page(url_key)? else { return Err(anyhow!("no page {}", url_key)) };
+        self.delete_conversation(&page.conversation_id)
+    }
+
+    /// Records how the extension placed each anchor on its page.
+    pub fn report_anchors(&self, states: &[(String, AnchorState)]) -> Result<()> {
+        let mut pages_changed = std::collections::HashSet::new();
+        for (id, state) in states {
+            let Ok(cl) = self.store.get_clarification(id) else { continue };
+            if cl.anchor_state != Some(*state) {
+                self.store.set_anchor_state(id, *state)?;
+                pages_changed.insert(cl.conversation_id);
+            }
+        }
+        for conv in pages_changed {
+            self.publish_page_change(&conv);
+        }
+        Ok(())
+    }
+
+    /// A question from the browser about a page. The page's conversation is
+    /// created on the first ask, with the page's title; the readable text is
+    /// handed to the agent when it is new or has changed since last time.
+    pub async fn page_ask(self: &Arc<Self>, req: PageAskRequest, sink: EventSink) -> Result<PageAskResult> {
+        if req.private {
+            return Err(anyhow!("pages in a private window are not asked about"));
+        }
+        let question = req.question.trim().to_string();
+        if question.is_empty() {
+            return Err(anyhow!("message is empty"));
+        }
+        let settings = self.store.settings()?;
+        let url_key = pages::url_key(&req.page.url)?;
+        let host = pages::host_of(&req.page.url);
+        if pages::host_matches(&settings.page_deny_list, &host) {
+            return Err(anyhow!("{} is on the deny list", host));
+        }
+        let given_title = req.page.title.trim().to_string();
+        let title = if given_title.is_empty() { url_key.clone() } else { given_title.clone() };
+        let page = match self.store.get_page(&url_key)? {
+            Some(page) => {
+                let page = self.store.upsert_page(&url_key, &req.page.url, &given_title, req.page.favicon_url.as_deref(), &page.conversation_id)?;
+                if !given_title.is_empty() {
+                    self.store.rename_conversation(&page.conversation_id, &title)?;
+                }
+                page
+            }
+            None => {
+                let agent = settings.page_agent.unwrap_or(settings.default_agent);
+                let conv = self.create_conversation(agent, None, None, None)?;
+                self.store.rename_conversation(&conv.summary.id, &title)?;
+                self.store.upsert_page(&url_key, &req.page.url, &given_title, req.page.favicon_url.as_deref(), &conv.summary.id)?
+            }
+        };
+        // The page text goes along when the agent has not seen this version.
+        // Its hash is recorded only once the turn has started, so a refused
+        // ask (a turn already running) sends the text again next time.
+        let page_text = match req.page_text.filter(|_| settings.send_page_text) {
+            Some(text) if !text.trim().is_empty() => {
+                let text = pages::truncate_page_text(&text);
+                let hash = pages::page_text_hash(&text);
+                let previous = self.store.page_text_hash(&url_key)?;
+                if previous.as_deref() == Some(hash.as_str()) {
+                    None
+                } else {
+                    Some((text, hash, previous.is_some()))
+                }
+            }
+            _ => None,
+        };
+        let target = req.anchor.map(|anchor| ClarificationTarget::Web {
+            quote: anchor.quote.exact.clone(),
+            anchor,
+            context: req.context,
+        });
+        let res = self.send_turn_with_page(
+            SendTurnRequest { conversation_id: page.conversation_id.clone(), text: question, clarification: target, attachments: vec![] },
+            page_text.as_ref().map(|(text, _, changed)| (text.clone(), *changed)),
+            sink,
+        )
+        .await?;
+        if let Some((text, hash, _)) = &page_text {
+            self.store.set_page_text(&url_key, text, hash)?;
+        }
+        self.publish(AppEvent::Page { url_key: url_key.clone(), deleted: false });
+        Ok(PageAskResult {
+            url_key,
+            conversation_id: page.conversation_id,
+            clarification: res.clarification,
+            user_turn: res.user_turn,
+            assistant_turn: res.assistant_turn,
+        })
     }
 
     pub fn is_running(&self, conversation_id: &str) -> bool {
@@ -406,12 +572,30 @@ impl Engine {
     /// Record the user's turn, create the pending assistant turn and start the
     /// agent in the background. Progress arrives through `sink`.
     pub async fn send_turn(self: &Arc<Self>, req: SendTurnRequest, sink: EventSink) -> Result<SendTurnResult> {
+        self.send_turn_with_page(req, None, sink).await
+    }
+
+    /// `send_turn` with, for a page conversation, the page's readable text
+    /// to include in the prompt and whether it replaces an earlier copy.
+    async fn send_turn_with_page(
+        self: &Arc<Self>,
+        req: SendTurnRequest,
+        page_text: Option<(String, bool)>,
+        sink: EventSink,
+    ) -> Result<SendTurnResult> {
         let text = req.text.trim().to_string();
         if text.is_empty() {
             return Err(anyhow!("message is empty"));
         }
         let conv = self.store.get_conversation(&req.conversation_id)?;
         let agent = conv.summary.agent;
+        // Every event also reaches the broadcast, so the window and the
+        // browser bridge both see it whichever side started the turn.
+        let events = self.events.clone();
+        let sink: EventSink = Arc::new(move |env: TurnEventEnvelope| {
+            sink(env.clone());
+            let _ = events.send(AppEvent::Turn(Box::new(env)));
+        });
 
         // Reserve the conversation before touching the store so two sends
         // racing each other cannot both start a process.
@@ -430,7 +614,7 @@ impl Engine {
         }
         let interaction = agents::process::Interaction { input: stdin_rx, waiting };
 
-        let result = self.start_turn(&conv, agent, text, req.clarification, &req.attachments, cancel.clone(), interaction, sink);
+        let result = self.start_turn(&conv, agent, text, req.clarification, page_text, &req.attachments, cancel.clone(), interaction, sink);
         if result.is_err() {
             self.running.lock().unwrap().remove(&req.conversation_id);
         }
@@ -444,6 +628,7 @@ impl Engine {
         agent: AgentId,
         text: String,
         target: Option<ClarificationTarget>,
+        page_text: Option<(String, bool)>,
         attachment_ids: &[String],
         cancel: CancellationToken,
         interaction: agents::process::Interaction,
@@ -458,17 +643,32 @@ impl Engine {
                 return Err(anyhow!("the project folder {} is missing; it may have been moved or deleted", dir.display()));
             }
         }
-        let note = prompt::system_note(conv.summary.project_dir.as_deref());
+        let page = self.store.page_of_conversation(&conv_id)?;
+        let note = match &page {
+            Some(p) => prompt::page_system_note(&p.title, &p.url),
+            None => prompt::system_note(conv.summary.project_dir.as_deref()),
+        };
         let attachments = self.staged_attachments(attachment_ids)?;
         // No agent session yet means this spawn starts the agent's conversation,
         // even when an earlier attempt failed before the agent reported one.
         let is_first_turn = conv.agent_session_id.is_none();
 
+        let (page_body, page_changed) = match &page_text {
+            Some((t, changed)) => (Some(t.as_str()), *changed),
+            None => (None, false),
+        };
         let (clarification, clarification_id, body) = match target {
+            None if page.is_some() => (None, None, prompt::page_question_prompt(&text, page_body, page_changed)),
             None => (None, None, text.clone()),
             Some(ClarificationTarget::New { anchor_block_id, quote, parent_id }) => {
-                let cl = self.store.create_clarification(&conv_id, &anchor_block_id, &quote, parent_id.as_deref())?;
+                let cl = self.store.create_clarification(&conv_id, &anchor_block_id, &quote, parent_id.as_deref(), None)?;
                 let body = prompt::clarification_prompt(&quote, &text);
+                (Some(cl.clone()), Some(cl.id), body)
+            }
+            Some(ClarificationTarget::Web { quote, anchor, context }) => {
+                let anchor_json = serde_json::to_string(&anchor)?;
+                let cl = self.store.create_clarification(&conv_id, "", &quote, None, Some(&anchor_json))?;
+                let body = prompt::page_ask_prompt(&quote, &context, &text, page_body, page_changed);
                 (Some(cl.clone()), Some(cl.id), body)
             }
             Some(ClarificationTarget::Existing { clarification_id }) => {
@@ -519,7 +719,8 @@ impl Engine {
             clarification_id.as_deref(),
             None,
         )?;
-        if clarification_id.is_none() {
+        // A page conversation is named after its page; others after the first message.
+        if clarification_id.is_none() && page.is_none() {
             let title = prompt::title_from_message(&text, 60);
             self.store.set_title_if_placeholder(&conv_id, &title)?;
         }
@@ -903,6 +1104,121 @@ mod tests {
         assert!(res.user_turn.prompt_text.unwrap().contains("> \"the store buffer\"\n\nwhy?"));
         // A clarification does not retitle the conversation.
         assert_eq!(engine.get_conversation(&conv.summary.id).unwrap().summary.title, "New conversation");
+    }
+
+    fn page_ask(url: &str, title: &str, quote: Option<&str>, question: &str, text: Option<&str>) -> PageAskRequest {
+        PageAskRequest {
+            page: PageMeta { url: url.into(), title: title.into(), favicon_url: None },
+            anchor: quote.map(|q| WebAnchor {
+                quote: TextQuoteSelector { exact: q.into(), prefix: "pre ".into(), suffix: " suf".into() },
+                position: Some(TextPositionSelector { start: 10, end: 20 }),
+                container: Some("main > p:nth-of-type(2)".into()),
+            }),
+            context: AskContext { before: "before text".into(), after: "after text".into() },
+            question: question.into(),
+            page_text: text.map(String::from),
+            private: false,
+        }
+    }
+
+    async fn settle(engine: &Engine, conv_id: &str) {
+        for _ in 0..100 {
+            if !engine.is_running(conv_id) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn page_asks_create_a_page_conversation_and_send_text_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = ShellEnv::from_process();
+        env.vars.insert("PATH".into(), "/nonexistent".into());
+        let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), env).unwrap());
+        let mut events = engine.subscribe();
+        let (sink, _) = collect();
+
+        let first = engine
+            .page_ask(page_ask("https://example.com/post?utm_source=x", "A post", Some("store buffer"), "why?", Some("Page body")), sink.clone())
+            .await
+            .unwrap();
+        assert_eq!(first.url_key, "https://example.com/post");
+        let cl = first.clarification.clone().unwrap();
+        assert_eq!(cl.anchor_block_id, "");
+        assert_eq!(cl.web_anchor.as_ref().unwrap().quote.prefix, "pre ");
+        let prompt1 = first.user_turn.prompt_text.clone().unwrap();
+        assert!(prompt1.contains("> \"store buffer\""));
+        assert!(prompt1.contains("Text just before it: \"…before text\""));
+        assert!(prompt1.contains("<page>\nPage body\n</page>"));
+        assert!(!prompt1.contains("has changed"));
+        // Claude takes the note as a flag, so the prompt body has no system note.
+        let conv = engine.get_conversation(&first.conversation_id).unwrap();
+        assert_eq!(conv.summary.title, "A post");
+        assert_eq!(conv.summary.page_key.as_deref(), Some("https://example.com/post"));
+        settle(&engine, &first.conversation_id).await;
+
+        // Same text again: not resent. A tracking-param variant finds the same page.
+        let second = engine
+            .page_ask(page_ask("https://example.com/post?fbclid=1", "", Some("other"), "and?", Some("Page body")), sink.clone())
+            .await
+            .unwrap();
+        assert_eq!(second.conversation_id, first.conversation_id);
+        assert!(!second.user_turn.prompt_text.unwrap().contains("<page>"));
+        assert_eq!(engine.get_conversation(&first.conversation_id).unwrap().summary.title, "A post");
+        settle(&engine, &first.conversation_id).await;
+
+        // Changed text: sent again and marked as changed. No anchor: a page-level question.
+        let third = engine
+            .page_ask(page_ask("https://example.com/post", "A post", None, "summarise", Some("New body")), sink.clone())
+            .await
+            .unwrap();
+        assert!(third.clarification.is_none());
+        let p3 = third.user_turn.prompt_text.unwrap();
+        assert!(p3.starts_with("The user is asking about the page as a whole."));
+        assert!(p3.contains("which has changed since last time"));
+        assert!(p3.contains("<page>\nNew body\n</page>"));
+        settle(&engine, &first.conversation_id).await;
+
+        // Page text off: never sent.
+        let mut st = engine.settings().unwrap();
+        st.send_page_text = false;
+        st.page_deny_list = vec!["*.bank.com".into()];
+        engine.update_settings(st).unwrap();
+        let fourth = engine
+            .page_ask(page_ask("https://example.com/post", "A post", Some("q"), "q?", Some("Third body")), sink.clone())
+            .await
+            .unwrap();
+        assert!(!fourth.user_turn.prompt_text.unwrap().contains("<page>"));
+        settle(&engine, &first.conversation_id).await;
+
+        let denied = engine.page_ask(page_ask("https://online.bank.com/x", "Bank", None, "q", None), sink.clone()).await.unwrap_err();
+        assert!(denied.to_string().contains("deny list"));
+        let mut private = page_ask("https://example.com/p", "P", None, "q", None);
+        private.private = true;
+        assert!(engine.page_ask(private, sink.clone()).await.is_err());
+
+        let page = engine.get_page("https://example.com/post").unwrap().unwrap();
+        assert_eq!(page.page.ask_count, 3);
+        assert_eq!(engine.list_pages(10).unwrap().len(), 1);
+        engine.report_anchors(&[(cl.id.clone(), AnchorState::Orphan)]).unwrap();
+        assert_eq!(engine.get_page("https://example.com/post").unwrap().unwrap().page.orphan_count, 1);
+
+        // The broadcast carried turn and page events.
+        let mut saw_turn = false;
+        let mut saw_page = false;
+        while let Ok(ev) = events.try_recv() {
+            match ev {
+                AppEvent::Turn(_) => saw_turn = true,
+                AppEvent::Page { url_key, deleted: false } if url_key == "https://example.com/post" => saw_page = true,
+                _ => {}
+            }
+        }
+        assert!(saw_turn && saw_page);
+
+        engine.delete_page("https://example.com/post").unwrap();
+        assert!(engine.get_page("https://example.com/post").unwrap().is_none());
+        assert!(matches!(events.try_recv(), Ok(AppEvent::Page { deleted: true, .. })));
     }
 
     #[test]

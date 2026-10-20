@@ -6,6 +6,7 @@
 #   scripts/build.sh --universal                      # macOS arm64 + x86_64 in one app
 #   scripts/build.sh --sign "Developer ID Application: Name (TEAMID)"
 #   scripts/build.sh --debug                          # unoptimised build, faster
+#   scripts/build.sh --safari                         # include the Safari extension (macOS, needs Xcode)
 #
 # Prerequisites: Node.js 20+, Rust stable, and on Linux the WebKitGTK
 # development packages (see README). Output lands in target/release/bundle/.
@@ -19,6 +20,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET=""
 UNIVERSAL=false
 DEBUG=false
+SAFARI=false
 SIGN="${APPLE_SIGNING_IDENTITY:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -27,6 +29,7 @@ while [[ $# -gt 0 ]]; do
         --universal) UNIVERSAL=true; shift ;;
         --debug) DEBUG=true; shift ;;
         --sign) SIGN="$2"; shift 2 ;;
+        --safari) SAFARI=true; shift ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
@@ -52,6 +55,13 @@ fi
 
 if [ -n "$SIGN" ]; then
     export APPLE_SIGNING_IDENTITY="$SIGN"
+fi
+
+# The Safari extension is built by Xcode and copied into Gloss.app's
+# PlugIns folder; it must be signed before the bundler signs the app.
+if [ "$SAFARI" = true ]; then
+    bash "$REPO_ROOT/scripts/build-safari.sh"
+    ARGS+=(--config "{\"bundle\":{\"macOS\":{\"files\":{\"PlugIns/Gloss Extension.appex\":\"$REPO_ROOT/safari/build/Gloss Extension.appex\"}}}}")
 fi
 
 echo "== Gloss build ${TARGET:+($TARGET)} =="

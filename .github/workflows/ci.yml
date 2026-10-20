@@ -1,7 +1,8 @@
 name: CI
 
-# Every push and pull request compiles the engine and the Tauri shell on all
-# three platforms and runs the engine and frontend test suites.
+# Every push and pull request compiles the engine, the bridge host and the
+# Tauri shell on all three platforms, runs the engine and frontend test
+# suites, and builds and tests the browser extension.
 
 on:
   push:
@@ -53,8 +54,8 @@ jobs:
           npm test
           npm run build
 
-      - name: Engine tests
-        run: cargo test -p gloss-engine
+      - name: Engine, bridge and shell tests
+        run: cargo test -p gloss-engine -p gloss-bridge -p gloss-app
 
       - name: Clippy (engine and shell)
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -62,3 +63,36 @@ jobs:
       - name: Build the app binary
         working-directory: ui
         run: npx tauri build --debug --no-bundle
+
+  extension:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Extension check, tests and build
+        working-directory: extension
+        run: |
+          npm run check
+          npm test
+          npm run build
+          npm run lint:firefox
+
+      - name: Package the builds
+        working-directory: extension
+        run: npm run zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-builds
+          path: |
+            extension/dist/*.zip

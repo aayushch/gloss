@@ -9,9 +9,11 @@
 
 pub mod agents;
 pub mod attach;
+pub mod bridge;
 pub mod engine;
 pub mod env;
 pub mod history;
+pub mod pages;
 pub mod paths;
 pub mod prompt;
 pub mod store;

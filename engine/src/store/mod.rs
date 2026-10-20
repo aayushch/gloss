@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -50,6 +50,14 @@ const MIGRATE_V5_TO_V6: &str = "
     UPDATE schema_version SET version = 6;
 ";
 
+/// Version 7 adds web-page asks: the `pages` table comes from the schema,
+/// and clarifications gain the anchor columns the browser extension uses.
+const MIGRATE_V6_TO_V7: &str = "
+    ALTER TABLE clarifications ADD COLUMN web_anchor TEXT;
+    ALTER TABLE clarifications ADD COLUMN anchor_state TEXT;
+    UPDATE schema_version SET version = 7;
+";
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -86,23 +94,31 @@ impl Store {
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
             }
             Some(2) => {
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
             }
             Some(3) => {
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
             }
             Some(4) => {
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
             }
-            Some(5) => conn.execute_batch(MIGRATE_V5_TO_V6)?,
+            Some(5) => {
+                conn.execute_batch(MIGRATE_V5_TO_V6)?;
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
+            }
+            Some(6) => conn.execute_batch(MIGRATE_V6_TO_V7)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -368,10 +384,7 @@ impl Store {
                     t.attachments.push(att);
                 }
             }
-            let mut stmt = c.prepare(
-                "SELECT id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at
-                 FROM clarifications WHERE conversation_id = ?1 ORDER BY number",
-            )?;
+            let mut stmt = c.prepare(&format!("{} WHERE conversation_id = ?1 ORDER BY number", CLARIFICATION_SELECT))?;
             let clarifications = stmt
                 .query_map(params![id], row_clarification)?
                 .collect::<Result<Vec<_>, _>>()?;
@@ -701,12 +714,15 @@ impl Store {
 
     // ── clarifications ──────────────────────────────────────────────────
 
+    /// Creates a clarification. `web_anchor` is the JSON anchor of an ask made
+    /// on a web page; in-app clarifications pass None and a block id.
     pub fn create_clarification(
         &self,
         conversation_id: &str,
         anchor_block_id: &str,
         quote: &str,
         parent_id: Option<&str>,
+        web_anchor: Option<&str>,
     ) -> Result<Clarification> {
         let id = new_id("cl");
         self.with(|c| {
@@ -716,9 +732,9 @@ impl Store {
                 |r| r.get(0),
             )?;
             c.execute(
-                "INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7)",
-                params![id, conversation_id, number, anchor_block_id, quote, parent_id, now_ms()],
+                "INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at, web_anchor)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)",
+                params![id, conversation_id, number, anchor_block_id, quote, parent_id, now_ms(), web_anchor],
             )?;
             Ok(())
         })?;
@@ -727,14 +743,9 @@ impl Store {
 
     pub fn get_clarification(&self, id: &str) -> Result<Clarification> {
         self.with(|c| {
-            c.query_row(
-                "SELECT id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at
-                 FROM clarifications WHERE id = ?1",
-                params![id],
-                row_clarification,
-            )
-            .optional()?
-            .ok_or_else(|| anyhow!("no clarification {}", id))
+            c.query_row(&format!("{} WHERE id = ?1", CLARIFICATION_SELECT), params![id], row_clarification)
+                .optional()?
+                .ok_or_else(|| anyhow!("no clarification {}", id))
         })
     }
 
@@ -747,11 +758,178 @@ impl Store {
             Ok(())
         })
     }
+
+    /// Records how the extension last placed a web anchor on its page.
+    pub fn set_anchor_state(&self, id: &str, state: AnchorState) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE clarifications SET anchor_state = ?2 WHERE id = ?1",
+                params![id, state.as_str()],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Removes a clarification with its turns and every clarification nested
+    /// in its replies, in one transaction. Returns the attachments those
+    /// turns carried so the caller can delete their files.
+    pub fn delete_clarification(&self, id: &str) -> Result<Vec<Attachment>> {
+        self.with(|c| {
+            c.execute_batch("BEGIN")?;
+            let result = (|| -> Result<Vec<Attachment>> {
+                let mut removed = Vec::new();
+                let mut pending = vec![id.to_string()];
+                while let Some(cur) = pending.pop() {
+                    let mut stmt = c.prepare("SELECT id FROM clarifications WHERE parent_id = ?1")?;
+                    let children: Vec<String> = stmt.query_map(params![cur], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                    pending.extend(children);
+                    let mut stmt = c.prepare(&format!(
+                        "{} WHERE a.turn_id IN (SELECT id FROM turns WHERE clarification_id = ?1)",
+                        ATTACHMENT_SELECT
+                    ))?;
+                    removed.extend(stmt.query_map(params![cur], row_attachment)?.collect::<Result<Vec<_>, _>>()?);
+                    c.execute("DELETE FROM turns WHERE clarification_id = ?1", params![cur])?;
+                    c.execute("DELETE FROM clarifications WHERE id = ?1", params![cur])?;
+                }
+                Ok(removed)
+            })();
+            match result {
+                Ok(removed) => {
+                    c.execute_batch("COMMIT")?;
+                    Ok(removed)
+                }
+                Err(e) => {
+                    let _ = c.execute_batch("ROLLBACK");
+                    Err(e)
+                }
+            }
+        })
+    }
+
+    // ── pages ───────────────────────────────────────────────────────────
+
+    /// Creates the page or refreshes its URL, title, favicon and last-seen
+    /// time. The conversation is only set on creation.
+    pub fn upsert_page(&self, url_key: &str, url: &str, title: &str, favicon_url: Option<&str>, conversation_id: &str) -> Result<Page> {
+        let now = now_ms();
+        self.with(|c| {
+            c.execute(
+                "INSERT INTO pages (url_key, url, title, favicon_url, conversation_id, first_seen, last_seen)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+                 ON CONFLICT(url_key) DO UPDATE SET
+                    url = excluded.url,
+                    title = CASE WHEN excluded.title = '' THEN pages.title ELSE excluded.title END,
+                    favicon_url = COALESCE(excluded.favicon_url, pages.favicon_url),
+                    last_seen = excluded.last_seen",
+                params![url_key, url, title, favicon_url, conversation_id, now],
+            )?;
+            Ok(())
+        })?;
+        self.get_page(url_key)?.ok_or_else(|| anyhow!("no page {}", url_key))
+    }
+
+    pub fn get_page(&self, url_key: &str) -> Result<Option<Page>> {
+        self.with(|c| {
+            Ok(c.query_row(&format!("{} WHERE p.url_key = ?1", PAGE_SELECT), params![url_key], row_page).optional()?)
+        })
+    }
+
+    pub fn page_of_conversation(&self, conversation_id: &str) -> Result<Option<Page>> {
+        self.with(|c| {
+            Ok(c.query_row(&format!("{} WHERE p.conversation_id = ?1", PAGE_SELECT), params![conversation_id], row_page)
+                .optional()?)
+        })
+    }
+
+    /// Pages, most recently active first.
+    pub fn list_pages(&self, limit: usize) -> Result<Vec<Page>> {
+        self.with(|c| {
+            let mut stmt = c.prepare(&format!(
+                "{} ORDER BY MAX(p.last_seen, c.updated_at) DESC LIMIT ?1",
+                PAGE_SELECT
+            ))?;
+            let rows = stmt.query_map(params![limit as i64], row_page)?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// The hash of the page text last sent to the agent, if any.
+    pub fn page_text_hash(&self, url_key: &str) -> Result<Option<String>> {
+        self.with(|c| {
+            Ok(c.query_row("SELECT text_hash FROM pages WHERE url_key = ?1", params![url_key], |r| r.get(0))
+                .optional()?
+                .flatten())
+        })
+    }
+
+    /// The page text last sent to the agent, if any.
+    pub fn page_text(&self, url_key: &str) -> Result<Option<String>> {
+        self.with(|c| {
+            Ok(c.query_row("SELECT text FROM pages WHERE url_key = ?1", params![url_key], |r| r.get(0))
+                .optional()?
+                .flatten())
+        })
+    }
+
+    pub fn set_page_text(&self, url_key: &str, text: &str, hash: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE pages SET text = ?2, text_hash = ?3 WHERE url_key = ?1",
+                params![url_key, text, hash],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn touch_page(&self, url_key: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute("UPDATE pages SET last_seen = ?2 WHERE url_key = ?1", params![url_key, now_ms()])?;
+            Ok(())
+        })
+    }
+
+    /// Removes a page by deleting its conversation; the cascade takes the
+    /// page row, its turns and its clarifications with it.
+    pub fn delete_page(&self, url_key: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "DELETE FROM conversations WHERE id = (SELECT conversation_id FROM pages WHERE url_key = ?1)",
+                params![url_key],
+            )?;
+            Ok(())
+        })
+    }
 }
 
 const SUMMARY_SELECT: &str = "SELECT c.id, c.title, c.agent, c.model, c.web_search, c.created_at, c.updated_at,
-        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags, c.project_dir, c.mode
+        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = c.id), c.pinned, c.tags, c.project_dir, c.mode,
+        (SELECT url_key FROM pages p WHERE p.conversation_id = c.id)
      FROM conversations c";
+
+const CLARIFICATION_SELECT: &str =
+    "SELECT id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at, web_anchor, anchor_state
+     FROM clarifications";
+
+const PAGE_SELECT: &str = "SELECT p.url_key, p.url, p.title, p.favicon_url, p.conversation_id, p.first_seen, p.last_seen,
+        c.updated_at,
+        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = p.conversation_id AND k.web_anchor IS NOT NULL),
+        (SELECT COUNT(*) FROM clarifications k WHERE k.conversation_id = p.conversation_id AND k.anchor_state = 'orphan')
+     FROM pages p JOIN conversations c ON c.id = p.conversation_id";
+
+fn row_page(r: &Row<'_>) -> rusqlite::Result<Page> {
+    Ok(Page {
+        url_key: r.get(0)?,
+        url: r.get(1)?,
+        title: r.get(2)?,
+        favicon_url: r.get(3)?,
+        conversation_id: r.get(4)?,
+        first_seen: r.get(5)?,
+        last_seen: r.get(6)?,
+        updated_at: r.get(7)?,
+        ask_count: r.get::<_, i64>(8)? as u32,
+        orphan_count: r.get::<_, i64>(9)? as u32,
+    })
+}
 
 const ATTACHMENT_SELECT: &str =
     "SELECT a.id, a.name, a.mime, a.kind, a.size, a.path, a.turn_id, a.created_at FROM attachments a";
@@ -772,6 +950,7 @@ fn row_summary(r: &Row<'_>) -> rusqlite::Result<ConversationSummary> {
         tags: serde_json::from_str(&tags).unwrap_or_default(),
         project_dir: r.get(10)?,
         mode: r.get(11)?,
+        page_key: r.get(12)?,
     })
 }
 
@@ -845,10 +1024,13 @@ fn row_turn(r: &Row<'_>) -> rusqlite::Result<Turn> {
         created_at: r.get(11)?,
         completed_at: r.get(12)?,
         attachments: Vec::new(),
+        truncated: false,
     })
 }
 
 fn row_clarification(r: &Row<'_>) -> rusqlite::Result<Clarification> {
+    let web_anchor: Option<String> = r.get(8)?;
+    let anchor_state: Option<String> = r.get(9)?;
     Ok(Clarification {
         id: r.get(0)?,
         conversation_id: r.get(1)?,
@@ -858,6 +1040,8 @@ fn row_clarification(r: &Row<'_>) -> rusqlite::Result<Clarification> {
         parent_id: r.get(5)?,
         open: r.get::<_, i64>(6)? != 0,
         created_at: r.get(7)?,
+        web_anchor: web_anchor.and_then(|j| serde_json::from_str(&j).ok()),
+        anchor_state: anchor_state.as_deref().and_then(AnchorState::parse),
     })
 }
 
@@ -884,9 +1068,9 @@ mod tests {
         assert_eq!(done.status, TurnStatus::Done);
         assert_eq!(done.usage.unwrap().input_tokens, Some(3));
 
-        let cl = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "answer", None).unwrap();
+        let cl = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "answer", None, None).unwrap();
         assert_eq!(cl.number, 1);
-        let cl2 = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "partial", Some(&cl.id)).unwrap();
+        let cl2 = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "partial", Some(&cl.id), None).unwrap();
         assert_eq!(cl2.number, 2);
         s.set_clarification_open(&cl.id, false).unwrap();
 
@@ -961,8 +1145,11 @@ mod tests {
             conn.execute_batch(SCHEMA).unwrap();
             conn.execute_batch(
                 "DROP TABLE projects;
+                 DROP TABLE pages;
                  ALTER TABLE conversations DROP COLUMN origin_file;
                  ALTER TABLE conversations DROP COLUMN origin_until;
+                 ALTER TABLE clarifications DROP COLUMN web_anchor;
+                 ALTER TABLE clarifications DROP COLUMN anchor_state;
                  INSERT INTO schema_version VALUES (4);
                  INSERT INTO conversations (id, title, agent, project_dir, created_at, updated_at) VALUES
                     ('c1', 'One', 'claude', '/work/alpha', 5, 5),
@@ -975,6 +1162,75 @@ mod tests {
         let list = s.list_projects().unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!((list[0].path.as_str(), list[0].created_at, list[0].last_active_at), ("/work/alpha", 3, 9));
+    }
+
+    #[test]
+    fn migrates_version_6_adds_web_anchor_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v6.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA).unwrap();
+            conn.execute_batch(
+                "DROP TABLE pages;
+                 ALTER TABLE clarifications DROP COLUMN web_anchor;
+                 ALTER TABLE clarifications DROP COLUMN anchor_state;
+                 INSERT INTO schema_version VALUES (6);
+                 INSERT INTO conversations (id, title, agent, created_at, updated_at) VALUES ('c1', 'One', 'claude', 5, 5);
+                 INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, created_at)
+                    VALUES ('k1', 'c1', 1, 't:0', 'old quote', 5);",
+            )
+            .unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        let old = s.get_clarification("k1").unwrap();
+        assert!(old.web_anchor.is_none());
+        let anchor = r#"{"quote":{"exact":"hi","prefix":"","suffix":""}}"#;
+        let page_conv = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
+        let cl = s.create_clarification(&page_conv.summary.id, "", "hi", None, Some(anchor)).unwrap();
+        assert_eq!(cl.web_anchor.unwrap().quote.exact, "hi");
+        s.upsert_page("https://e.com/a", "https://e.com/a?x", "A", None, &page_conv.summary.id).unwrap();
+        assert_eq!(s.list_pages(10).unwrap()[0].ask_count, 1);
+    }
+
+    #[test]
+    fn pages_roundtrip_and_cascade() {
+        let s = Store::in_memory().unwrap();
+        let conv = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
+        let id = conv.summary.id.clone();
+        let p = s.upsert_page("https://e.com/a", "https://e.com/a?utm=1", "Article", Some("https://e.com/i.png"), &id).unwrap();
+        assert_eq!((p.title.as_str(), p.ask_count, p.orphan_count), ("Article", 0, 0));
+        assert_eq!(s.get_summary(&id).unwrap().page_key.as_deref(), Some("https://e.com/a"));
+        // A second visit keeps first_seen, refreshes the URL and keeps the title when none is given.
+        let again = s.upsert_page("https://e.com/a", "https://e.com/a", "", None, "ignored").unwrap();
+        assert_eq!(again.first_seen, p.first_seen);
+        assert_eq!(again.title, "Article");
+        assert_eq!(again.url, "https://e.com/a");
+        assert_eq!(again.conversation_id, id);
+        assert_eq!(again.favicon_url.as_deref(), Some("https://e.com/i.png"));
+
+        let anchor = r#"{"quote":{"exact":"x","prefix":"","suffix":""},"position":{"start":1,"end":2}}"#;
+        let cl = s.create_clarification(&id, "", "x", None, Some(anchor)).unwrap();
+        let t = s.create_turn(&id, Role::User, "why", None, TurnStatus::Done, Some(&cl.id), None).unwrap();
+        s.set_anchor_state(&cl.id, AnchorState::Orphan).unwrap();
+        let page = s.get_page("https://e.com/a").unwrap().unwrap();
+        assert_eq!((page.ask_count, page.orphan_count), (1, 1));
+        assert_eq!(s.page_of_conversation(&id).unwrap().unwrap().url_key, "https://e.com/a");
+        assert_eq!(s.get_clarification(&cl.id).unwrap().anchor_state, Some(AnchorState::Orphan));
+
+        assert!(s.page_text_hash("https://e.com/a").unwrap().is_none());
+        s.set_page_text("https://e.com/a", "body", "h1").unwrap();
+        assert_eq!(s.page_text_hash("https://e.com/a").unwrap().as_deref(), Some("h1"));
+
+        let nested = s.create_clarification(&id, "", "y", Some(&cl.id), Some(anchor)).unwrap();
+        s.delete_clarification(&cl.id).unwrap();
+        assert!(s.get_clarification(&cl.id).is_err());
+        assert!(s.get_clarification(&nested.id).is_err());
+        assert!(s.get_turn(&t.id).is_err());
+
+        s.delete_page("https://e.com/a").unwrap();
+        assert!(s.get_page("https://e.com/a").unwrap().is_none());
+        assert!(s.get_summary(&id).is_err());
     }
 }
 

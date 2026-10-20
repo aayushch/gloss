@@ -1,8 +1,10 @@
 <script lang="ts">
 	// Conversation header: title, project (a picker while the chat is a
 	// draft), tags, pin, web-search toggle, model pill, clarification count
-	// and the export menu.
+	// and the export menu. A web page's conversation shows the page's
+	// favicon and title instead of the project controls.
 	import { app, folderName } from '$lib/state/app.svelte';
+	import { hostOf } from '$lib/state/threads';
 	import Icon from './Icon.svelte';
 	import ModelMenu from './ModelMenu.svelte';
 
@@ -48,7 +50,9 @@
 		app.chooseProject(path);
 	}
 
-	const title = $derived(app.active?.title ?? app.viewing?.session.title ?? 'New conversation');
+	const page = $derived(app.activePage);
+	const isPage = $derived(!!app.active?.pageKey);
+	const title = $derived(page?.title || app.active?.title || app.viewing?.session.title || 'New conversation');
 	const count = $derived(app.active?.clarifications.length ?? 0);
 	const agent = $derived(app.activeAgent);
 	const agentId = $derived(app.activeAgentId);
@@ -59,8 +63,19 @@
 </script>
 
 <header data-tauri-drag-region>
+	{#if isPage}
+		<span class="favicon" title={page?.url ?? app.active?.pageKey ?? ''}>
+			{#if page?.faviconUrl}
+				<img src={page.faviconUrl} alt="" width="16" height="16" />
+			{:else}
+				<span class="letter">{hostOf(page?.url ?? app.active?.pageKey ?? '').charAt(0).toUpperCase()}</span>
+			{/if}
+		</span>
+	{/if}
 	<h1 title={title}>{title}</h1>
-	{#if app.draft}
+	{#if isPage}
+		<span class="host">{hostOf(page?.url ?? app.active?.pageKey ?? '')}</span>
+	{:else if app.draft}
 		<div class="project-wrap" data-project-menu>
 			<span class="folder" class:none={!app.activeProjectDir}>
 				<button
@@ -175,6 +190,8 @@
 	</div>
 	{#if app.viewing}
 		<button type="button" class="ibtn continue" title="Resume this session in Gloss; it stays in the agent's own history too" onclick={() => app.continueSession()}>Continue in Gloss</button>
+	{:else if isPage}
+		<span class="pill count">{count} ask{count === 1 ? '' : 's'}</span>
 	{:else}
 		<span class="pill count">{count} clarification{count === 1 ? '' : 's'}</span>
 	{/if}
@@ -185,9 +202,14 @@
 			</button>
 			{#if exportOpen}
 				<div class="menu" role="menu">
-					<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.copyConversationMarkdown(); }}>Copy as Markdown</button>
-					<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.saveConversationMarkdown(); }}>Save as Markdown…</button>
-					<div class="hint">Clarifications are folded in under the sentences they were asked about.</div>
+					{#if isPage}
+						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.copyPageMarkdown(); }}>Copy page notes as Markdown</button>
+						<div class="hint">The page's title and link, then each highlighted passage with what was asked about it.</div>
+					{:else}
+						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.copyConversationMarkdown(); }}>Copy as Markdown</button>
+						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.saveConversationMarkdown(); }}>Save as Markdown…</button>
+						<div class="hint">Clarifications are folded in under the sentences they were asked about.</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -217,6 +239,31 @@
 		flex: 1;
 		min-width: 10px;
 		align-self: stretch;
+	}
+	.favicon {
+		width: 20px;
+		height: 20px;
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 5px;
+		background: var(--accent-tint);
+		overflow: hidden;
+	}
+	.favicon img {
+		display: block;
+	}
+	.letter {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--accent-text);
+	}
+	.host {
+		font-size: 11.5px;
+		color: var(--text-3);
+		white-space: nowrap;
+		flex: none;
 	}
 	.pill {
 		display: inline-flex;

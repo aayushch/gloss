@@ -1,0 +1,16 @@
+[package]
+name = "gloss-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native-messaging host that relays the Gloss browser extension to the running Gloss app"
+
+[[bin]]
+name = "gloss-bridge"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

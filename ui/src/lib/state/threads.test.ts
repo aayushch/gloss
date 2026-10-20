@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
-import { agentsIn, projectItems, splitByProject, wellsContaining } from './threads';
+import { agentsIn, anchorLabel, hostOf, pageQuestions, pageThreads, projectItems, splitByProject, splitForRail, wellsContaining } from './threads';
 
-function turn(id: string, text: string, clarificationId: string | null): Turn {
-	return { id, conversationId: 'c', seq: 0, role: 'assistant', text, promptText: null, status: 'done', clarificationId, model: null, error: null, usage: null, createdAt: 0 } as Turn;
+function turn(id: string, text: string, clarificationId: string | null, role: Turn['role'] = 'assistant'): Turn {
+	return { id, conversationId: 'c', seq: 0, role, text, promptText: null, status: 'done', clarificationId, model: null, error: null, usage: null, createdAt: 0 } as Turn;
 }
 
 const conv = {
@@ -45,6 +45,61 @@ describe('splitByProject', () => {
 		expect(byProject.get('/p/one')!.map((c) => c.id)).toEqual(['a', 'd']);
 		expect(byProject.get('/p/empty')).toEqual([]);
 		expect(rest.map((c) => c.id)).toEqual(['b', 'c']);
+	});
+});
+
+describe('splitForRail', () => {
+	const conv = (id: string, projectDir: string | null, pageKey: string | null = null) => ({ id, projectDir, pageKey }) as ConversationSummary;
+	const project = (path: string) => ({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
+
+	it('keeps page conversations out of the project and date lists', () => {
+		const { byProject, pages, rest } = splitForRail(
+			[conv('a', '/p/one'), conv('w', null, 'https://example.com/x'), conv('b', null), conv('w2', '/p/one', 'https://example.com/y')],
+			[project('/p/one')]
+		);
+		expect(byProject.get('/p/one')!.map((c) => c.id)).toEqual(['a']);
+		expect(pages.map((c) => c.id)).toEqual(['w', 'w2']);
+		expect(rest.map((c) => c.id)).toEqual(['b']);
+		expect(splitByProject([conv('w', null, 'https://example.com/x'), conv('b', null)], []).rest.map((c) => c.id)).toEqual(['b']);
+	});
+});
+
+describe('page threads', () => {
+	const web = { quote: { exact: 'q', prefix: '', suffix: '' }, position: null, container: null };
+	const pageConv = {
+		id: 'p',
+		turns: [
+			turn('u1', 'What is this about?', null, 'user'),
+			turn('a1', 'Store buffers.', null),
+			turn('u2', 'Why?', 'w1', 'user'),
+			turn('a2', 'Because.', 'w1'),
+			turn('u3', 'And nested?', 'w2', 'user'),
+			turn('u4', 'Old style?', 'cl9', 'user')
+		],
+		clarifications: [
+			{ id: 'w1', anchorBlockId: '', quote: 'first passage', parentId: null, webAnchor: web, anchorState: 'anchored' },
+			{ id: 'w2', anchorBlockId: '', quote: 'inside the reply', parentId: 'w1', webAnchor: web, anchorState: 'orphan' },
+			{ id: 'cl9', anchorBlockId: 'a1:0', quote: 'buffers', parentId: null, webAnchor: null, anchorState: null }
+		]
+	} as unknown as Conversation;
+
+	it('lists only the asks with a web anchor, with their turns', () => {
+		const threads = pageThreads(pageConv);
+		expect(threads.map((t) => t.clarification.id)).toEqual(['w1', 'w2']);
+		expect(threads[0].turns).toHaveLength(1);
+		expect(threads[0].turns[0].reply?.id).toBe('a2');
+	});
+
+	it('page questions are the turns outside any ask', () => {
+		expect(pageQuestions(pageConv).map((t) => t.id)).toEqual(['u1', 'a1']);
+	});
+
+	it('labels anchor states and reads hosts', () => {
+		expect(anchorLabel('anchored')).toBe('');
+		expect(anchorLabel('fuzzy')).toBe('approximate match');
+		expect(anchorLabel('orphan')).toBe('not on the page any more');
+		expect(hostOf('https://www.example.com/a/b?x=1')).toBe('example.com');
+		expect(hostOf('not a url')).toBe('not a url');
 	});
 });
 

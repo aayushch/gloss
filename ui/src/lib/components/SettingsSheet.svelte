@@ -1,9 +1,9 @@
 <script lang="ts">
-	// Modal settings sheet: agent choice, default model per agent, appearance
-	// and app updates.
-	import { app } from '$lib/state/app.svelte';
+	// Modal settings sheet: agent choice, default model per agent, app
+	// updates, the browser extension and appearance.
+	import { app, AGENT_NAMES } from '$lib/state/app.svelte';
 	import { updater, type CheckResult } from '$lib/state/updater.svelte';
-	import type { AgentId } from '$lib/api/types';
+	import type { AgentId, BrowserRegistration, SessionInfo } from '$lib/api/types';
 	import Icon from './Icon.svelte';
 
 	const agents = $derived(app.agents);
@@ -36,6 +36,45 @@
 		if (mins < 60) return `${mins} min ago`;
 		return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
+
+	// ── browser extension ───────────────────────────────────────────────
+
+	const ext = $derived(app.extension);
+	const isMac = typeof document !== 'undefined' && document.documentElement.dataset.platform === 'macos';
+
+	/** The Chrome Web Store serves every Chromium browser; the button names the one that is installed. */
+	const storeLabel = $derived.by(() => {
+		const installed = ext?.browsers.find((b) => b.family === 'chromium' && b.installed);
+		const name = installed?.name ?? 'Chrome';
+		const known = ['Brave', 'Edge', 'Arc', 'Vivaldi', 'Chrome'].find((k) => name.includes(k));
+		return `Get for ${known ?? 'Chrome'}`;
+	});
+
+	function browserStatus(b: BrowserRegistration): string {
+		if (!b.installed) return 'Not installed';
+		if (b.error) return `Error: ${b.error}`;
+		return b.registered ? 'Registered' : 'Not registered';
+	}
+
+	function sessionLabel(s: SessionInfo): string {
+		const name = s.browser ? s.browser.charAt(0).toUpperCase() + s.browser.slice(1) : 'Browser';
+		return `${name} ${s.extensionVersion} connected`;
+	}
+
+	/** The deny list as typed; saved on blur so every keystroke does not hit the engine. */
+	let denyText = $state(app.settings.pageDenyList.join('\n'));
+	$effect(() => {
+		denyText = app.settings.pageDenyList.join('\n');
+	});
+
+	function commitDenyList() {
+		const list = [...new Set(denyText.split(/[\n,]/).map((h) => h.trim().toLowerCase()).filter(Boolean))];
+		if (list.join('\n') !== app.settings.pageDenyList.join('\n')) app.saveSettings({ pageDenyList: list });
+	}
+
+	$effect(() => {
+		app.refreshExtensionStatus();
+	});
 
 	$effect(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -133,6 +172,90 @@
 					{/if}
 				</div>
 			{/if}
+		</section>
+
+		<section>
+			<h3>Browser extension</h3>
+			<p class="intro">Highlight text on any web page and ask about it; the page and its asks appear under Pages in the rail. The extension talks to Gloss through a small native-messaging host that each browser must know about.</p>
+			{#if !ext}
+				<p class="intro">Reading the extension status…</p>
+			{:else}
+				{#if ext.translocated}
+					<div class="warn">Move Gloss to the Applications folder so browsers can find it. macOS runs it from a temporary copy right now, and the registered paths point there.</div>
+				{/if}
+				<div class="rows">
+					{#each ext.browsers as b (b.id)}
+						<div class="row static" class:off={!b.installed}>
+							<span class="text">
+								<span class="name">{b.name}</span>
+								<span class="cmd" title={b.manifestPath}>{b.family === 'firefox' ? 'Firefox add-on' : 'Chrome Web Store'}</span>
+							</span>
+							<span class="status" class:missing={b.installed && (!b.registered || !!b.error)} class:ok={b.installed && b.registered && !b.error}>{browserStatus(b)}</span>
+						</div>
+					{/each}
+				</div>
+				{#if ext.sessions.length}
+					<ul class="sessions">
+						{#each ext.sessions as s (s.id)}
+							<li><span class="live"></span>{sessionLabel(s)}</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="intro quiet">No browser is connected right now.</p>
+				{/if}
+				<div class="actions">
+					<button type="button" class="ibtn" onclick={() => app.openUrl(ext.chromeStoreUrl)}>{storeLabel}</button>
+					<button type="button" class="ibtn" disabled={!ext.xpiBundled} title={ext.xpiBundled ? (ext.firefoxXpiPath ?? '') : 'This build does not include the Firefox add-on'} onclick={() => app.installFirefoxExtension()}>Install in Firefox</button>
+					{#if ext.safariAvailable}
+						<button type="button" class="ibtn" onclick={() => app.openSafariExtensions()}>Safari extension</button>
+					{/if}
+				</div>
+				{#if !ext.xpiBundled}
+					<p class="intro quiet">The Firefox add-on is not bundled with this build.</p>
+				{/if}
+				<div class="actions">
+					<button type="button" class="ibtn ghost" onclick={() => app.registerHosts()}>Re-register</button>
+					<button type="button" class="ibtn ghost" onclick={() => app.unregisterHosts()}>Unregister</button>
+					<span class="result mono path" title={ext.bridgePath}>{ext.bridgePath}</span>
+				</div>
+			{/if}
+			<div class="prefs">
+				<label class="toggle">
+					<input type="checkbox" checked={app.settings.sendPageText} onchange={(e) => app.saveSettings({ sendPageText: e.currentTarget.checked })} />
+					<span class="switch"></span>
+					<span class="text">
+						<span class="name">Send page text to the agent</span>
+						<span class="cmd">The page's readable text goes along with an ask so the agent can read around the passage.</span>
+					</span>
+				</label>
+				<label class="field">
+					<span class="name">Never ask about these hosts</span>
+					<span class="cmd">One host per line; <span class="mono">*.example.com</span> covers subdomains.</span>
+					<textarea class="iinput deny" rows="3" placeholder="mail.example.com" bind:value={denyText} onblur={commitDenyList}></textarea>
+				</label>
+				{#if isMac}
+					<label class="toggle">
+						<input type="checkbox" checked={app.settings.safariBridge} onchange={(e) => app.saveSettings({ safariBridge: e.currentTarget.checked })} />
+						<span class="switch"></span>
+						<span class="text">
+							<span class="name">Safari bridge</span>
+							<span class="cmd">Listen on this Mac only{ext?.loopbackPort ? ` (port ${ext.loopbackPort})` : ''} so the Safari extension can reach Gloss.</span>
+						</span>
+					</label>
+				{/if}
+				<label class="field inline">
+					<span class="text">
+						<span class="name">Page agent</span>
+						<span class="cmd">Answers questions asked from the browser.</span>
+					</span>
+					<select class="pick" value={app.settings.pageAgent ?? ''} onchange={(e) => app.saveSettings({ pageAgent: (e.currentTarget.value || null) as AgentId | null })}>
+						<option value="">Default agent ({AGENT_NAMES[app.settings.defaultAgent]})</option>
+						{#each app.agents as a (a.id)}
+							<option value={a.id} disabled={!a.available}>{a.name}{a.available ? '' : ' (not installed)'}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
 		</section>
 
 		<section>
@@ -301,6 +424,145 @@
 	}
 	.result.err {
 		color: var(--accent-text);
+	}
+	.row.static {
+		cursor: default;
+	}
+	.status.ok {
+		color: var(--text-2);
+	}
+	.warn {
+		font-size: 12.5px;
+		color: var(--accent-text);
+		background: var(--accent-tint);
+		border: 1px solid var(--accent);
+		border-radius: 8px;
+		padding: 8px 10px;
+		margin-bottom: 10px;
+	}
+	.sessions {
+		list-style: none;
+		margin: 8px 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12.5px;
+		color: var(--text-2);
+	}
+	.sessions li {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+	}
+	.live {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--accent);
+		flex: none;
+	}
+	.quiet {
+		margin: 8px 0 0;
+		color: var(--text-3);
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+		margin-top: 10px;
+	}
+	.path {
+		font-size: 11px;
+		color: var(--text-3);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+		flex: 1;
+	}
+	.prefs {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px solid var(--line);
+	}
+	.toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		cursor: pointer;
+	}
+	.toggle input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+	.switch {
+		width: 30px;
+		height: 18px;
+		border-radius: 999px;
+		background: var(--surface-2);
+		border: 1px solid var(--line);
+		position: relative;
+		flex: none;
+		margin-top: 1px;
+		transition: background 120ms ease;
+	}
+	.switch::after {
+		content: '';
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--bg);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+		transition: transform 120ms ease;
+	}
+	.toggle input:checked + .switch {
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+	.toggle input:checked + .switch::after {
+		transform: translateX(12px);
+	}
+	.toggle input:focus-visible + .switch {
+		box-shadow: 0 0 0 3px var(--accent-tint);
+	}
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+	.field.inline {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.deny {
+		margin-top: 4px;
+		font-size: 12.5px;
+		font-family: var(--mono);
+		resize: vertical;
+		min-height: 56px;
+	}
+	.pick {
+		height: 28px;
+		padding: 0 8px;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		background: var(--surface);
+		color: var(--text);
+		font-size: 12.5px;
+		flex: none;
+		max-width: 220px;
 	}
 	.seg {
 		display: inline-flex;

@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "bash ../scripts/build-bridge.sh --debug && bash ../scripts/ensure-resources.sh && npm run dev",
+    "beforeBuildCommand": "bash ../scripts/build-bridge.sh && bash ../scripts/ensure-resources.sh && npm run build"
   },
   "app": {
     "windows": [
@@ -47,7 +47,8 @@
       "signingIdentity": null,
       "files": {
         "Resources/Assets.car": "icons/Assets.car"
-      }
+      },
+      "entitlements": "entitlements.plist"
     },
     "windows": {
       "wix": {
@@ -65,6 +66,12 @@
       "rpm": {
         "release": "1"
       }
+    },
+    "externalBin": [
+      "binaries/gloss-bridge"
+    ],
+    "resources": {
+      "resources/gloss.xpi": "gloss.xpi"
     }
   },
   "plugins": {
@@ -73,6 +80,13 @@
       "endpoints": [
         "https://github.com/aayushch/gloss/releases/latest/download/latest.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "gloss"
+        ]
+      }
     }
   }
 }
