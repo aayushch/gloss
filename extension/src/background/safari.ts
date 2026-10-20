@@ -43,17 +43,33 @@ export class SafariTransport implements Transport {
 
 	async request(method: string, params?: unknown): Promise<unknown> {
 		const id = String(this.nextId++);
-		let reply: BridgeIncoming;
-		try {
-			reply = (await browser.runtime.sendNativeMessage('application.id', { id, method, params })) as BridgeIncoming;
-		} catch (e) {
-			throw new BridgeFailure('app_not_running', e instanceof Error ? e.message : 'the Gloss handler did not answer');
-		}
+		const reply = (await this.sendNative({ id, method, params })) as BridgeIncoming;
 		if (!reply || typeof reply !== 'object') throw new BridgeFailure('internal', 'empty reply from the Gloss handler');
 		if ('error' in reply) throw new BridgeFailure(reply.error.code, reply.error.message);
 		if ('event' in reply) throw new BridgeFailure('internal', 'unexpected event reply');
 		if (TURN_STARTERS.has(method)) this.follow(reply.result as PageAskResult);
 		return reply.result;
+	}
+
+	/**
+	 * One native message, retried once when Safari reports the handler
+	 * process as interrupted (it restarts the process on the next call):
+	 * that is what Safari says while it is still tearing a handler down.
+	 */
+	private async sendNative(message: object): Promise<unknown> {
+		for (let attempt = 0; ; attempt++) {
+			try {
+				return await browser.runtime.sendNativeMessage('application.id', message);
+			} catch (e) {
+				const text = e instanceof Error ? e.message : String(e);
+				const interrupted = /SFErrorDomain error 3|interrupted/i.test(text);
+				if (interrupted && attempt < 2) {
+					await new Promise((r) => setTimeout(r, 400));
+					continue;
+				}
+				throw new BridgeFailure('app_not_running', text || 'the Gloss handler did not answer');
+			}
+		}
 	}
 
 	onEvent(handler: (event: string, data: unknown) => void): () => void {

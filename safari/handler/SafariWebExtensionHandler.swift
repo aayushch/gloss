@@ -23,6 +23,11 @@ private let appGroup = "BG78RT6D5Z.sh.aay.gloss"
 final class BridgeClient {
     static let shared = BridgeClient()
 
+    private init() {
+        // Belt and braces for the SO_NOSIGPIPE option set per socket.
+        signal(SIGPIPE, SIG_IGN)
+    }
+
     private let queue = DispatchQueue(label: "sh.aay.gloss.bridge")
     private var fd: Int32 = -1
     private var buffer = Data()
@@ -103,6 +108,12 @@ final class BridgeClient {
         }
         var timeout = timeval(tv_sec: 60, tv_usec: 0)
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        // A write to a connection Gloss has closed (it was restarted) must
+        // fail with EPIPE so the relay reconnects; without this the kernel
+        // delivers SIGPIPE and the whole handler process dies, which Safari
+        // reports to the page as "SFErrorDomain error 3".
+        var noSigPipe: Int32 = 1
+        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
         fd = sock
         if !writeLine("{\"token\":\"\(info.token)\"}") {
             lastFailure = "the connection to Gloss closed before the token was sent"
