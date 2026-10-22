@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gloss — Terms of Use</title>
+<meta name="description" content="Terms of use for the Gloss desktop app and the Gloss browser extension.">
+<link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+// Applies the saved or system theme before the first paint, as the home page does.
+(function () {
+	var saved = null;
+	try { saved = localStorage.getItem('gloss-mode'); } catch (e) {}
+	var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+	if (dark) document.documentElement.setAttribute('data-mode', 'dark');
+})();
+</script>
+</head>
+<body>
+
+<nav class="nav">
+	<div class="wrap">
+		<a href="./" class="brand"><span class="gmark" aria-hidden="true"><svg viewBox="120 104 220 148" width="15" height="10" fill="currentColor"><g transform="rotate(180 230 178)"><path d="M136 236 V176 Q136 120 192 120 H200 V156 H196 Q176 156 176 176 V184 H212 V236 Z"/><path d="M248 236 V176 Q248 120 304 120 H312 V156 H308 Q288 156 288 176 V184 H324 V236 Z"/></g></svg></span>Gloss</a>
+		<div class="navlinks">
+			<a href="./">Home</a>
+		</div>
+		<button type="button" class="ibtn ibtn-ghost ibtn-sm ibtn-icon" id="theme" title="Toggle theme" aria-label="Toggle theme">
+			<svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+			<svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+		</button>
+		<a href="https://github.com/aayushch/gloss" target="_blank" rel="noopener" class="ibtn ibtn-sm">GitHub</a>
+	</div>
+</nav>
+
+<main class="wrap">
+<article class="legal">
+
+<h1>Terms of Use</h1>
+<p class="legal-date">Last updated: 22 October 2026</p>
+
+<p>These terms cover the Gloss desktop app (macOS, Windows and Linux), the Gloss browser extension (Chrome, Firefox and Safari) and this website. Gloss is free, open-source software made by Aayush Chawla. By installing or using Gloss you agree to these terms. If you do not agree, do not use it.</p>
+
+<div class="legal-summary">
+	<p><strong>In short:</strong> Gloss is free and comes with no warranty. You use the AI agents through your own accounts and under their providers' terms, and you are responsible for what you ask and for checking the answers before relying on them. How Gloss handles your data is described in the <a href="privacy.html">Privacy Policy</a>.</p>
+</div>
+
+<h2>1. License</h2>
+<p>Gloss is released under the <a href="https://github.com/aayushch/gloss/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. You may use, copy, modify and distribute it under that license. Where these terms and the license differ about the software itself, the license applies.</p>
+
+<h2>2. The AI agents and their providers</h2>
+<p>Gloss works by running AI agents you install yourself (Claude Code, Codex CLI, Gemini CLI, Pi or Cursor Agent). Gloss is not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Cursor or any other provider. Your use of each agent, including what it costs and what its provider does with your data, is governed by your own account and agreement with that provider. You are responsible for following their terms and usage policies.</p>
+
+<h2>3. Answers can be wrong</h2>
+<p>Replies come from AI models and can be incomplete, out of date or wrong, even when they sound confident. Check anything important before you rely on it, and do not treat replies as professional advice, such as medical, legal or financial advice.</p>
+
+<h2>4. Your content and your responsibility</h2>
+<p>You keep all rights to what you write, attach and ask about. You are responsible for having the right to send that content to the agent you chose, including text from web pages and files. Do not use Gloss for anything unlawful, or to send material you are not allowed to share.</p>
+<p>Agents can read and write files and run commands in the folders you give them, depending on the mode you choose. You are responsible for the folders you add and for reviewing changes an agent makes.</p>
+
+<h2>5. The browser extension</h2>
+<p>The extension works only with the Gloss desktop app on the same computer, and is provided under these same terms. Its use of browser data is described in the <a href="privacy.html">Privacy Policy</a>. Store listings (the Chrome Web Store, and Mozilla for signing) are also subject to those stores' own terms.</p>
+
+<h2>6. Updates</h2>
+<p>Gloss may offer updates, which you choose to install. Features can change or be removed in any release. There is no commitment to keep Gloss maintained or available.</p>
+
+<h2>7. No warranty</h2>
+<p>Gloss is provided &ldquo;as is&rdquo;, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose and non-infringement.</p>
+
+<h2>8. Limitation of liability</h2>
+<p>To the fullest extent the law allows, the authors and contributors of Gloss are not liable for any claim, damages or other liability arising from the software or its use, including lost data, changes an agent makes to your files, charges from an agent's provider, or decisions made from its answers. Some places do not allow these limits, so they apply only as far as your local law permits.</p>
+
+<h2>9. Changes to these terms</h2>
+<p>These terms may be updated with new releases. The date at the top shows the current version, and the history of this page is public in the repository. Continuing to use Gloss after a change means you accept the new terms.</p>
+
+<h2>10. Contact</h2>
+<p>For questions about these terms, open an issue at <a href="https://github.com/aayushch/gloss/issues" target="_blank" rel="noopener">github.com/aayushch/gloss/issues</a>.</p>
+
+</article>
+
+<footer class="footer">
+	<span>Gloss · open source · data lives in <span class="mono">~/.gloss</span></span>
+	<span class="links">
+		<a href="./">Home</a>
+		<a href="privacy.html">Privacy</a>
+		<a href="https://github.com/aayushch/gloss" target="_blank" rel="noopener">GitHub</a>
+		<a href="https://aay.sh" target="_blank" rel="noopener">aay.sh</a>
+	</span>
+</footer>
+</main>
+
+<script>
+document.getElementById('theme').addEventListener('click', function () {
+	var root = document.documentElement;
+	var dark = root.getAttribute('data-mode') !== 'dark';
+	if (dark) root.setAttribute('data-mode', 'dark');
+	else root.removeAttribute('data-mode');
+	try { localStorage.setItem('gloss-mode', dark ? 'dark' : 'light'); } catch (e) {}
+});
+</script>
+</body>
+</html>
