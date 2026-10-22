@@ -129,7 +129,9 @@ The `Release` workflow builds the extension once and then:
   id is `extension/EXTENSION_ID`, and `key` in `manifests/chrome.json` is
   its public key (developer dashboard › Package › View public key), so
   unpacked builds get the same id. The store refuses a manifest with a
-  `key`, so `npm run zip` leaves it out of `chrome.zip`;
+  `key`, so `npm run zip` leaves it out of `chrome.zip`. A store failure
+  (such as a submission still under review) is logged and the release goes
+  on without it; upload `chrome.zip` by hand in that case;
 - attaches `chrome.zip`, `firefox.zip`, the signed `.xpi` and `updates.json`
   (Firefox's update manifest, pointing at that release's `.xpi`) to the
   release. The add-on reads `updates.json` through the latest-release link,

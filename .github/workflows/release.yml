@@ -71,7 +71,12 @@ jobs:
             require("fs").writeFileSync("dist/updates.json", JSON.stringify(doc, null, 2) + "\n");
           ' "$version" "$link" "$hash"
 
+      # A store rejection (for example a submission still under review, or a
+      # revoked token) must not block the release: the installers and the
+      # Firefox add-on do not depend on the store, and chrome.zip is attached
+      # to the release for a manual upload either way.
       - name: Publish to the Chrome Web Store
+        continue-on-error: true
         working-directory: extension
         env:
           # OAuth client for the Chrome Web Store API, see docs/extension.md.
