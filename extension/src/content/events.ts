@@ -14,8 +14,26 @@ export const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerd
 export const GUARD_KEY = '__glossEventGuard';
 /** Global property set once guard.ts has added its window listeners. */
 export const GUARD_READY_KEY = '__glossEventGuardReady';
+/**
+ * An event guard.ts answers by setting `GUARD_ALIVE_KEY`. A page that calls
+ * `document.open()` erases guard.ts's window listeners, and this is how the
+ * main content script finds out they are gone.
+ */
+export const GUARD_PROBE = 'gloss-guard-probe';
+export const GUARD_ALIVE_KEY = '__glossEventGuardAlive';
 
 export type GuardHolder = typeof globalThis & {
 	[GUARD_KEY]?: (e: Event) => void;
 	[GUARD_READY_KEY]?: boolean;
+	[GUARD_ALIVE_KEY]?: boolean;
 };
+
+/** True while guard.ts's window listeners are still in place. */
+export function guardListening(): boolean {
+	const holder = globalThis as GuardHolder;
+	if (!holder[GUARD_READY_KEY]) return false;
+	holder[GUARD_ALIVE_KEY] = false;
+	window.dispatchEvent(new Event(GUARD_PROBE));
+	// The probe's listener in guard.ts sets the flag during the dispatch.
+	return (holder as { [GUARD_ALIVE_KEY]?: boolean })[GUARD_ALIVE_KEY] === true;
+}

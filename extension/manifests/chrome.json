@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Gloss",
   "description": "Highlight text on any page and ask Gloss about it. Replies stay anchored to the passage.",
-  "version": "2.1.3",
+  "version": "2.1.5",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlAaBHkGgQoKf0XsxsQi9LX3rajcR7xl64U+gytP7qse/buzXTHeWDl1bIaa0rHdCF4lySgPkadwC2lWl5rzXwRzrnnmcfFmrtwRDPLdt86y9d+qxCdRniHtDJjhQg8bsz2/6W70V1T8eLqzKxjmKiTlQzhv34U0MESpEJwEbx43rwIuhXG1+Y3uZQebU5e30IETBiByk+4Wb5EdOhyL0P1JEUci8NQahlIp81iuGyEGBO/NEhp7BNGA1bgboGMD7tovB4e0StUMBmFw0vwf/X4Ntp0mBWY29F3m3dBcJLWApgBjFc8EVnGfY23xonZu0UegC4dLWUi28SAwEUmhAtwIDAQAB",
   "permissions": [
     "nativeMessaging",
@@ -23,6 +23,17 @@
         "guard.js"
       ],
       "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "pageguard.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
       "all_frames": false
     },
     {

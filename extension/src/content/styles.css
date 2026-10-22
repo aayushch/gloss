@@ -451,7 +451,16 @@ textarea {
 	font-size: 12px;
 }
 
+/* In a row, a hint takes the space the buttons leave and wraps within it. */
+.gloss-row .gloss-hint {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Buttons keep their size and stay on one line however full their row is. */
 .gloss-btn {
+	flex: none;
+	white-space: nowrap;
 	padding: 4px 10px;
 	border: 1px solid var(--gloss-border);
 	border-radius: 7px;

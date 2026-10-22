@@ -80,10 +80,15 @@ Closing it hides it until Gloss restarts.
   are never asked about, and "Send page text to the agent" can be turned off.
 - While the composer or popover is open, what you type and click in it
   stays in it: the page's keyboard shortcuts and dialog focus traps do not
-  see those events. Once it is closed the page gets every key again. A
-  small script (`guard.js`) loads before the page's own scripts so that
-  Gloss's listeners come first; a page that registers its shortcut
-  listener while loading (Jira does) would otherwise see the key first.
+  see those events. Once it is closed the page gets every key again. Two
+  small scripts load before the page's own scripts. `pageguard.js` runs in
+  the page's own JavaScript world and makes every listener the page adds
+  skip events aimed inside the Gloss UI. `guard.js` adds Gloss's window
+  listeners first, so they stop those events before the page's listeners
+  run. A page that rebuilds itself with `document.open()` while loading
+  (Jira does) erases all window listeners and removes the Gloss UI; Gloss
+  then starts its UI again, and `pageguard.js` still keeps the page's new
+  listeners out.
 
 ## When something is off
 

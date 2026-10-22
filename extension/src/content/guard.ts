@@ -8,10 +8,11 @@
 // Content scripts of one extension share a global object, which is how the
 // two scripts meet.
 
-import { GUARD_KEY, GUARD_READY_KEY, GUARDED_EVENTS, type GuardHolder } from './events';
+import { GUARD_ALIVE_KEY, GUARD_KEY, GUARD_PROBE, GUARD_READY_KEY, GUARDED_EVENTS, type GuardHolder } from './events';
 
 const holder = globalThis as GuardHolder;
 if (!holder[GUARD_READY_KEY]) {
 	holder[GUARD_READY_KEY] = true;
 	for (const type of GUARDED_EVENTS) window.addEventListener(type, (e) => holder[GUARD_KEY]?.(e), true);
+	window.addEventListener(GUARD_PROBE, () => (holder[GUARD_ALIVE_KEY] = true), true);
 }

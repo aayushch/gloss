@@ -26,7 +26,7 @@ import {
 } from '../shared/protocol';
 import { describe, resolve } from './anchor';
 import { Dock, fractionOf } from './dock';
-import { GUARD_KEY, GUARD_READY_KEY, GUARDED_EVENTS, type GuardHolder } from './events';
+import { GUARD_KEY, GUARDED_EVENTS, guardListening, type GuardHolder } from './events';
 import { UiGuard } from './uiguard';
 import { GlyphLayer } from './glyphs';
 import { HighlightLayer } from './highlight';
@@ -163,12 +163,13 @@ class ContentApp {
 		});
 
 		// guard.ts, run before the page's scripts, holds the first window
-		// listeners and calls this guard from them. Where it did not run
-		// (an extension reload leaves open pages without it), the guard
-		// listens itself, after whatever the page added before it.
+		// listeners and calls this guard from them. Where those listeners
+		// are missing (an extension reload leaves open pages without
+		// guard.ts, and a page's `document.open()` erases them), the guard
+		// listens itself, after whatever the page added before it;
+		// pageguard.ts keeps the page's own listeners out either way.
 		this.uiGuard = new UiGuard(this.host, this.shadow, (e) => this.onDocumentKeyDown(e));
-		const holder = globalThis as GuardHolder;
-		if (holder[GUARD_READY_KEY]) holder[GUARD_KEY] = this.uiGuard.handle;
+		if (guardListening()) (globalThis as GuardHolder)[GUARD_KEY] = this.uiGuard.handle;
 		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.uiGuard.handle, true);
 		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'keyup', () => this.scheduleSelectionCheck());
@@ -185,6 +186,15 @@ class ContentApp {
 		browser.runtime.onMessage.addListener(this.onTabMessage);
 
 		void this.loadPage();
+	}
+
+	/**
+	 * False once the page has taken the Gloss UI out of the document. A
+	 * page's `document.open()` does that and also erases every listener
+	 * the UI added, so `main` then starts the UI again from scratch.
+	 */
+	get onPage(): boolean {
+		return this.disposed || this.host.isConnected;
 	}
 
 	private listen(target: EventTarget, type: string, fn: EventListener, options?: AddEventListenerOptions | boolean): void {
@@ -923,14 +933,42 @@ function describeFailure(e: unknown): string {
 	}
 }
 
+/** How often `main` looks for a body to start in after the page took the UI out. */
+const RESTART_POLL_MS = 200;
+
 async function main(): Promise<void> {
 	if (inPrivateContext()) return;
 	if (window !== window.top) return;
-	if (!document.body || document.documentElement.querySelector(HOST_TAG)) return;
 	if (!/^https?:$/.test(location.protocol) && location.protocol !== 'file:') return;
+	await start();
+	// A page that rewrites itself with `document.open()` (Jira does while
+	// it loads) removes the Gloss UI and erases its listeners. Watching the
+	// document (a mutation observer, which `document.open()` leaves in
+	// place) catches that, and the UI starts again once the new page has a
+	// body.
+	let restarting = false;
+	new MutationObserver(() => {
+		if (restarting || !app || app.onPage) return;
+		restarting = true;
+		app.dispose();
+		app = null;
+		const retry = () => {
+			if (!document.body) return void setTimeout(retry, RESTART_POLL_MS);
+			restarting = false;
+			void start();
+		};
+		retry();
+	}).observe(document, { childList: true, subtree: true });
+}
+
+let app: ContentApp | null = null;
+
+async function start(): Promise<void> {
+	if (!document.body || document.documentElement.querySelector(HOST_TAG)) return;
 	const cached = (await storageGet<ExtensionSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS;
 	if (isDeniedHost(location.hostname, cached.denyList)) return;
-	new ContentApp(cached).start();
+	app = new ContentApp(cached);
+	app.start();
 }
 
 void main();
