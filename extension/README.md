@@ -25,7 +25,7 @@ npm run lint:firefox   # web-ext lint over dist/firefox
 1. `npm run build`.
 2. Open `chrome://extensions`, turn on **Developer mode**.
 3. **Load unpacked** and pick `extension/dist/chrome`.
-4. The extension id is fixed by the `key` in `manifests/chrome.json`; it is written to `EXTENSION_ID`. The Gloss app registers the native-messaging host `sh.aay.gloss` for that id, so the id must not change (the private key is in `keys/chrome.pem`, which is git-ignored).
+4. The extension id is the Chrome Web Store item's id, `EXTENSION_ID`. The `key` in `manifests/chrome.json` is the store item's public key (developer dashboard › Package › View public key), which gives unpacked builds the same id. The Gloss app registers the native-messaging host `sh.aay.gloss` for that id, so the id must not change.
 5. Open Gloss once so it installs the native-messaging host manifest, then reload the extension.
 
 ## Load in Firefox (temporary add-on)

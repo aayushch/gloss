@@ -120,14 +120,11 @@ The `Release` workflow builds the extension once and then:
 - uploads the Chrome build to the Chrome Web Store and publishes it
   (`CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`: an OAuth client
   with the Chrome Web Store API enabled, as described in Google's "Using the
-  Chrome Web Store Publish API"). The store item must exist already, created
-  once by uploading `dist/chrome.zip` by hand. The store refuses a manifest
-  with a `key`, so `npm run zip` leaves it out of `chrome.zip`, and the
-  store gives the item an id of its own. When that id differs from
-  `extension/EXTENSION_ID`, copy the item's public key (developer dashboard ›
-  Package › View public key) into `key` in `manifests/chrome.json` and the
-  item id into `EXTENSION_ID`, so unpacked builds and the app's host
-  manifests use the store's id;
+  Chrome Web Store Publish API"). The store item must exist already. Its
+  id is `extension/EXTENSION_ID`, and `key` in `manifests/chrome.json` is
+  its public key (developer dashboard › Package › View public key), so
+  unpacked builds get the same id. The store refuses a manifest with a
+  `key`, so `npm run zip` leaves it out of `chrome.zip`;
 - attaches `chrome.zip`, `firefox.zip`, the signed `.xpi` and `updates.json`
   (Firefox's update manifest, pointing at that release's `.xpi`) to the
   release. The add-on reads `updates.json` through the latest-release link,
