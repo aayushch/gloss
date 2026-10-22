@@ -40,8 +40,11 @@
 	box-sizing: border-box;
 }
 
+/* Reserves the scrollbar's space on every page, so the centred layout and
+   the header sit at the same place whether or not a page scrolls. */
 html {
 	scroll-behavior: smooth;
+	scrollbar-gutter: stable;
 }
 
 body {
