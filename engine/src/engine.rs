@@ -1252,7 +1252,7 @@ mod tests {
         let conv = engine.create_conversation(AgentId::Pi, None, None, Some(dotted)).unwrap();
         assert_eq!(
             conv.summary.project_dir.as_deref(),
-            Some(std::fs::canonicalize(&project).unwrap().to_string_lossy().as_ref())
+            Some(plain_path(&std::fs::canonicalize(&project).unwrap()).as_str())
         );
         let plain = engine.create_conversation(AgentId::Pi, None, None, Some("  ".into())).unwrap();
         assert!(plain.summary.project_dir.is_none());
