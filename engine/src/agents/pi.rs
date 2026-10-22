@@ -108,10 +108,11 @@ impl AgentAdapter for Pi {
         if !req.system_note.is_empty() {
             args.extend(["--append-system-prompt".into(), req.system_note.clone()]);
         }
+        // The conversation's title names the session for Pi's own picker.
+        // It goes on every turn: Pi records the name as a session_info entry
+        // each time, so a rename in Gloss reaches the session on the next turn.
         if let Some(title) = req.title.as_deref().filter(|t| !t.is_empty()) {
-            if req.agent_session_id.is_none() {
-                args.extend(["--name".into(), title.to_string()]);
-            }
+            args.extend(["--name".into(), title.to_string()]);
         }
         // `@path` arguments ahead of the message attach files; Pi sends
         // images to the model as image content.
@@ -285,7 +286,13 @@ mod tests {
         assert!(spec.args.windows(2).any(|w| w == ["--tools", "read,grep,find,ls"]));
         assert!(!spec.args.contains(&"--no-tools".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--session-id", "11111111-2222-3333-4444-555555555555"]));
+        assert!(spec.args.windows(2).any(|w| w == ["--name", "Title"]));
         assert_eq!(spec.args.last().unwrap(), "hi");
+        let mut r = req("again");
+        r.agent_session_id = Some("abc".into());
+        let spec = Pi::default().build_command(&r, &env).unwrap();
+        assert!(spec.args.windows(2).any(|w| w == ["--session", "abc"]));
+        assert!(spec.args.windows(2).any(|w| w == ["--name", "Title"]));
         let spec = Pi::default().build_command(&req_with_image("hi"), &env).unwrap();
         let n = spec.args.len();
         assert_eq!(&spec.args[n - 2..], ["@attachments/att_1/red.png", "hi"]);

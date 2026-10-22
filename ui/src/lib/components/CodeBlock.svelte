@@ -3,9 +3,20 @@
 	// never shows an in-text mark; when a clarification is anchored to it the
 	// header says so instead. The header's copy button puts the raw code on
 	// the clipboard and shows "Copied" for a moment.
-	import { highlightLines, plainLines, supportsLang, type Token } from '$lib/markdown/highlight';
+	//
+	// Highlighting runs at most once per interval. Code that changes between
+	// passes keeps the colours its unchanged lines already have and shows the
+	// new or changed lines plain, so a block streaming in stays readable
+	// without re-tokenising the whole text on every chunk.
+	import { onDestroy, untrack } from 'svelte';
+	import { highlightLines, mergeLines, supportsLang, type Token } from '$lib/markdown/highlight';
 	import { copyText } from '$lib/clipboard';
 	import Icon from './Icon.svelte';
+
+	/** Shortest gap between two highlight passes over the same block. A pass
+	 * over a few hundred lines costs tens of milliseconds on the main
+	 * thread, so streamed code is re-coloured a few times a second at most. */
+	const HIGHLIGHT_INTERVAL_MS = 300;
 
 	let {
 		code,
@@ -18,6 +29,15 @@
 	let copied = $state(false);
 	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
+	/** The code and language most recently handed in; a pass that ends with
+	 * older code merges its result over these and schedules another. */
+	let latestCode = '';
+	let latestLang = '';
+	let passTimer: ReturnType<typeof setTimeout> | undefined;
+	let passRunning = false;
+	let lastPassAt = 0;
+	let alive = true;
+
 	async function copy(): Promise<void> {
 		const ok = await copyText(code);
 		if (!ok) return;
@@ -26,18 +46,41 @@
 		copiedTimer = setTimeout(() => (copied = false), 1500);
 	}
 
+	function schedulePass(): void {
+		if (passTimer !== undefined || passRunning) return;
+		const wait = Math.max(0, lastPassAt + HIGHLIGHT_INTERVAL_MS - Date.now());
+		passTimer = setTimeout(() => {
+			passTimer = undefined;
+			void runPass();
+		}, wait);
+	}
+
+	async function runPass(): Promise<void> {
+		const c = latestCode;
+		const l = latestLang;
+		passRunning = true;
+		lastPassAt = Date.now();
+		const res = await highlightLines(c, l);
+		passRunning = false;
+		if (!alive) return;
+		if (latestCode === c) {
+			lines = res;
+			return;
+		}
+		lines = mergeLines(res, latestCode);
+		if (supportsLang(latestLang)) schedulePass();
+	}
+
 	$effect(() => {
-		const c = code;
-		const l = lang;
-		lines = plainLines(c);
-		if (!supportsLang(l)) return;
-		let alive = true;
-		highlightLines(c, l).then((res) => {
-			if (alive) lines = res;
-		});
-		return () => {
-			alive = false;
-		};
+		latestCode = code;
+		latestLang = lang;
+		lines = mergeLines(untrack(() => lines), code);
+		if (supportsLang(lang)) schedulePass();
+	});
+
+	onDestroy(() => {
+		alive = false;
+		clearTimeout(passTimer);
 	});
 </script>
 

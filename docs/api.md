@@ -32,7 +32,7 @@ Tauri event. Payload types are defined in `engine/src/types.rs` and mirrored in
 | `conversation_history` | `id: string` | `SessionTurn[]` | For a conversation with `continuedFrom`, the session's turns from before Gloss took it over; empty otherwise. |
 | `remove_project` | `path: string` | – | Removes the project from the list only. Its conversations keep their `projectDir` and are listed outside any project. |
 | `create_conversation` | `agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string` | `Conversation` | Title starts as "New conversation" and is replaced by the first user message. `projectDir` must be an existing absolute directory; it is stored canonicalised, added as a project if it is not one, and cannot change later. The agent then runs inside it with read-only file tools (see `docs/agents.md`). |
-| `rename_conversation` | `id: string, title: string` | `ConversationSummary` | |
+| `rename_conversation` | `id: string, title: string` | `ConversationSummary` | Trimmed; empty is an error. The agent's own session takes the new name on the next turn where its CLI supports naming (Claude Code, Pi). |
 | `delete_conversation` | `id: string` | – | Cancels a running turn first. Agent-side session files are left alone. |
 | `set_conversation_model` | `id: string, model: string` | `ConversationSummary` | Applies to the next turn. |
 | `set_conversation_mode` | `id: string, mode?: string` | `ConversationSummary` | Working mode of a project-bound conversation, one of the ids in `AgentInfo.modes`; omitted or `"read-only"` is read-only. Takes effect on the next turn, including a resumed session. |

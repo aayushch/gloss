@@ -53,6 +53,14 @@ function turnsOf(turns: Turn[], clarificationId: string): Turn[] {
  * keep their DOM range and anchor state; new ones start `pending`.
  */
 export function loadPage(state: PageState, result: GetPageResult): void {
+	state.urlKey = result.urlKey;
+	// A page Gloss has not stored yet has no conversation and no asks.
+	if (!result.page) {
+		state.conversationId = null;
+		state.running = false;
+		state.asks = new Map();
+		return;
+	}
 	const { conversation } = result.page;
 	const next = new Map<string, AskEntry>();
 	for (const cl of conversation.clarifications) {
@@ -66,7 +74,6 @@ export function loadPage(state: PageState, result: GetPageResult): void {
 			spot: old?.spot ?? null,
 		});
 	}
-	state.urlKey = result.urlKey;
 	state.conversationId = conversation.id;
 	state.running = conversation.running;
 	state.asks = next;

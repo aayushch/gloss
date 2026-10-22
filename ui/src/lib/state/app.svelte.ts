@@ -35,6 +35,7 @@ import { isOlder } from '$lib/version';
 import { find } from '$lib/state/find.svelte';
 import { wellsContaining } from '$lib/state/threads';
 import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
+import { DeltaBatcher } from './deltas';
 import { exportConversation, exportFileName, exportPage, exportTurn } from '$lib/markdown/export';
 
 /** Floating "Ask about this" button position and target. */
@@ -197,6 +198,8 @@ class AppState {
 	loadError = $state<string | null>(null);
 
 	private unlisten: (() => void)[] = [];
+	/** Joins streamed deltas so the transcript re-renders at most about twenty times a second, not once per token. */
+	private deltas = new DeltaBatcher((e) => this.applyEvent(e));
 	/** urlKeys of deleted pages whose replacement conversation is being opened. */
 	private forgetting = new Set<string>();
 	private noticeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -252,7 +255,7 @@ class AppState {
 		}
 		this.unlisten.forEach((u) => u());
 		this.unlisten = await Promise.all([
-			a.onTurnEvent((e) => this.applyEvent(e)),
+			a.onTurnEvent((e) => this.deltas.push(e)),
 			a.onPageEvent((e) => this.applyPageEvent(e)),
 			a.onSettingsEvent((s) => {
 				this.settings = s;
@@ -994,10 +997,18 @@ class AppState {
 		this.applyTheme(this.settings.theme === 'dark' ? 'light' : 'dark');
 	}
 
+	/** Gives a conversation the title typed by the user; blank or unchanged text leaves it alone. */
 	async rename(id: string, title: string): Promise<void> {
-		const s = await (await api()).renameConversation(id, title);
-		this.patchSummary(s);
-		if (this.active?.id === id) this.active.title = s.title;
+		const next = title.trim();
+		const current = this.conversations.find((c) => c.id === id)?.title ?? this.active?.title;
+		if (!next || next === current) return;
+		try {
+			const s = await (await api()).renameConversation(id, next);
+			this.patchSummary(s);
+			if (this.active?.id === id) this.active.title = s.title;
+		} catch (e) {
+			this.flash(`Could not rename: ${String(e).replace(/^Error:\s*/, '')}`);
+		}
 	}
 
 	async remove(id: string): Promise<void> {

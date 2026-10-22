@@ -127,6 +127,27 @@
 		e.stopPropagation();
 		app.togglePin(id);
 	}
+
+	/** The conversation whose row is an input right now, and its draft title. */
+	let renaming: string | null = $state(null);
+	let renameText = $state('');
+
+	function startRename(e: MouseEvent, c: ConversationSummary) {
+		e.stopPropagation();
+		renaming = c.id;
+		renameText = c.title;
+	}
+
+	function commitRename() {
+		const id = renaming;
+		renaming = null;
+		if (id) app.rename(id, renameText);
+	}
+
+	function focusAndSelect(el: HTMLInputElement) {
+		el.focus();
+		el.select();
+	}
 </script>
 
 {#snippet row(c: ConversationSummary, inProject = false)}
@@ -137,12 +158,29 @@
 		{:else if c.projectDir}
 			<span class="fmark" title={c.projectDir}><Icon name="folder" size={11} /></span>
 		{/if}
-		<span class="title">{c.title}</span>
-		{#if c.clarificationCount > 0}
-			<span class="countpill">{c.clarificationCount}</span>
+		{#if renaming === c.id}
+			<input
+				use:focusAndSelect
+				class="iinput rename"
+				aria-label="Conversation title"
+				bind:value={renameText}
+				onclick={(e) => e.stopPropagation()}
+				onblur={commitRename}
+				onkeydown={(e) => {
+					e.stopPropagation();
+					if (e.key === 'Enter') commitRename();
+					if (e.key === 'Escape') renaming = null;
+				}}
+			/>
+		{:else}
+			<span class="title">{c.title}</span>
+			{#if c.clarificationCount > 0}
+				<span class="countpill">{c.clarificationCount}</span>
+			{/if}
+			<button type="button" class="act" title="Rename conversation" aria-label="Rename conversation" onclick={(e) => startRename(e, c)}><Icon name="pencil" size={12} /></button>
+			<button type="button" class="act" class:pinned={c.pinned} title={c.pinned ? 'Unpin' : 'Pin'} aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button>
+			<button type="button" class="act" title="Delete conversation" aria-label="Delete conversation" onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button>
 		{/if}
-		<button type="button" class="act" class:pinned={c.pinned} title={c.pinned ? 'Unpin' : 'Pin'} aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button>
-		<button type="button" class="act" title="Delete conversation" aria-label="Delete conversation" onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button>
 	</div>
 	{#if current && app.active}
 		{#each app.active.clarifications as cl, i (cl.id)}
@@ -594,6 +632,14 @@
 		padding: 1px 6px;
 		border-radius: 999px;
 		font-weight: 500;
+	}
+	.rename {
+		flex: 1;
+		min-width: 0;
+		height: 22px;
+		padding: 0 6px;
+		font-size: 13px;
+		border-radius: 6px;
 	}
 	.act {
 		display: none;

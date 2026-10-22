@@ -131,3 +131,20 @@ export async function highlightLines(code: string, lang: string): Promise<Token[
 		return plainLines(code);
 	}
 }
+
+/** Lines for `code` that reuse `prev` wherever a line's text is unchanged
+ * and show the rest plain. While code streams in, the lines highlighted so
+ * far keep their colours and only the new or changed tail waits for the
+ * next highlight pass. */
+export function mergeLines(prev: Token[][], code: string): Token[][] {
+	return code.split('\n').map((text, i) => {
+		const p = prev[i];
+		return p && lineText(p) === text ? p : [{ t: text }];
+	});
+}
+
+function lineText(line: Token[]): string {
+	let s = '';
+	for (const tok of line) s += tok.t;
+	return s;
+}

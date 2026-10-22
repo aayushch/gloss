@@ -107,6 +107,13 @@
 		} catch {
 			return;
 		}
+		urlKey = page.urlKey;
+		// A page Gloss has not stored yet has no notes and no conversation to follow.
+		if (!page.page) {
+			notes = [];
+			if (!views.includes(view)) view = views[0] ?? NEW;
+			return;
+		}
 		const { conversation } = page.page;
 		notes = conversation.clarifications
 			.filter((c) => c.webAnchor)
@@ -115,7 +122,6 @@
 				clarification: c,
 				turns: conversation.turns.filter((t) => t.clarificationId === c.id).sort((a, b) => a.seq - b.seq),
 			}));
-		urlKey = page.urlKey;
 		client.subscribe({ urlKey: page.urlKey, conversationId: conversation.id });
 		// A note that was removed meanwhile, or a `focus` id that is not on this page.
 		if (!views.includes(view)) view = views[0] ?? NEW;

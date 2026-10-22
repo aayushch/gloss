@@ -28,6 +28,17 @@ describe('app state against the mock api', () => {
 		expect(app.conversations.find((c) => c.id === 'conv_cas')?.clarificationCount).toBe(before + 1);
 	});
 
+	it('renames the open conversation in the list and the header, ignoring blank or unchanged titles', async () => {
+		await app.init();
+		const id = app.active!.id;
+		const before = app.active!.title;
+		await app.rename(id, '   ');
+		expect(app.active!.title).toBe(before);
+		await app.rename(id, '  Spinlocks, revisited  ');
+		expect(app.active!.title).toBe('Spinlocks, revisited');
+		expect(app.conversations.find((c) => c.id === id)?.title).toBe('Spinlocks, revisited');
+	});
+
 	it('keeps the composer open and refuses a clarification while a reply runs', async () => {
 		await app.init();
 		const reply = app.active!.turns.find((t) => t.role === 'assistant')!;

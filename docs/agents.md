@@ -103,7 +103,7 @@ claude -p "<prompt>" --output-format stream-json --verbose --include-partial-mes
   --tools ""                                                           # web off
   --strict-mcp-config            # no --mcp-config given → zero MCP servers
   --append-system-prompt "<gloss note>"
-  -n "<conversation title>"      # names the session in claude's own picker
+  -n "<conversation title>"      # every turn: names the session in claude's own picker; a rename reaches it on the next turn
 ```
 
 Stream (one JSON object per line):
@@ -181,6 +181,7 @@ read from `~/.codex/models_cache.json` when present.
 pi -p --mode json --no-tools --session-dir ~/.gloss/pi-sessions \
   --session-id <id>              # first turn
   --session <id>                 # later turns
+  --name "<conversation title>"  # every turn: names the session (a session_info entry); a rename reaches it on the next turn
   [--model <provider/id>] [--append-system-prompt "<gloss note>"] "<prompt>"
 ```
 Stream: `session` (`id`, `cwd`), `agent_start`, `turn_start`,

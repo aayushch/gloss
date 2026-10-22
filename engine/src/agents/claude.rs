@@ -232,10 +232,11 @@ impl AgentAdapter for Claude {
         if !req.system_note.is_empty() {
             args.extend(["--append-system-prompt".into(), req.system_note.clone()]);
         }
+        // The conversation's title names the session in Claude's own picker.
+        // It goes on every turn, so a rename in Gloss reaches the session on
+        // the next turn: on a resumed session `-n` records a new title.
         if let Some(title) = req.title.as_deref().filter(|t| !t.is_empty()) {
-            if req.agent_session_id.is_none() {
-                args.extend(["-n".into(), title.to_string()]);
-            }
+            args.extend(["-n".into(), title.to_string()]);
         }
         Ok(CommandSpec {
             program,
@@ -540,7 +541,7 @@ mod tests {
         assert!(spec.args.windows(2).any(|w| w == ["--tools", "AskUserQuestion"]));
         assert!(!spec.args.contains(&"--allowedTools".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--model", "haiku"]));
-        assert!(!spec.args.contains(&"-n".to_string()));
+        assert!(spec.args.windows(2).any(|w| w == ["-n", "Title"]));
     }
 
     #[test]

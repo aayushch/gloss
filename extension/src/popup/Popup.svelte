@@ -35,10 +35,10 @@
 	/** The tab's note navigator; null where no content script runs, such as the PDF viewer. */
 	let navState = $state<NavigatorState | null>(null);
 
-	const asks = $derived((page?.page.conversation.clarifications ?? []).filter((c) => c.webAnchor));
+	const asks = $derived((page?.page?.conversation.clarifications ?? []).filter((c) => c.webAnchor));
 	const orphans = $derived(asks.filter((c) => c.anchorState === 'orphan').length);
 	const connected = $derived(status.state === 'connected');
-	const running = $derived(page?.page.conversation.running || isLive(reply));
+	const running = $derived(page?.page?.conversation.running || isLive(reply));
 	const askable = $derived(!!tab?.url && /^(https?|file):/.test(tab.url));
 
 	const statusText = $derived.by(() => {
@@ -63,7 +63,8 @@
 		try {
 			page = await client.request<GetPageResult>('getPage', { url: tab.url, title: tab.title ?? '' });
 			pageError = null;
-			client.subscribe({ urlKey: page.urlKey, conversationId: page.page.conversation.id });
+			// A page Gloss has not stored yet has no conversation to follow.
+			if (page.page) client.subscribe({ urlKey: page.urlKey, conversationId: page.page.conversation.id });
 		} catch (e) {
 			pageError = failureOf(e).message;
 		}
@@ -87,7 +88,7 @@
 		} else if (event === 'turn') {
 			const env = data as TurnEventEnvelope;
 			if (reply) reply = applyToTurn(reply, env);
-			if (page && env.conversationId === page.page.conversation.id) {
+			if (page?.page && env.conversationId === page.page.conversation.id) {
 				const t = env.event.type;
 				if (t === 'started') page.page.conversation.running = true;
 				if (t === 'done' || t === 'failed' || t === 'cancelled') page.page.conversation.running = false;
@@ -160,7 +161,7 @@
 			question = '';
 			page = page ?? null;
 			client.subscribe({ urlKey: r.urlKey, conversationId: r.conversationId });
-			if (page) page.page.conversation.running = true;
+			if (page?.page) page.page.conversation.running = true;
 		} catch (e) {
 			const f = failureOf(e);
 			askError = f.code === 'app_not_running' ? "Gloss isn't running." : f.code === 'busy' ? 'Gloss is still answering a question on this page.' : f.message;
@@ -175,7 +176,7 @@
 	}
 
 	function cancel() {
-		const id = page?.page.conversation.id ?? reply?.conversationId;
+		const id = page?.page?.conversation.id ?? reply?.conversationId;
 		if (id) client.request('cancel', { conversationId: id }).catch(() => {});
 	}
 

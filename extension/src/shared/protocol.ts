@@ -251,7 +251,8 @@ export interface HelloResult {
 
 export interface GetPageResult {
 	urlKey: string;
-	page: PageDetail;
+	/** Null when Gloss has not stored this page yet, so it has no conversation or asks. */
+	page: PageDetail | null;
 }
 
 export interface GetTurnResult {

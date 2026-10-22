@@ -11,6 +11,9 @@
 	let editingTags = $state(false);
 	let tagText = $state('');
 	let tagInput: HTMLInputElement | undefined = $state();
+	let editingTitle = $state(false);
+	let titleText = $state('');
+	let titleInput: HTMLInputElement | undefined = $state();
 	let exportOpen = $state(false);
 	let projectMenuOpen = $state(false);
 
@@ -25,6 +28,22 @@
 		editingTags = false;
 		const tags = tagText.split(',').map((t) => t.trim()).filter(Boolean);
 		if (tags.join(',') !== (app.active?.tags ?? []).join(',')) app.setTags(tags);
+	}
+
+	function startTitle() {
+		if (!canRename || !app.active) return;
+		titleText = app.active.title;
+		editingTitle = true;
+		setTimeout(() => {
+			titleInput?.focus();
+			titleInput?.select();
+		}, 0);
+	}
+
+	function commitTitle() {
+		if (!editingTitle) return;
+		editingTitle = false;
+		if (app.active) app.rename(app.active.id, titleText);
 	}
 
 	$effect(() => {
@@ -53,6 +72,9 @@
 	const page = $derived(app.activePage);
 	const isPage = $derived(!!app.active?.pageKey);
 	const title = $derived(page?.title || app.active?.title || app.viewing?.session.title || 'New conversation');
+	// A page's conversation is named after the page and renamed with it, so
+	// only an ordinary conversation can be given a title here.
+	const canRename = $derived(!!app.active && !isPage);
 	const count = $derived(app.active?.clarifications.length ?? 0);
 	const agent = $derived(app.activeAgent);
 	const agentId = $derived(app.activeAgentId);
@@ -72,7 +94,23 @@
 			{/if}
 		</span>
 	{/if}
-	<h1 title={title}>{title}</h1>
+	{#if editingTitle}
+		<input
+			bind:this={titleInput}
+			class="iinput titleedit"
+			aria-label="Conversation title"
+			bind:value={titleText}
+			onblur={commitTitle}
+			onkeydown={(e) => {
+				if (e.key === 'Enter') commitTitle();
+				if (e.key === 'Escape') editingTitle = false;
+			}}
+		/>
+	{:else if canRename}
+		<h1 title={title}><button type="button" class="h1btn" title="Rename conversation" onclick={startTitle}>{title}</button></h1>
+	{:else}
+		<h1 title={title}>{title}</h1>
+	{/if}
 	{#if isPage}
 		<span class="host">{hostOf(page?.url ?? app.active?.pageKey ?? '')}</span>
 	{:else if app.draft}
@@ -234,6 +272,30 @@
 		white-space: nowrap;
 		min-width: 0;
 		flex: 0 1 auto;
+	}
+	/* The title doubles as the rename control; it keeps the heading's look. */
+	.h1btn {
+		max-width: 100%;
+		margin: 0 -6px;
+		padding: 2px 6px;
+		border-radius: 6px;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.h1btn:hover {
+		background: var(--surface-2);
+	}
+	.titleedit {
+		height: 26px;
+		font-size: 13px;
+		font-weight: 600;
+		padding: 0 8px;
+		width: 320px;
+		max-width: 50%;
 	}
 	.spacer {
 		flex: 1;

@@ -25,7 +25,8 @@
 		| 'chevron-right'
 		| 'eye'
 		| 'code'
-		| 'folder';
+		| 'folder'
+		| 'pencil';
 	let { name, size = 14 }: { name: Name; size?: number } = $props();
 
 	const PATHS: Record<Name, string> = {
@@ -54,7 +55,8 @@
 		'chevron-left': '<path d="m15 18-6-6 6-6"/>',
 		'chevron-right': '<path d="m9 18 6-6-6-6"/>',
 		eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
-		code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>'
+		code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+		pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'
 	};
 </script>
 

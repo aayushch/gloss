@@ -74,6 +74,16 @@ describe('page state', () => {
 		expect(s.asks.get('c1')!.state).toBe('anchored');
 	});
 
+	it('empties the state for a page Gloss has not stored', () => {
+		const s = createPageState();
+		loadPage(s, pageResult());
+		loadPage(s, { urlKey: 'https://example.com/b', page: null });
+		expect(s.urlKey).toBe('https://example.com/b');
+		expect(s.conversationId).toBeNull();
+		expect(s.running).toBe(false);
+		expect(s.asks.size).toBe(0);
+	});
+
 	it('appends deltas, replaces text and finishes with the final turn', () => {
 		const s = createPageState();
 		loadPage(s, pageResult());
