@@ -8,6 +8,7 @@
 	import { innerHeight } from 'svelte/reactivity/window';
 	import { MARK_SVG } from '../../shared/mark';
 	import { NAV_HEIGHT } from '../dock';
+	import { passageY } from '../spot';
 	import { orderedAskIds } from '../state';
 	import type { Actions } from './actions';
 	import type { UiStore } from './store.svelte';
@@ -20,7 +21,7 @@
 
 	const ids = $derived.by(() => {
 		store.version;
-		return orderedAskIds(store.page);
+		return orderedAskIds(store.page, passageY);
 	});
 	const current = $derived(store.popover?.askId ?? store.lastAskId);
 	const index = $derived(current ? ids.indexOf(current) : -1);

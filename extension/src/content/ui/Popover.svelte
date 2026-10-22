@@ -91,6 +91,7 @@
 			<span class="gloss-popover-quote" title={entry.clarification.quote}>{quote}</span>
 			{#if entry.state === 'fuzzy'}<span class="gloss-badge" title="The passage changed since you asked; this is the closest match">approximate</span>{/if}
 			{#if entry.state === 'orphan'}<span class="gloss-badge" title="The passage is no longer on this page">not on page</span>{/if}
+			{#if entry.state === 'detached'}<span class="gloss-badge" title="The page took the passage's text out while it was off screen; it comes back when you scroll to it">off screen</span>{/if}
 			<button type="button" class="gloss-icon-btn" title="Collapse: the note stays, its mark dims" aria-label="Collapse" onclick={() => actions.collapse(askId)}>–</button>
 			<button type="button" class="gloss-icon-btn" title="Close" aria-label="Close" onclick={() => actions.closePopover()}>×</button>
 		</div>

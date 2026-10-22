@@ -113,10 +113,11 @@ function fold(s: string): string {
  * Stages, in order: the exact quote at its recorded position; the exact
  * quote anywhere, choosing by the context around it; the quote inside its
  * recorded container with quotes, dashes and case folded; an approximate
- * match allowing up to 20% edits (reported as `fuzzy`). Null means the
- * passage is gone and the caller marks the ask an orphan.
+ * match allowing up to 20% edits (reported as `fuzzy`). `approximate`
+ * false leaves out the last stage, the costliest, for the searches run
+ * each time the page changes. Null means the passage is not on the page.
  */
-export function resolve(anchor: WebAnchor, index: TextIndex): Resolved | null {
+export function resolve(anchor: WebAnchor, index: TextIndex, approximate = true): Resolved | null {
 	const text = index.text;
 	const exact = normalise(anchor.quote.exact);
 	if (!exact) return null;
@@ -167,6 +168,7 @@ export function resolve(anchor: WebAnchor, index: TextIndex): Resolved | null {
 	}
 
 	// 4. Approximate match over the whole text.
+	if (!approximate) return null;
 	const maxErrors = Math.ceil(exact.length * 0.2);
 	let matches = search(text, exact, maxErrors).filter((m) => m.end > m.start);
 	if (matches.length) {

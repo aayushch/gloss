@@ -1,6 +1,8 @@
 //! Pi keeps a project's sessions in `~/.pi/agent/sessions/--<slug>--/`,
-//! where the slug is the folder path without its leading `/` and with every
-//! other `/` replaced by `-` (`/Users/me/app` → `--Users-me-app--`). Gloss
+//! where the slug is the folder path without its first character when that
+//! is `/` or `\`, and with every other `/`, `\` and `:` replaced by `-`
+//! (`/Users/me/app` → `--Users-me-app--`, `C:\Users\me\app` →
+//! `--C--Users-me-app--`), as Pi's `getDefaultSessionDirPath` does. Gloss
 //! runs Pi with its own session folder, so these are sessions run outside
 //! Gloss.
 //!
@@ -16,7 +18,8 @@ use crate::types::AgentId;
 const HEAD_BYTES: u64 = 512 * 1024;
 
 pub(super) fn slug(project: &str) -> String {
-    format!("--{}--", project.trim_start_matches('/').replace('/', "-"))
+    let rest = project.strip_prefix(['/', '\\']).unwrap_or(project);
+    format!("--{}--", rest.replace(['/', '\\', ':'], "-"))
 }
 
 pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {

@@ -11,9 +11,16 @@ import type {
 	Turn,
 	TurnEventEnvelope,
 } from '../shared/protocol';
+import type { PassageSpot } from './spot';
 
-/** `pending` means the anchor has not been resolved on this page yet. */
-export type AskAnchorState = AnchorState | 'pending';
+/**
+ * `pending`: the anchor has not been resolved on this page yet.
+ * `detached`: the passage was found on this visit and its text has since
+ * left the page, as on pages that render only what is on screen; it is
+ * looked for again whenever the page changes, and Gloss is not told,
+ * since the passage is still part of the page.
+ */
+export type AskAnchorState = AnchorState | 'pending' | 'detached';
 
 export interface AskEntry {
 	clarification: Clarification;
@@ -21,6 +28,8 @@ export interface AskEntry {
 	turns: Turn[];
 	range: Range | null;
 	state: AskAnchorState;
+	/** Where the passage last sat on this visit, for scrolling back to it once detached. */
+	spot: PassageSpot | null;
 }
 
 export interface PageState {
@@ -54,6 +63,7 @@ export function loadPage(state: PageState, result: GetPageResult): void {
 			turns: turnsOf(conversation.turns, cl.id),
 			range: old?.range ?? null,
 			state: old?.state ?? 'pending',
+			spot: old?.spot ?? null,
 		});
 	}
 	state.urlKey = result.urlKey;
@@ -80,6 +90,7 @@ export function addAsk(state: PageState, result: PageAskResult, range: Range | n
 		turns: [result.userTurn, result.assistantTurn],
 		range,
 		state: anchorState,
+		spot: null,
 	};
 	state.asks.set(result.clarification.id, entry);
 	return entry;
@@ -113,26 +124,33 @@ export function setAnchor(state: PageState, askId: string, range: Range | null, 
 
 /**
  * The page's asks in reading order, as the note navigator steps through
- * them: asks found on the page by where their passage starts, then the
- * ones without a passage on the page (orphans, unresolved) by their number.
+ * them: asks with a place on the page by how far down it is (`yOf`, see
+ * `passageY` in spot.ts), then the ones without one (orphans, unresolved)
+ * by their number. Two asks at the same height go by where their passages
+ * start when both are on the page.
  */
-export function orderedAskIds(state: PageState): string[] {
-	const placed: [string, Range][] = [];
+export function orderedAskIds(state: PageState, yOf: (entry: AskEntry) => number | null): string[] {
+	const placed: [AskEntry, number][] = [];
 	const rest: AskEntry[] = [];
-	for (const [id, entry] of state.asks) {
-		if (entry.range && entry.state !== 'orphan' && entry.state !== 'pending') placed.push([id, entry.range]);
-		else rest.push(entry);
+	for (const entry of state.asks.values()) {
+		const y = entry.state === 'orphan' || entry.state === 'pending' ? null : yOf(entry);
+		if (y === null) rest.push(entry);
+		else placed.push([entry, y]);
 	}
-	placed.sort(([, a], [, b]) => {
-		try {
-			return a.compareBoundaryPoints(Range.START_TO_START, b);
-		} catch {
-			// Ranges in different documents or detached trees cannot be compared.
-			return 0;
+	const byNumber = (a: AskEntry, b: AskEntry) => a.clarification.number - b.clarification.number || a.clarification.createdAt - b.clarification.createdAt;
+	placed.sort(([a, ya], [b, yb]) => {
+		if (ya !== yb) return ya - yb;
+		if (a.range && b.range) {
+			try {
+				return a.range.compareBoundaryPoints(Range.START_TO_START, b.range);
+			} catch {
+				// Ranges in different documents or detached trees cannot be compared.
+			}
 		}
+		return byNumber(a, b);
 	});
-	rest.sort((a, b) => a.clarification.number - b.clarification.number || a.clarification.createdAt - b.clarification.createdAt);
-	return [...placed.map(([id]) => id), ...rest.map((e) => e.clarification.id)];
+	rest.sort(byNumber);
+	return [...placed.map(([e]) => e.clarification.id), ...rest.map((e) => e.clarification.id)];
 }
 
 /** The ask whose turns include `turnId`. */

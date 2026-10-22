@@ -979,7 +979,23 @@ fn canonical_dir(dir: &str) -> Result<String> {
         return Err(anyhow!("project folder does not exist or is not a directory: {}", dir));
     }
     let canonical = std::fs::canonicalize(path).with_context(|| format!("resolve {}", dir))?;
-    Ok(canonical.to_string_lossy().to_string())
+    Ok(plain_path(&canonical))
+}
+
+/// A path written the way users, agents and their session folders write it.
+/// On Windows `canonicalize` returns the extended-length form, `\\?\C:\x` or
+/// `\\?\UNC\server\share\x`; this turns it back into `C:\x` or
+/// `\\server\share\x`. Any other path is returned as it is.
+pub(crate) fn plain_path(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{}", rest);
+    }
+    match s.strip_prefix(r"\\?\") {
+        // Only a drive path drops the prefix; other verbatim paths need it.
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest.to_string(),
+        _ => s.into_owned(),
+    }
 }
 
 fn remove_attachment_files(att: &Attachment) {
@@ -1258,7 +1274,7 @@ mod tests {
             .with_agent_homes(homes.clone());
         let project = dir.path().join("proj");
         std::fs::create_dir(&project).unwrap();
-        let project = std::fs::canonicalize(&project).unwrap().to_string_lossy().to_string();
+        let project = plain_path(&std::fs::canonicalize(&project).unwrap());
         let sessions = homes.claude.join("projects").join(crate::history::claude_slug(&project));
         std::fs::create_dir_all(&sessions).unwrap();
         for id in ["mine", "theirs"] {
@@ -1282,8 +1298,8 @@ mod tests {
             .with_agent_homes(homes.clone());
         let project = dir.path().join("proj");
         std::fs::create_dir(&project).unwrap();
-        let project = std::fs::canonicalize(&project).unwrap().to_string_lossy().to_string();
-        let pi_dir = homes.pi.join("sessions").join(format!("--{}--", project.trim_start_matches('/').replace('/', "-")));
+        let project = plain_path(&std::fs::canonicalize(&project).unwrap());
+        let pi_dir = homes.pi.join("sessions").join(crate::history::pi_slug(&project));
         std::fs::create_dir_all(&pi_dir).unwrap();
         let lines = [
             serde_json::json!({"type": "session", "id": "p1", "cwd": project, "timestamp": "2026-10-01T10:00:00Z"}),
@@ -1311,6 +1327,15 @@ mod tests {
         let plain = engine.create_conversation(AgentId::Pi, None, None, None).unwrap();
         assert!(engine.conversation_history(&plain.summary.id).unwrap().is_empty());
         assert_eq!(engine.pi_session_dir(&plain.summary.id, AgentId::Pi).unwrap(), engine.paths.pi_sessions);
+    }
+
+    #[test]
+    fn plain_paths_drop_the_windows_extended_length_prefix() {
+        use std::path::Path;
+        assert_eq!(plain_path(Path::new(r"\\?\C:\Users\me\app")), r"C:\Users\me\app");
+        assert_eq!(plain_path(Path::new(r"\\?\UNC\server\share\app")), r"\\server\share\app");
+        assert_eq!(plain_path(Path::new(r"\\?\Volume{abc}\app")), r"\\?\Volume{abc}\app");
+        assert_eq!(plain_path(Path::new("/Users/me/app")), "/Users/me/app");
     }
 
     #[test]

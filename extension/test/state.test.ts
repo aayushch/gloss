@@ -128,10 +128,10 @@ describe('page state', () => {
 
 describe('orderedAskIds', () => {
 	function entry(id: string, number: number, range: Range | null, state: AskEntry['state']): AskEntry {
-		return { clarification: { ...clarification(id), number }, turns: [], range, state };
+		return { clarification: { ...clarification(id), number }, turns: [], range, state, spot: null };
 	}
 
-	it('orders placed asks by where their passage starts, then the rest by number', () => {
+	it('orders asks with a place on the page by its height, then the rest by number', () => {
 		document.body.innerHTML = '<p id="a">first</p><p id="b">second</p><p id="c">third</p>';
 		const rangeOf = (id: string) => {
 			const r = document.createRange();
@@ -144,6 +144,22 @@ describe('orderedAskIds', () => {
 		s.asks.set('early', entry('early', 3, rangeOf('a'), 'fuzzy'));
 		s.asks.set('pending', entry('pending', 0, null, 'pending'));
 		s.asks.set('middle', entry('middle', 4, rangeOf('b'), 'anchored'));
-		expect(orderedAskIds(s)).toEqual(['early', 'middle', 'late', 'pending', 'orphan']);
+		// Scrolled away: its text is gone, its last height is kept.
+		s.asks.set('away', entry('away', 5, null, 'detached'));
+		const heights: Record<string, number> = { early: 10, middle: 20, away: 25, late: 30 };
+		expect(orderedAskIds(s, (e) => heights[e.clarification.id] ?? null)).toEqual(['early', 'middle', 'away', 'late', 'pending', 'orphan']);
+	});
+
+	it('orders asks on one line by where their passages start', () => {
+		document.body.innerHTML = '<p id="a">first</p><p id="b">second</p>';
+		const rangeOf = (id: string) => {
+			const r = document.createRange();
+			r.selectNodeContents(document.getElementById(id)!);
+			return r;
+		};
+		const s = createPageState();
+		s.asks.set('second', entry('second', 1, rangeOf('b'), 'anchored'));
+		s.asks.set('first', entry('first', 2, rangeOf('a'), 'anchored'));
+		expect(orderedAskIds(s, () => 100)).toEqual(['first', 'second']);
 	});
 });

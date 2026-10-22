@@ -1172,3 +1172,57 @@ mark.mark {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+/* Privacy policy and other text pages */
+.legal {
+	max-width: 720px;
+	padding: 56px 0 64px;
+}
+.legal h1 {
+	font-size: clamp(30px, 4vw, 40px);
+	line-height: 1.15;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+.legal-date {
+	margin: 8px 0 28px;
+	font-size: 14px;
+	color: var(--text-3);
+}
+.legal h2 {
+	font-size: 20px;
+	font-weight: 600;
+	margin: 36px 0 10px;
+}
+.legal p,
+.legal ul {
+	margin: 0 0 14px;
+	color: var(--text-2);
+}
+.legal ul {
+	padding-left: 22px;
+}
+.legal li {
+	margin-bottom: 6px;
+}
+.legal strong {
+	color: var(--text);
+	font-weight: 600;
+}
+.legal code {
+	font-family: var(--mono);
+	font-size: 0.9em;
+	background: var(--surface);
+	padding: 1px 5px;
+	border-radius: 4px;
+}
+.legal-summary {
+	background: var(--accent-tint);
+	border-radius: 10px;
+	padding: 16px 20px;
+	margin: 0 0 8px;
+}
+.legal-summary p {
+	margin: 0;
+	color: var(--text);
+}

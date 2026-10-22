@@ -5,7 +5,7 @@
  * Events the page never sees when they happen inside the Gloss UI: the
  * ones focus-trap libraries watch and the three key events that page
  * shortcut handlers bind (single-letter shortcuts mostly use keypress),
- * see `guardEvent` in index.ts. Nothing is guarded while no Gloss UI is
+ * see `UiGuard` in uiguard.ts. Nothing is guarded while no Gloss UI is
  * showing, since only events aimed inside it are affected.
  */
 export const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keypress', 'keyup'];

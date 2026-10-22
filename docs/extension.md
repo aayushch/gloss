@@ -93,6 +93,12 @@ Closing it hides it until Gloss restarts.
   protocol versions; update the older one.
 - A mark is missing after the page changed: the ask is still listed in the
   toolbar popup and in Gloss, marked as not on the page any more.
+- Pages that keep only what is on screen (long CI logs, feeds, virtual
+  lists) take a passage's text out when it scrolls far away. Its highlight
+  and mark go with it, and come back as soon as the page shows that text
+  again; Gloss is not told the note is gone. The navigator scrolls back to
+  where such a passage last was, and its reply shows "off screen" until the
+  page puts the text back.
 - After moving Gloss, launch it once so it rewrites the host files.
 
 ## Releasing
@@ -115,8 +121,13 @@ The `Release` workflow builds the extension once and then:
   (`CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`: an OAuth client
   with the Chrome Web Store API enabled, as described in Google's "Using the
   Chrome Web Store Publish API"). The store item must exist already, created
-  once by uploading `dist/chrome.zip` by hand with the `key` in its manifest
-  so the item id equals `extension/EXTENSION_ID`;
+  once by uploading `dist/chrome.zip` by hand. The store refuses a manifest
+  with a `key`, so `npm run zip` leaves it out of `chrome.zip`, and the
+  store gives the item an id of its own. When that id differs from
+  `extension/EXTENSION_ID`, copy the item's public key (developer dashboard ›
+  Package › View public key) into `key` in `manifests/chrome.json` and the
+  item id into `EXTENSION_ID`, so unpacked builds and the app's host
+  manifests use the store's id;
 - attaches `chrome.zip`, `firefox.zip`, the signed `.xpi` and `updates.json`
   (Firefox's update manifest, pointing at that release's `.xpi`) to the
   release. The add-on reads `updates.json` through the latest-release link,

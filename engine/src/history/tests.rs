@@ -243,3 +243,10 @@ fn reads_turns_with_tool_calls_collapsed() {
     assert_eq!(turns.len(), 2);
     assert_eq!((turns[1].text.as_str(), turns[1].tools.clone()), ("A repo.", vec!["bash ls".to_string()]));
 }
+
+#[test]
+fn pi_slugs_match_pi_on_every_platform() {
+    assert_eq!(pi::slug("/Users/me/app"), "--Users-me-app--");
+    assert_eq!(pi::slug(r"C:\Users\me\app"), "--C--Users-me-app--");
+    assert_eq!(pi::slug(r"\\server\share\app"), "---server-share-app--");
+}

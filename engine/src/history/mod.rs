@@ -26,6 +26,11 @@ pub fn claude_slug(project: &str) -> String {
     claude::slug(project)
 }
 
+/// The folder name Pi files a project's sessions under.
+pub fn pi_slug(project: &str) -> String {
+    pi::slug(project)
+}
+
 /// Where each agent keeps its history.
 #[derive(Clone, Debug)]
 pub struct AgentHomes {

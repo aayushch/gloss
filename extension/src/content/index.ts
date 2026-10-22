@@ -27,9 +27,11 @@ import {
 import { describe, resolve } from './anchor';
 import { Dock, fractionOf } from './dock';
 import { GUARD_KEY, GUARD_READY_KEY, GUARDED_EVENTS, type GuardHolder } from './events';
+import { UiGuard } from './uiguard';
 import { GlyphLayer } from './glyphs';
 import { HighlightLayer } from './highlight';
-import { addAsk, addFollowUp, applyTurnEvent, clearPage, loadPage, orderedAskIds, removeAsk, setAnchor, setOpen, type AskEntry } from './state';
+import { addAsk, addFollowUp, applyTurnEvent, clearPage, loadPage, orderedAskIds, removeAsk, setAnchor, setOpen, type AskAnchorState, type AskEntry } from './state';
+import { passageY, scrollToSpot, spotOf } from './spot';
 import styles from './styles.css';
 import { HOST_TAG, normalise, TextIndex } from './text';
 import type { Actions } from './ui/actions';
@@ -46,6 +48,15 @@ const PAGE_TEXT_HEAD = 40_000;
 const PAGE_TEXT_TAIL = 20_000;
 /** Orphans are tried again on this schedule after load: pages often render late. */
 const ORPHAN_RETRY_MS = [1_000, 2_000, 3_000];
+/**
+ * Asks whose passage is not on the page are looked for again once the page
+ * has stopped changing for this long, and at least this often while it
+ * keeps changing (a log that streams in never stops).
+ */
+const MISSING_SETTLE_MS = 400;
+const MISSING_MAX_WAIT_MS = 2_000;
+/** After the navigator scrolls to a detached passage, it is looked for on this schedule while the page renders it. */
+const SCROLL_BACK_RETRY_MS = [100, 400, 1_000];
 /** Local storage key of the navigator's height on the right edge, a fraction of the viewport height. */
 const NAV_HEIGHT_KEY = 'navigatorHeight';
 /** How long the composer waits for Gloss to come up after "Open Gloss". */
@@ -78,11 +89,14 @@ class ContentApp {
 	private loading: Promise<void> | null = null;
 	private retryTimers: ReturnType<typeof setTimeout>[] = [];
 	private reresolveTimer: ReturnType<typeof setTimeout> | null = null;
+	private missingTimer: ReturnType<typeof setTimeout> | null = null;
+	/** When the pending `missingTimer` was first set, for `MISSING_MAX_WAIT_MS`. */
+	private missingSince = 0;
+	private scrollBackTimers: ReturnType<typeof setTimeout>[] = [];
 	private readonly reresolveIds = new Set<string>();
 	private stopUrlWatch: (() => void) | null = null;
 	private disposed = false;
-	/** True while `guardEvent` dispatches its copy of an event. */
-	private replaying = false;
+	private uiGuard!: UiGuard;
 	private readonly listeners: [EventTarget, string, EventListener, AddEventListenerOptions | boolean | undefined][] = [];
 
 	constructor(private settings: ExtensionSettings) {}
@@ -90,7 +104,7 @@ class ContentApp {
 	start(): void {
 		this.host = document.createElement(HOST_TAG);
 		// react-focus-lock (Atlassian, many React apps) leaves focus alone
-		// inside an element carrying this attribute; `guardEvent` below
+		// inside an element carrying this attribute; `UiGuard` (uiguard.ts)
 		// handles every other focus trap.
 		this.host.setAttribute('data-no-focus-lock', '');
 		this.shadow = this.host.attachShadow({ mode: 'closed' });
@@ -114,6 +128,7 @@ class ContentApp {
 			onReposition: () => {
 				this.highlights.repaint();
 				this.updateAnchorRect();
+				this.refreshSpots();
 			},
 		});
 		this.dock = new Dock(
@@ -127,7 +142,10 @@ class ContentApp {
 		void localGet<number>(NAV_HEIGHT_KEY).then((f) => {
 			if (typeof f === 'number' && !this.disposed) this.dock.setFraction(f);
 		});
-		this.mutations = new MutationObserver(() => (this.indexDirty = true));
+		this.mutations = new MutationObserver(() => {
+			this.indexDirty = true;
+			this.scheduleMissingRetry();
+		});
 		this.mutations.observe(document.body, { childList: true, subtree: true, characterData: true });
 
 		this.app = mount(App, { target: uiRoot, props: { store: this.store, actions: this.actions() } });
@@ -148,9 +166,10 @@ class ContentApp {
 		// listeners and calls this guard from them. Where it did not run
 		// (an extension reload leaves open pages without it), the guard
 		// listens itself, after whatever the page added before it.
+		this.uiGuard = new UiGuard(this.host, this.shadow, (e) => this.onDocumentKeyDown(e));
 		const holder = globalThis as GuardHolder;
-		if (holder[GUARD_READY_KEY]) holder[GUARD_KEY] = this.guardEvent;
-		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.guardEvent, true);
+		if (holder[GUARD_READY_KEY]) holder[GUARD_KEY] = this.uiGuard.handle;
+		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.uiGuard.handle, true);
 		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'keyup', () => this.scheduleSelectionCheck());
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
@@ -180,11 +199,13 @@ class ContentApp {
 		for (const [t, type, fn, options] of this.listeners) t.removeEventListener(type, fn, options);
 		browser.runtime.onMessage.removeListener(this.onTabMessage);
 		const holder = globalThis as GuardHolder;
-		if (holder[GUARD_KEY] === this.guardEvent) delete holder[GUARD_KEY];
+		if (holder[GUARD_KEY] === this.uiGuard.handle) delete holder[GUARD_KEY];
 		this.stopUrlWatch?.();
 		this.mutations?.disconnect();
 		for (const t of this.retryTimers) clearTimeout(t);
 		if (this.reresolveTimer) clearTimeout(this.reresolveTimer);
+		if (this.missingTimer) clearTimeout(this.missingTimer);
+		for (const t of this.scrollBackTimers) clearTimeout(t);
 		if (this.launchTimer) clearTimeout(this.launchTimer);
 		this.dock.hide();
 		this.glyphs.dispose();
@@ -254,30 +275,38 @@ class ContentApp {
 
 	/** Resolves every ask that has no anchor yet and reports the states to Gloss. */
 	private resolvePending(): void {
-		const states: Record<string, AnchorState> = {};
+		const states: Record<string, AskAnchorState> = {};
 		for (const [id, entry] of this.store.page.asks) {
 			if (entry.state !== 'pending') continue;
 			this.resolveOne(id, entry);
-			states[id] = entry.state as AnchorState;
+			states[id] = entry.state;
 		}
 		this.report(states);
 		this.bump();
 	}
 
-	/** Resolves one ask against the current index and updates its highlight and glyph. */
-	private resolveOne(id: string, entry: AskEntry): void {
+	/**
+	 * Resolves one ask against the current index and updates its highlight
+	 * and glyph. An ask not found becomes `detached` when its passage was
+	 * found earlier on this visit (the page removed its text, as pages that
+	 * render only what is on screen do), else an orphan. `approximate`
+	 * false skips the costly approximate search (see `resolve`).
+	 */
+	private resolveOne(id: string, entry: AskEntry, approximate = true): void {
 		const anchor = entry.clarification.webAnchor;
 		if (!anchor) return;
 		const index = this.textIndex();
-		const found = resolve(anchor, index);
+		const found = resolve(anchor, index, approximate);
 		if (entry.range) this.highlights.remove(entry.range);
 		if (!found) {
-			setAnchor(this.store.page, id, null, 'orphan');
+			const seen = entry.state === 'anchored' || entry.state === 'fuzzy' || entry.state === 'detached';
+			setAnchor(this.store.page, id, null, seen ? 'detached' : 'orphan');
 			this.glyphs.remove(id);
 			if (this.store.popover?.askId === id) this.store.anchorRect = null;
 			return;
 		}
 		setAnchor(this.store.page, id, found.range, found.state);
+		entry.spot = spotOf(found.range, entry.spot) ?? entry.spot;
 		this.highlights.add(found.range);
 		this.glyphs.set(id, found.range, {
 			open: entry.clarification.open,
@@ -290,9 +319,56 @@ class ContentApp {
 		}
 	}
 
-	private report(states: Record<string, AnchorState>): void {
+	/** Tells Gloss the anchor states found; `detached` and `pending` stay on this page. */
+	private report(all: Record<string, AskAnchorState>): void {
+		const states: Record<string, AnchorState> = {};
+		for (const [id, state] of Object.entries(all)) if (state !== 'detached' && state !== 'pending') states[id] = state;
 		if (!Object.keys(states).length) return;
 		this.client.request('reportAnchors', { states }).catch(() => {});
+	}
+
+	/** Records where each passage on the page sits, as it may scroll away and be removed. */
+	private refreshSpots(): void {
+		for (const entry of this.store.page.asks.values()) {
+			const range = entry.range;
+			if (!range || (entry.state !== 'anchored' && entry.state !== 'fuzzy') || !document.contains(range.startContainer)) continue;
+			entry.spot = spotOf(range, entry.spot) ?? entry.spot;
+		}
+	}
+
+	private hasMissing(): boolean {
+		for (const entry of this.store.page.asks.values()) if (entry.state === 'orphan' || entry.state === 'detached') return true;
+		return false;
+	}
+
+	/** The page changed: looks for missing passages again once it settles (see `MISSING_SETTLE_MS`). */
+	private scheduleMissingRetry(): void {
+		if (this.disposed || !this.hasMissing()) return;
+		if (this.missingTimer) {
+			if (Date.now() - this.missingSince >= MISSING_MAX_WAIT_MS) return;
+			clearTimeout(this.missingTimer);
+		} else {
+			this.missingSince = Date.now();
+		}
+		this.missingTimer = setTimeout(() => {
+			this.missingTimer = null;
+			this.retryMissing();
+		}, MISSING_SETTLE_MS);
+	}
+
+	/** Looks for every orphan and detached passage again, with the exact stages only. */
+	private retryMissing(): void {
+		if (this.disposed) return;
+		const states: Record<string, AskAnchorState> = {};
+		for (const [id, entry] of this.store.page.asks) {
+			if (entry.state !== 'orphan' && entry.state !== 'detached') continue;
+			const before = entry.state;
+			this.resolveOne(id, entry, false);
+			if (entry.state !== before) states[id] = entry.state;
+		}
+		if (!Object.keys(states).length) return;
+		this.report(states);
+		this.bump();
 	}
 
 	/** Tries orphans again at 1 s, 3 s and 6 s after a load. */
@@ -305,11 +381,11 @@ class ContentApp {
 			this.retryTimers.push(
 				setTimeout(() => {
 					if (this.disposed) return;
-					const states: Record<string, AnchorState> = {};
+					const states: Record<string, AskAnchorState> = {};
 					for (const [id, entry] of this.store.page.asks) {
 						if (entry.state !== 'orphan') continue;
 						this.resolveOne(id, entry);
-						if (entry.state !== 'orphan') states[id] = entry.state as AnchorState;
+						if (entry.state !== 'orphan') states[id] = entry.state;
 					}
 					this.report(states);
 					this.bump();
@@ -326,13 +402,13 @@ class ContentApp {
 			this.reresolveTimer = null;
 			const ids = [...this.reresolveIds];
 			this.reresolveIds.clear();
-			const states: Record<string, AnchorState> = {};
+			const states: Record<string, AskAnchorState> = {};
 			for (const id of ids) {
 				const entry = this.store.page.asks.get(id);
 				if (!entry) continue;
 				const before = entry.state;
 				this.resolveOne(id, entry);
-				if (entry.state !== before) states[id] = entry.state as AnchorState;
+				if (entry.state !== before) states[id] = entry.state;
 			}
 			this.report(states);
 			this.bump();
@@ -355,7 +431,10 @@ class ContentApp {
 		this.highlights.clear();
 		this.glyphs.clear();
 		this.indexDirty = true;
-		for (const [id] of this.store.page.asks) setAnchor(this.store.page, id, null, 'pending');
+		for (const [id, entry] of this.store.page.asks) {
+			setAnchor(this.store.page, id, null, 'pending');
+			entry.spot = null;
+		}
 		void this.loadPage();
 	}
 
@@ -423,50 +502,6 @@ class ContentApp {
 			if (!sel || sel.isCollapsed) this.store.pill = null;
 		}
 	}
-
-	/**
-	 * Keeps the page from seeing what happens inside the Gloss UI. Modal
-	 * dialogs trap focus: their libraries listen on the document, often in
-	 * the capture phase, cancel presses outside the dialog and pull focus
-	 * back, which would make the composer's box impossible to type into.
-	 * Keyboard shortcuts are the other case: the page sees a key typed in
-	 * the composer as typed on the host element, not in a text box, and
-	 * runs the shortcut for that letter. The window is the first stop of
-	 * every event, so a trusted event
-	 * aimed inside the host is stopped there and a copy that does not
-	 * leave the shadow tree is dispatched in its place. The copy reaches
-	 * every listener of the Gloss UI; when one of them cancels it, the
-	 * original is cancelled too so the browser's default action follows.
-	 */
-	private readonly guardEvent = (e: Event): void => {
-		if (!e.isTrusted || this.replaying) return;
-		const path = e.composedPath();
-		if (!path.includes(this.host)) return;
-		const target = path[0];
-		if (!(target instanceof EventTarget) || target === this.host) return;
-		let copy: Event;
-		try {
-			const init: Record<string, unknown> = {};
-			for (const key in e) init[key] = (e as unknown as Record<string, unknown>)[key];
-			init.bubbles = true;
-			init.composed = false;
-			init.cancelable = e.cancelable;
-			copy = new (e.constructor as new (type: string, init: Record<string, unknown>) => Event)(e.type, init);
-		} catch {
-			return;
-		}
-		e.stopImmediatePropagation();
-		this.replaying = true;
-		try {
-			// The document-level Escape handling runs first, as it does for
-			// a key pressed on the page (it listens in the capture phase).
-			if (e.type === 'keydown') this.onDocumentKeyDown(copy as KeyboardEvent);
-			target.dispatchEvent(copy);
-		} finally {
-			this.replaying = false;
-		}
-		if (copy.defaultPrevented) e.preventDefault();
-	};
 
 	private onDocumentMouseDown(e: MouseEvent): void {
 		if (e.composedPath().includes(this.host)) return;
@@ -626,15 +661,24 @@ class ContentApp {
 	}
 
 	/**
-	 * Shows a note: scrolls its passage into view when it is on the page
-	 * and opens its popover, which hangs from the passage or, for a note
-	 * whose passage is gone, sits at the top of the viewport.
+	 * Shows a note and opens its popover. A passage on the page is scrolled
+	 * into view and the popover hangs from it. A detached passage's last
+	 * spot is scrolled into view and looked for while the page renders it
+	 * again; the popover sits at the top of the viewport until it is found,
+	 * then moves beside it. An orphan's popover stays at the top.
 	 */
 	private focusAsk(id: string, warnOrphan: boolean): boolean {
 		const entry = this.store.page.asks.get(id);
 		if (!entry) return false;
-		if (entry.range && entry.state !== 'orphan') this.glyphs.scrollTo(id);
-		else if (warnOrphan) this.store.showToast("This note's passage is no longer on the page.");
+		if (entry.range && (entry.state === 'anchored' || entry.state === 'fuzzy')) {
+			this.glyphs.scrollTo(id);
+		} else if (entry.state === 'detached' && entry.spot && scrollToSpot(entry.spot)) {
+			// The page puts the passage back once its spot is on screen.
+			for (const t of this.scrollBackTimers) clearTimeout(t);
+			this.scrollBackTimers = SCROLL_BACK_RETRY_MS.map((ms) => setTimeout(() => this.retryMissing(), ms));
+		} else if (warnOrphan) {
+			this.store.showToast("This note's passage is no longer on the page.");
+		}
 		this.openPopover(id);
 		// The popover follows the passage while a smooth scroll runs; this
 		// catches the final position when the scroll fired no events.
@@ -644,7 +688,7 @@ class ContentApp {
 
 	/** Shows the note `delta` places from the current one in reading order, wrapping at either end. */
 	private stepNote(delta: 1 | -1): void {
-		const ids = orderedAskIds(this.store.page);
+		const ids = orderedAskIds(this.store.page, passageY);
 		if (!ids.length) return;
 		const current = this.store.popover?.askId ?? this.store.lastAskId;
 		const i = current ? ids.indexOf(current) : -1;
@@ -657,7 +701,7 @@ class ContentApp {
 			this.closePopover();
 			return;
 		}
-		const ids = orderedAskIds(this.store.page);
+		const ids = orderedAskIds(this.store.page, passageY);
 		const last = this.store.lastAskId;
 		const id = last && ids.includes(last) ? last : ids[0];
 		if (id) this.focusAsk(id, false);

@@ -100,6 +100,14 @@ describe('resolve', () => {
 		expect(r.range.toString()).toContain('program order');
 	});
 
+	it('leaves out the approximate match when asked to', () => {
+		const idx = load(ARTICLE);
+		const a = anchorFor(idx, 'the order other cores observe can differ from program order');
+		const edited = load(ARTICLE.replace('other cores observe', 'another core sees'));
+		expect(resolve(a, edited, false)).toBeNull();
+		expect(resolve(a, idx, false)?.state).toBe('anchored');
+	});
+
 	it('tolerates re-typeset quotes inside the same container', () => {
 		const idx = load('<main><p>He said "store buffer" and left.</p></main>');
 		const a = anchorFor(idx, 'said "store buffer" and');
