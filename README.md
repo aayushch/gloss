@@ -12,6 +12,11 @@ like a desktop chat client, and adds one thing those clients lack:
 
 A *gloss* is a short explanation written beside a word in a text.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/app-dark.png">
+  <img alt="Gloss showing a reply with a clarification opened under the sentence it was asked about" src="docs/images/app-light.png" width="1280">
+</picture>
+
 Also in the box: artifacts (a page, drawing, diagram, document or file the
 agent writes shows as a card in the reply and opens in a side pane with a
 sandboxed preview, versions and save), attachments of images and text files,
