@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Scrolling transcript. Owns text-selection handling (the floating "Ask
 	// about this" button), scroll-to-well jumps and auto-scroll on new turns.
@@ -56,7 +59,9 @@
 		// collapsed on both sides because a selection across code lines or
 		// table cells picks up newlines and tabs the block text does not have,
 		// and a table's text joins its cells with " | " which the DOM lacks.
-		const haystack = reg ? flat(reg.kind === 'table' ? reg.text.replace(/ \| /g, ' ') : reg.text) : '';
+		const haystack = reg
+			? flat(reg.kind === 'table' ? reg.text.replace(/ \| /g, ' ') : reg.text)
+			: '';
 		if (!reg || !haystack.includes(flat(text))) {
 			app.pendingAsk = null;
 			return;
@@ -106,7 +111,8 @@
 				return;
 			}
 			if (node) {
-				const top = node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 80;
+				const top =
+					node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 80;
 				el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 			}
 			if (app.jumpTarget === target) app.jumpTarget = null;
@@ -152,17 +158,25 @@
 			{/if}
 		{/each}
 		{#if conv.turns.length === 0 && !app.earlier.length}
-			<div class="empty">Send a message to start. Select any part of a reply to ask about it inline.</div>
+			<div class="empty">
+				Send a message to start. Select any part of a reply to ask about it inline.
+			</div>
 		{/if}
 	{:else if app.viewing}
 		{@const v = app.viewing}
 		{@const recent = Date.now() - v.session.updatedAt < RECENT_MS}
 		<div class="note" class:warn={recent}>
-			{AGENT_NAMES[v.session.agent]} session run {v.session.origin ? ORIGIN_LABELS[v.session.origin] : 'outside Gloss'}, last written {relativeTime(v.session.updatedAt)}.
-			Send a message below to continue it here: Gloss resumes the same session, so it stays in {AGENT_NAMES[v.session.agent]}'s own history too.
-			It continues read-only until you pick another mode in the header.
+			{AGENT_NAMES[v.session.agent]} session run {v.session.origin
+				? ORIGIN_LABELS[v.session.origin]
+				: 'outside Gloss'}, last written {relativeTime(v.session.updatedAt)}. Send a message below
+			to continue it here: Gloss resumes the same session, so it stays in {AGENT_NAMES[
+				v.session.agent
+			]}'s own history too. It continues read-only until you pick another mode in the header.
 			{#if recent}
-				<strong>It was written to in the last few minutes. If it is still open in a terminal or editor, close it there first: both would write to the same session.</strong>
+				<strong
+					>It was written to in the last few minutes. If it is still open in a terminal or editor,
+					close it there first: both would write to the same session.</strong
+				>
 			{/if}
 		</div>
 		{#if v.turns === null}
@@ -175,9 +189,16 @@
 	{:else if app.draft}
 		<div class="empty">
 			<div class="big">New conversation</div>
-			<div>Via {app.activeAgent?.name ?? app.draft.agent}{app.activeModelId ? ` · ${app.modelName(app.draft.agent, app.activeModelId)}` : ''}. Select any part of a reply to ask about it inline.</div>
+			<div>
+				Via {app.activeAgent?.name ?? app.draft.agent}{app.activeModelId
+					? ` · ${app.modelName(app.draft.agent, app.activeModelId)}`
+					: ''}. Select any part of a reply to ask about it inline.
+			</div>
 			{#if app.draft.projectDir}
-				<div>The agent runs inside <strong>{app.draft.projectDir}</strong> and can read its files, not change them.</div>
+				<div>
+					The agent runs inside <strong>{app.draft.projectDir}</strong> and can read its files, not change
+					them.
+				</div>
 			{:else}
 				<div>Pick a project in the header to let the agent read one of your folders.</div>
 			{/if}
@@ -186,7 +207,12 @@
 		<div class="empty error">Could not reach the engine: {app.loadError}</div>
 	{/if}
 	{#if app.pendingAsk}
-		<AskButton x={app.pendingAsk.x} y={app.pendingAsk.y} disabled={app.running} onask={openComposer} />
+		<AskButton
+			x={app.pendingAsk.x}
+			y={app.pendingAsk.y}
+			disabled={app.running}
+			onask={openComposer}
+		/>
 	{/if}
 </div>
 

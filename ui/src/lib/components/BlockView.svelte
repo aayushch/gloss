@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Renders one markdown block with its highlight marks, then everything
 	// anchored to it: the clarification wells and, while the user is writing a
@@ -19,7 +22,13 @@
 		threads,
 		depth = 0,
 		parentId = null
-	}: { block: Block; conv: Conversation; threads: Map<string, Thread>; depth?: number; parentId?: string | null } = $props();
+	}: {
+		block: Block;
+		conv: Conversation;
+		threads: Map<string, Thread>;
+		depth?: number;
+		parentId?: string | null;
+	} = $props();
 
 	const COMPOSER_MARK = '__composer';
 
@@ -27,9 +36,24 @@
 	const composerHere = $derived(app.composerFor?.blockId === block.id ? app.composerFor : null);
 
 	const marks = $derived.by((): Mark[] => {
-		if (block.kind === 'code' || block.kind === 'table' || block.kind === 'hr' || block.kind === 'artifact') return [];
-		const out: Mark[] = anchored.map((c) => ({ start: resolveMark(block.text, c.quote), len: c.quote.length, id: c.id }));
-		if (composerHere) out.push({ start: resolveMark(block.text, composerHere.quote), len: composerHere.quote.length, id: COMPOSER_MARK });
+		if (
+			block.kind === 'code' ||
+			block.kind === 'table' ||
+			block.kind === 'hr' ||
+			block.kind === 'artifact'
+		)
+			return [];
+		const out: Mark[] = anchored.map((c) => ({
+			start: resolveMark(block.text, c.quote),
+			len: c.quote.length,
+			id: c.id
+		}));
+		if (composerHere)
+			out.push({
+				start: resolveMark(block.text, composerHere.quote),
+				len: composerHere.quote.length,
+				id: COMPOSER_MARK
+			});
 		return out;
 	});
 
@@ -47,19 +71,37 @@
 		app.toggleClarification(id);
 	}
 
-	const tag = $derived(block.kind === 'h' ? `h${Math.min(6, Math.max(1, (block.level ?? 4) + (depth > 0 ? 1 : 0)))}` : 'p');
+	const tag = $derived(
+		block.kind === 'h'
+			? `h${Math.min(6, Math.max(1, (block.level ?? 4) + (depth > 0 ? 1 : 0)))}`
+			: 'p'
+	);
 </script>
 
 {#snippet inline()}
 	{#each segments as s, i (i)}
 		{#if s.markId}
-			<span class="mark" role="button" tabindex="0" onclick={() => onMark(s.markId!)} onkeydown={(e) => e.key === 'Enter' && onMark(s.markId!)}>
-				{#if s.run.code}<code>{s.t}</code>{:else if s.run.href}<a href={s.run.href} target="_blank" rel="noreferrer" class:b={s.run.b} class:i={s.run.i}>{s.t}</a>{:else}<span class:b={s.run.b} class:i={s.run.i} class:del={s.run.del}>{s.t}</span>{/if}
+			<span
+				class="mark"
+				role="button"
+				tabindex="0"
+				onclick={() => onMark(s.markId!)}
+				onkeydown={(e) => e.key === 'Enter' && onMark(s.markId!)}
+			>
+				{#if s.run.code}<code>{s.t}</code>{:else if s.run.href}<a
+						href={s.run.href}
+						target="_blank"
+						rel="noreferrer"
+						class:b={s.run.b}
+						class:i={s.run.i}>{s.t}</a
+					>{:else}<span class:b={s.run.b} class:i={s.run.i} class:del={s.run.del}>{s.t}</span>{/if}
 			</span>
 		{:else if s.run.code}
 			<code>{s.t}</code>
 		{:else if s.run.href}
-			<a href={s.run.href} target="_blank" rel="noreferrer" class:b={s.run.b} class:i={s.run.i}>{s.t}</a>
+			<a href={s.run.href} target="_blank" rel="noreferrer" class:b={s.run.b} class:i={s.run.i}
+				>{s.t}</a
+			>
 		{:else if s.run.b || s.run.i || s.run.del}
 			<span class:b={s.run.b} class:i={s.run.i} class:del={s.run.del}>{s.t}</span>
 		{:else}
@@ -73,7 +115,12 @@
 		<ArtifactCard artifact={block.artifact} turnId={turnOfBlock(block.id)} />
 	{:else if block.kind === 'code'}
 		<div data-block={block.id} class="codehost">
-			<CodeBlock code={block.code ?? ''} lang={block.lang ?? ''} clarified={anchored.length > 0} nested={depth > 0} />
+			<CodeBlock
+				code={block.code ?? ''}
+				lang={block.lang ?? ''}
+				clarified={anchored.length > 0}
+				nested={depth > 0}
+			/>
 		</div>
 	{:else if block.kind === 'hr'}
 		<hr />
@@ -81,24 +128,51 @@
 		<div class="tablewrap" data-block={block.id}>
 			<table>
 				<thead>
-					<tr>{#each block.rows?.[0] ?? [] as cell, ci (ci)}<th>{#each cell as r, ri (ri)}{#if r.code}<code>{r.t}</code>{:else}<span class:b={r.b} class:i={r.i}>{r.t}</span>{/if}{/each}</th>{/each}</tr>
+					<tr
+						>{#each block.rows?.[0] ?? [] as cell, ci (ci)}<th
+								>{#each cell as r, ri (ri)}{#if r.code}<code>{r.t}</code>{:else}<span
+											class:b={r.b}
+											class:i={r.i}>{r.t}</span
+										>{/if}{/each}</th
+							>{/each}</tr
+					>
 				</thead>
 				<tbody>
 					{#each (block.rows ?? []).slice(1) as row, rowi (rowi)}
-						<tr>{#each row as cell, ci (ci)}<td>{#each cell as r, ri (ri)}{#if r.code}<code>{r.t}</code>{:else}<span class:b={r.b} class:i={r.i}>{r.t}</span>{/if}{/each}</td>{/each}</tr>
+						<tr
+							>{#each row as cell, ci (ci)}<td
+									>{#each cell as r, ri (ri)}{#if r.code}<code>{r.t}</code>{:else}<span
+												class:b={r.b}
+												class:i={r.i}>{r.t}</span
+											>{/if}{/each}</td
+								>{/each}</tr
+						>
 					{/each}
 				</tbody>
 			</table>
 		</div>
 	{:else if block.kind === 'li'}
-		<div class="li" class:ol={block.ordered} data-block={block.id} style="margin-left:{(block.depth ?? 0) * 22}px">
-			{#if block.ordered}<span class="num">{block.num}.</span>{:else}<span class="bullet"></span>{/if}
+		<div
+			class="li"
+			class:ol={block.ordered}
+			data-block={block.id}
+			style="margin-left:{(block.depth ?? 0) * 22}px"
+		>
+			{#if block.ordered}<span class="num">{block.num}.</span>{:else}<span class="bullet"
+				></span>{/if}
 			<span class="litext">{@render inline()}</span>
 		</div>
 	{:else if block.kind === 'quote'}
 		<blockquote data-block={block.id}>{@render inline()}</blockquote>
 	{:else}
-		<svelte:element this={tag} class="prose" class:h={block.kind === 'h'} data-block={block.id} style={block.depth ? `margin-left:${block.depth * 22}px` : ''}>{@render inline()}</svelte:element>
+		<svelte:element
+			this={tag}
+			class="prose"
+			class:h={block.kind === 'h'}
+			data-block={block.id}
+			style={block.depth ? `margin-left:${block.depth * 22}px` : ''}
+			>{@render inline()}</svelte:element
+		>
 	{/if}
 
 	{#each anchored as cl (cl.id)}
@@ -109,7 +183,12 @@
 	{/each}
 
 	{#if composerHere}
-		<InlineComposer quote={composerHere.quote} nested={depth > 0} onsend={(t) => app.ask(t)} oncancel={() => (app.composerFor = null)} />
+		<InlineComposer
+			quote={composerHere.quote}
+			nested={depth > 0}
+			onsend={(t) => app.ask(t)}
+			oncancel={() => (app.composerFor = null)}
+		/>
 	{/if}
 </div>
 

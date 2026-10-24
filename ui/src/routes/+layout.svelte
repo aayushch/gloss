@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	import '../app.css';
 	let { children } = $props();
@@ -8,7 +11,11 @@
 	// toolbar; elsewhere the native title bar carries its own edge.
 	$effect(() => {
 		const ua = navigator.userAgent;
-		document.documentElement.dataset.platform = /Mac/i.test(ua) ? 'macos' : /Win/i.test(ua) ? 'windows' : 'linux';
+		document.documentElement.dataset.platform = /Mac/i.test(ua)
+			? 'macos'
+			: /Win/i.test(ua)
+				? 'windows'
+				: 'linux';
 	});
 </script>
 

@@ -1,14 +1,24 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The artifact pane: title and type, version stepper, Preview and Code
 	// tabs, and the copy, save and open actions. The preview's script and
 	// network switches reset whenever a different artifact opens.
-	import { artifactLang, artifactTypeLabel, canPreview, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
+	import {
+		artifactLang,
+		artifactTypeLabel,
+		canPreview,
+		type ArtifactGroup,
+		type ArtifactVersion
+	} from '$lib/markdown/artifacts';
 	import { app } from '$lib/state/app.svelte';
 	import ArtifactPreview from './ArtifactPreview.svelte';
 	import CodeBlock from './CodeBlock.svelte';
 	import Icon from './Icon.svelte';
 
-	let { artifact, group }: { artifact: ArtifactVersion; group: ArtifactGroup | undefined } = $props();
+	let { artifact, group }: { artifact: ArtifactVersion; group: ArtifactGroup | undefined } =
+		$props();
 
 	let tab = $state<'preview' | 'code'>('preview');
 	let scripts = $state(false);
@@ -41,28 +51,81 @@
 		</div>
 		{#if total > 1}
 			<div class="versions">
-				<button type="button" class="ico" disabled={artifact.version <= 1} aria-label="Previous version" onclick={() => app.showArtifactVersion(artifact.version - 1)}><Icon name="chevron-left" size={14} /></button>
+				<button
+					type="button"
+					class="ico"
+					disabled={artifact.version <= 1}
+					aria-label="Previous version"
+					onclick={() => app.showArtifactVersion(artifact.version - 1)}
+					><Icon name="chevron-left" size={14} /></button
+				>
 				<span>v{artifact.version} of {total}</span>
-				<button type="button" class="ico" disabled={artifact.version >= total} aria-label="Next version" onclick={() => app.showArtifactVersion(artifact.version + 1)}><Icon name="chevron-right" size={14} /></button>
+				<button
+					type="button"
+					class="ico"
+					disabled={artifact.version >= total}
+					aria-label="Next version"
+					onclick={() => app.showArtifactVersion(artifact.version + 1)}
+					><Icon name="chevron-right" size={14} /></button
+				>
 			</div>
 		{/if}
-		<button type="button" class="ico" title="Close" aria-label="Close artifact" onclick={() => app.closeArtifact()}><Icon name="x" size={15} /></button>
+		<button
+			type="button"
+			class="ico"
+			title="Close"
+			aria-label="Close artifact"
+			onclick={() => app.closeArtifact()}><Icon name="x" size={15} /></button
+		>
 	</div>
 	<div class="bar">
 		<div class="tabs" role="tablist">
-			<button type="button" role="tab" class:on={showPreview} disabled={!previewable} aria-selected={showPreview} onclick={() => (tab = 'preview')}><Icon name="eye" size={13} />Preview</button>
-			<button type="button" role="tab" class:on={!showPreview} aria-selected={!showPreview} onclick={() => (tab = 'code')}><Icon name="code" size={13} />Code</button>
+			<button
+				type="button"
+				role="tab"
+				class:on={showPreview}
+				disabled={!previewable}
+				aria-selected={showPreview}
+				onclick={() => (tab = 'preview')}><Icon name="eye" size={13} />Preview</button
+			>
+			<button
+				type="button"
+				role="tab"
+				class:on={!showPreview}
+				aria-selected={!showPreview}
+				onclick={() => (tab = 'code')}><Icon name="code" size={13} />Code</button
+			>
 		</div>
 		{#if showPreview && artifact.type === 'html'}
 			<div class="switches">
-				<label title="Let scripts in the page run. The page stays isolated from Gloss."><input type="checkbox" bind:checked={scripts} />Scripts</label>
-				<label title="Let the page load from the internet (fonts, libraries, images)."><input type="checkbox" bind:checked={network} />Network</label>
+				<label title="Let scripts in the page run. The page stays isolated from Gloss."
+					><input type="checkbox" bind:checked={scripts} />Scripts</label
+				>
+				<label title="Let the page load from the internet (fonts, libraries, images)."
+					><input type="checkbox" bind:checked={network} />Network</label
+				>
 			</div>
 		{/if}
 		<div class="actions">
-			<button type="button" class="act" title="Copy content" onclick={() => app.copyArtifact(artifact)}><Icon name="copy" size={13} />Copy</button>
-			<button type="button" class="act" title="Save to a file" onclick={() => app.saveArtifact(artifact)}><Icon name="download" size={13} />Save…</button>
-			<button type="button" class="act" title={artifact.type === 'html' ? 'Open in the browser' : 'Open with the default app'} onclick={() => app.openArtifactExternally(artifact)}><Icon name="external" size={13} />Open</button>
+			<button
+				type="button"
+				class="act"
+				title="Copy content"
+				onclick={() => app.copyArtifact(artifact)}><Icon name="copy" size={13} />Copy</button
+			>
+			<button
+				type="button"
+				class="act"
+				title="Save to a file"
+				onclick={() => app.saveArtifact(artifact)}><Icon name="download" size={13} />Save…</button
+			>
+			<button
+				type="button"
+				class="act"
+				title={artifact.type === 'html' ? 'Open in the browser' : 'Open with the default app'}
+				onclick={() => app.openArtifactExternally(artifact)}
+				><Icon name="external" size={13} />Open</button
+			>
 		</div>
 	</div>
 	<div class="body" class:code={!showPreview}>

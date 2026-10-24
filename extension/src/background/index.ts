@@ -1,10 +1,20 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The background: the one place that talks to Gloss. It greets Gloss with
 // `hello`, relays requests from content scripts, the popup and the ask
 // window, routes pushed events back to the clients they concern, keeps
 // the toolbar badge and context menu, and launches Gloss on request.
 
 import { browser, extensionVersion, SETTINGS_KEY, storageSet } from '../shared/browser';
-import { LOCAL_METHODS, PORT_NAME, type AskWindowParams, type BackgroundMessage, type ClientMessage, type ConnectionStatus } from '../shared/messages';
+import {
+	LOCAL_METHODS,
+	PORT_NAME,
+	type AskWindowParams,
+	type BackgroundMessage,
+	type ClientMessage,
+	type ConnectionStatus
+} from '../shared/messages';
 import {
 	BridgeFailure,
 	DEFAULT_SETTINGS,
@@ -14,7 +24,7 @@ import {
 	type ExtensionSettings,
 	type HelloResult,
 	type PageEventData,
-	type TurnEventEnvelope,
+	type TurnEventEnvelope
 } from '../shared/protocol';
 import type { TabMessage } from '../shared/messages';
 import { NativePortTransport } from './native';
@@ -31,7 +41,8 @@ const LAUNCH_PROBE_MAX_MS = 30_000;
 const RECOVERY_PROBE_MS = 10_000;
 
 const registry = new ClientRegistry();
-const transport: Transport = __BROWSER__ === 'safari' ? new SafariTransport() : new NativePortTransport();
+const transport: Transport =
+	__BROWSER__ === 'safari' ? new SafariTransport() : new NativePortTransport();
 let status: ConnectionStatus = { state: 'connecting', settings: DEFAULT_SETTINGS };
 let helloInFlight: Promise<void> | null = null;
 let launchProbe: ReturnType<typeof setInterval> | null = null;
@@ -59,7 +70,12 @@ function startRecoveryProbe(): void {
 			return;
 		}
 		void hello().then(() => {
-			if (isConnected()) registry.broadcast({ type: 'event', event: 'app_state', data: { running: true } satisfies AppStateEventData });
+			if (isConnected())
+				registry.broadcast({
+					type: 'event',
+					event: 'app_state',
+					data: { running: true } satisfies AppStateEventData
+				});
 		});
 	}, RECOVERY_PROBE_MS);
 }
@@ -84,9 +100,14 @@ function hello(): Promise<void> {
 				protocol: PROTOCOL,
 				extensionVersion: extensionVersion(),
 				browser: __BROWSER__,
-				userAgent: navigator.userAgent,
+				userAgent: navigator.userAgent
 			})) as HelloResult;
-			setStatus({ state: 'connected', appVersion: r.appVersion, agent: r.agent, settings: r.settings });
+			setStatus({
+				state: 'connected',
+				appVersion: r.appVersion,
+				agent: r.agent,
+				settings: r.settings
+			});
 			void storageSet(SETTINGS_KEY, r.settings);
 		} catch (e) {
 			const f = failureOf(e);
@@ -94,7 +115,7 @@ function hello(): Promise<void> {
 				setStatus({
 					state: 'protocol_mismatch',
 					mismatch: /update gloss/i.test(f.message) ? 'update_app' : 'update_extension',
-					message: f.message,
+					message: f.message
 				});
 			} else if (f.code === 'app_not_running') {
 				setStatus({ state: 'app_not_running', message: f.message });
@@ -119,7 +140,10 @@ function unavailable(): BridgeFailure {
 		case 'protocol_mismatch':
 			return new BridgeFailure('protocol', status.message ?? 'protocol mismatch');
 		case 'host_missing':
-			return new BridgeFailure('internal', 'The Gloss bridge is not installed. Open Gloss once to set it up.');
+			return new BridgeFailure(
+				'internal',
+				'The Gloss bridge is not installed. Open Gloss once to set it up.'
+			);
 		case 'error':
 			return new BridgeFailure('internal', status.message ?? 'cannot reach Gloss');
 		default:
@@ -169,7 +193,11 @@ function startLaunchProbe(): void {
 		await hello();
 		if (isConnected()) {
 			stopLaunchProbe();
-			registry.broadcast({ type: 'event', event: 'app_state', data: { running: true } satisfies AppStateEventData });
+			registry.broadcast({
+				type: 'event',
+				event: 'app_state',
+				data: { running: true } satisfies AppStateEventData
+			});
 		} else if (Date.now() - startedAt > LAUNCH_PROBE_MAX_MS) {
 			stopLaunchProbe();
 		}
@@ -200,7 +228,11 @@ transport.onEvent((event, data) => {
 			break;
 		case 'shutdown':
 			setStatus({ state: 'app_not_running', message: 'Gloss quit' });
-			registry.broadcast({ type: 'event', event: 'app_state', data: { running: false } satisfies AppStateEventData });
+			registry.broadcast({
+				type: 'event',
+				event: 'app_state',
+				data: { running: false } satisfies AppStateEventData
+			});
 			break;
 		case 'app_state': {
 			const s = data as AppStateEventData;
@@ -245,7 +277,7 @@ browser.runtime.onConnect.addListener((port) => {
 		incognito: Boolean(tab?.incognito),
 		isContent: tab?.id !== undefined && !(sender?.url ?? '').startsWith(extensionOrigin),
 		urlKey: null,
-		conversationId: null,
+		conversationId: null
 	};
 	registry.add(entry);
 	// A transport without pushes (Safari) learns that Gloss came back only by
@@ -256,19 +288,30 @@ browser.runtime.onConnect.addListener((port) => {
 		if (raw.type === 'subscribe') {
 			entry.urlKey = raw.urlKey;
 			entry.conversationId = raw.conversationId;
-			if (entry.isContent && entry.tabId !== null && raw.askCount !== undefined) setBadge(entry.tabId, raw.askCount);
+			if (entry.isContent && entry.tabId !== null && raw.askCount !== undefined)
+				setBadge(entry.tabId, raw.askCount);
 			return;
 		}
 		if (raw.type !== 'request') return;
 		relay(entry, raw.method, raw.params)
-			.then((result) => port.postMessage({ type: 'response', id: raw.id, result } satisfies BackgroundMessage))
+			.then((result) =>
+				port.postMessage({ type: 'response', id: raw.id, result } satisfies BackgroundMessage)
+			)
 			.catch((e) => {
 				const f = failureOf(e);
-				port.postMessage({ type: 'response', id: raw.id, error: { code: f.code, message: f.message } } satisfies BackgroundMessage);
+				port.postMessage({
+					type: 'response',
+					id: raw.id,
+					error: { code: f.code, message: f.message }
+				} satisfies BackgroundMessage);
 			});
 	});
 	port.onDisconnect.addListener(() => registry.remove(entry));
-	port.postMessage({ type: 'event', event: 'connection', data: status } satisfies BackgroundMessage);
+	port.postMessage({
+		type: 'event',
+		event: 'connection',
+		data: status
+	} satisfies BackgroundMessage);
 });
 
 // ---- context menu and keyboard command ---------------------------------
@@ -276,7 +319,11 @@ browser.runtime.onConnect.addListener((port) => {
 async function setupMenu(): Promise<void> {
 	try {
 		await browser.contextMenus.removeAll();
-		browser.contextMenus.create({ id: MENU_ID, title: 'Ask Gloss about “%s”', contexts: ['selection'] });
+		browser.contextMenus.create({
+			id: MENU_ID,
+			title: 'Ask Gloss about “%s”',
+			contexts: ['selection']
+		});
 	} catch (e) {
 		console.warn('gloss: context menu unavailable', e);
 	}
@@ -299,8 +346,13 @@ async function askFromTab(tab: chrome.tabs.Tab | undefined, selectionText: strin
 	}
 	if (!tab?.id) return;
 	const opened = await Promise.race([
-		browser.tabs.sendMessage(tab.id, { type: 'open-composer', selectionText } satisfies TabMessage).then(() => true, () => false),
-		new Promise<boolean>((r) => setTimeout(() => r(false), CONTENT_REPLY_MS)),
+		browser.tabs
+			.sendMessage(tab.id, { type: 'open-composer', selectionText } satisfies TabMessage)
+			.then(
+				() => true,
+				() => false
+			),
+		new Promise<boolean>((r) => setTimeout(() => r(false), CONTENT_REPLY_MS))
 	]);
 	if (opened || tab.incognito) return;
 	await openAskWindow({ url: tab.url ?? '', title: tab.title ?? '', text: selectionText });
@@ -318,7 +370,8 @@ async function openAskWindow(p: AskWindowParams): Promise<void> {
 		try {
 			// A tab opened in place of a window may since have been navigated elsewhere; that tab is left alone.
 			const current = await browser.tabs.get(askWindowTab);
-			if (!current.url?.startsWith(browser.runtime.getURL('ask.html'))) throw new Error('not the ask window');
+			if (!current.url?.startsWith(browser.runtime.getURL('ask.html')))
+				throw new Error('not the ask window');
 			const t = await browser.tabs.update(askWindowTab, { url });
 			if (t?.windowId !== undefined) await browser.windows.update(t.windowId, { focused: true });
 			return;
@@ -359,7 +412,8 @@ try {
 }
 try {
 	// Content scripts read the cached settings from session storage.
-	const session = browser.storage.session as { setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined;
+	const session = browser.storage.session as
+		{ setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined;
 	void session?.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
 } catch {
 	// Older browsers keep session storage private to the background; content scripts then start unrestricted.

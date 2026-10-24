@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Typed wrappers around the Tauri commands listed in docs/api.md. Outside
 // Tauri (plain `vite dev` in a browser) the in-memory mock takes over so the
 // UI can be exercised without an engine.
@@ -69,7 +72,12 @@ export interface Api {
 	/** The turns a continued conversation's session had before Gloss took it over. */
 	conversationHistory(id: string): Promise<SessionTurn[]>;
 	getConversation(id: string): Promise<Conversation>;
-	createConversation(agent: AgentId, model?: string, webSearch?: boolean, projectDir?: string | null): Promise<Conversation>;
+	createConversation(
+		agent: AgentId,
+		model?: string,
+		webSearch?: boolean,
+		projectDir?: string | null
+	): Promise<Conversation>;
 	/** Opens the native folder picker; null when nothing was chosen. */
 	pickFolder(): Promise<string | null>;
 	/**
@@ -121,9 +129,38 @@ export interface Api {
 
 /** File types the picker offers; the engine still checks the content. */
 export const ATTACHMENT_EXTENSIONS = [
-	'png', 'jpg', 'jpeg', 'gif', 'webp',
-	'md', 'txt', 'json', 'csv', 'xml', 'yaml', 'yml', 'toml', 'ini', 'log',
-	'rs', 'ts', 'js', 'py', 'go', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'rb', 'sh', 'sql', 'html', 'css', 'svelte'
+	'png',
+	'jpg',
+	'jpeg',
+	'gif',
+	'webp',
+	'md',
+	'txt',
+	'json',
+	'csv',
+	'xml',
+	'yaml',
+	'yml',
+	'toml',
+	'ini',
+	'log',
+	'rs',
+	'ts',
+	'js',
+	'py',
+	'go',
+	'java',
+	'c',
+	'h',
+	'cpp',
+	'hpp',
+	'cs',
+	'rb',
+	'sh',
+	'sql',
+	'html',
+	'css',
+	'svelte'
 ];
 
 export function inTauri(): boolean {
@@ -140,7 +177,8 @@ function tauriApi(): Api {
 		listModels: (agent) => call('list_models', { agent }),
 		getSettings: () => call('get_settings'),
 		updateSettings: (settings) => call('update_settings', { settings }),
-		listConversations: (query, tag) => call('list_conversations', { query: query ?? null, tag: tag ?? null }),
+		listConversations: (query, tag) =>
+			call('list_conversations', { query: query ?? null, tag: tag ?? null }),
 		search: (query) => call('search', { query }),
 		setPinned: (id, pinned) => call('set_pinned', { id, pinned }),
 		setTags: (id, tags) => call('set_tags', { id, tags }),
@@ -149,7 +187,9 @@ function tauriApi(): Api {
 			const { invoke } = await import('@tauri-apps/api/core');
 			// Raw bytes go in the body; the name is percent-encoded so any file
 			// name fits in a header.
-			return invoke<Attachment>('add_attachment', bytes, { headers: { 'x-name': encodeURIComponent(name), 'x-mime': mime } });
+			return invoke<Attachment>('add_attachment', bytes, {
+				headers: { 'x-name': encodeURIComponent(name), 'x-mime': mime }
+			});
 		},
 		addAttachmentPath: (path) => call('add_attachment_path', { path }),
 		pickFiles: async () => {
@@ -177,14 +217,24 @@ function tauriApi(): Api {
 		removeProject: (path) => call('remove_project', { path }),
 		listProjectSessions: (path) => call('list_project_sessions', { path }),
 		readProjectSession: (path, agent, id) => call('read_project_session', { path, agent, id }),
-		continueProjectSession: (path, agent, id) => call('continue_project_session', { path, agent, id }),
+		continueProjectSession: (path, agent, id) =>
+			call('continue_project_session', { path, agent, id }),
 		conversationHistory: (id) => call('conversation_history', { id }),
 		getConversation: (id) => call('get_conversation', { id }),
 		createConversation: (agent, model, webSearch, projectDir) =>
-			call('create_conversation', { agent, model: model ?? null, webSearch: webSearch ?? null, projectDir: projectDir ?? null }),
+			call('create_conversation', {
+				agent,
+				model: model ?? null,
+				webSearch: webSearch ?? null,
+				projectDir: projectDir ?? null
+			}),
 		pickFolder: async () => {
 			const { open } = await import('@tauri-apps/plugin-dialog');
-			const picked = await open({ directory: true, multiple: false, title: 'Add a project folder' });
+			const picked = await open({
+				directory: true,
+				multiple: false,
+				title: 'Add a project folder'
+			});
 			return typeof picked === 'string' ? picked : null;
 		},
 		renameConversation: (id, title) => call('rename_conversation', { id, title }),
@@ -192,7 +242,8 @@ function tauriApi(): Api {
 		setConversationModel: (id, model) => call('set_conversation_model', { id, model }),
 		setConversationWebSearch: (id, enabled) => call('set_conversation_web_search', { id, enabled }),
 		setConversationMode: (id, mode) => call('set_conversation_mode', { id, mode }),
-		answerRequest: (conversationId, requestId, answer) => call('answer_request', { conversationId, requestId, answer }),
+		answerRequest: (conversationId, requestId, answer) =>
+			call('answer_request', { conversationId, requestId, answer }),
 		sendTurn: (req) => call('send_turn', { req }),
 		cancelTurn: (conversationId) => call('cancel_turn', { conversationId }),
 		setClarificationOpen: (id, open) => call('set_clarification_open', { id, open }),

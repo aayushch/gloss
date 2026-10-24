@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { guardListening } from '../src/content/events';
 import { HOST_TAG } from '../src/content/text';

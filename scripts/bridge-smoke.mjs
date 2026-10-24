@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Drives the gloss-bridge native-messaging host the way a browser does:
 // writes length-prefixed JSON frames to its stdin and prints the frames it
 // answers with. Run with a Gloss app or `gloss-engine serve` up to see real
@@ -11,7 +14,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const candidates = [process.argv[2], path.join(root, 'target/debug/gloss-bridge'), path.join(root, 'target/release/gloss-bridge')].filter(Boolean);
+const candidates = [
+	process.argv[2],
+	path.join(root, 'target/debug/gloss-bridge'),
+	path.join(root, 'target/release/gloss-bridge')
+].filter(Boolean);
 const bin = candidates.find((p) => existsSync(p));
 if (!bin) {
 	console.error('gloss-bridge binary not found; run cargo build -p gloss-bridge');
@@ -44,7 +51,13 @@ child.stdout.on('data', (chunk) => {
 	}
 });
 child.on('exit', (code) => process.exit(code ?? 0));
-child.stdin.write(frame({ id: '1', method: 'hello', params: { protocol: 1, browser: 'smoke', extensionVersion: '0' } }));
+child.stdin.write(
+	frame({
+		id: '1',
+		method: 'hello',
+		params: { protocol: 1, browser: 'smoke', extensionVersion: '0' }
+	})
+);
 child.stdin.write(frame({ id: '2', method, params }));
 setTimeout(() => {
 	console.error('timed out');

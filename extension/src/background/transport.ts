@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // How the background reaches Gloss. Chrome and Firefox keep a native
 // messaging port open to the `gloss-bridge` host, which pushes events;
 // Safari can only exchange one message at a time and polls instead.

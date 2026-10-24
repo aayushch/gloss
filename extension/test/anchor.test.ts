@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { describe as describeRange, resolve, cssPath } from '../src/content/anchor';
 import { TextIndex } from '../src/content/text';
@@ -31,7 +34,10 @@ describe('describe', () => {
 	it('records quote, context, position and container', () => {
 		const idx = load(ARTICLE);
 		const a = anchorFor(idx, 'continue past a write');
-		expect(a.position).toEqual({ start: idx.text.indexOf('continue past'), end: idx.text.indexOf('continue past') + 'continue past a write'.length });
+		expect(a.position).toEqual({
+			start: idx.text.indexOf('continue past'),
+			end: idx.text.indexOf('continue past') + 'continue past a write'.length
+		});
 		expect(a.quote.prefix.endsWith('lets the core ')).toBe(true);
 		expect(a.quote.suffix.startsWith(' that would')).toBe(true);
 		expect(a.container).toBe('main > article > p:nth-of-type(2)');
@@ -63,15 +69,21 @@ describe('resolve', () => {
 	});
 
 	it('picks the right copy of a duplicated sentence by its context', () => {
-		const idx = load('<p>Intro.</p><p>Same line here. After one.</p><p>Same line here. After two.</p>');
+		const idx = load(
+			'<p>Intro.</p><p>Same line here. After one.</p><p>Same line here. After two.</p>'
+		);
 		const second = idx.text.lastIndexOf('Same line here.');
 		const a = describeRange(idx.toRange(second, second + 'Same line here.'.length), idx)!;
 		expect(a.quote.suffix.startsWith(' After two.')).toBe(true);
 		// A new paragraph at the top shifts every position.
-		const changed = load('<p>A brand new introduction paragraph.</p><p>Intro.</p><p>Same line here. After one.</p><p>Same line here. After two.</p>');
+		const changed = load(
+			'<p>A brand new introduction paragraph.</p><p>Intro.</p><p>Same line here. After one.</p><p>Same line here. After two.</p>'
+		);
 		const r = resolve(a, changed)!;
 		expect(r.state).toBe('anchored');
-		expect(changed.text.slice(r.offsets.start, r.offsets.end + ' After two.'.length)).toBe('Same line here. After two.');
+		expect(changed.text.slice(r.offsets.start, r.offsets.end + ' After two.'.length)).toBe(
+			'Same line here. After two.'
+		);
 	});
 
 	it('anchors a paragraph that moved', () => {
@@ -120,7 +132,12 @@ describe('resolve', () => {
 	it('returns null when the passage is gone', () => {
 		const idx = load(ARTICLE);
 		const a = anchorFor(idx, 'A memory barrier drains the store buffer');
-		const without = load(ARTICLE.replace(/<p>A memory barrier.*?<\/p>/, '<p>Fences are discussed elsewhere entirely.</p>'));
+		const without = load(
+			ARTICLE.replace(
+				/<p>A memory barrier.*?<\/p>/,
+				'<p>Fences are discussed elsewhere entirely.</p>'
+			)
+		);
 		expect(resolve(a, without)).toBeNull();
 	});
 
@@ -136,7 +153,11 @@ describe('resolve', () => {
 
 	it('is whitespace-insensitive for quotes made elsewhere', () => {
 		const idx = load('<p>alpha   beta\ngamma</p>');
-		const a: WebAnchor = { quote: { exact: '  beta \n gamma ', prefix: '', suffix: '' }, position: null, container: null };
+		const a: WebAnchor = {
+			quote: { exact: '  beta \n gamma ', prefix: '', suffix: '' },
+			position: null,
+			container: null
+		};
 		const r = resolve(a, idx)!;
 		expect(r.state).toBe('anchored');
 		expect(r.range.toString()).toBe('beta\ngamma');

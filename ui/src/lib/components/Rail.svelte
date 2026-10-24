@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Left navigation rail: new chat, search, tag filters, the projects (each
 	// with its Gloss conversations and the sessions its agents recorded
@@ -8,8 +11,24 @@
 	// folds from its label.
 	import { api } from '$lib/api/client';
 	import { app, AGENT_NAMES, ORIGIN_LABELS, PROJECT_PAGE } from '$lib/state/app.svelte';
-	import type { AgentId, ConversationSummary, ExternalSession, Page, Project } from '$lib/api/types';
-	import { agentsIn, groupOf, hostOf, pad, projectItems, relativeTime, short, splitForRail, type Group } from '$lib/state/threads';
+	import type {
+		AgentId,
+		ConversationSummary,
+		ExternalSession,
+		Page,
+		Project
+	} from '$lib/api/types';
+	import {
+		agentsIn,
+		groupOf,
+		hostOf,
+		pad,
+		projectItems,
+		relativeTime,
+		short,
+		splitForRail,
+		type Group
+	} from '$lib/state/threads';
 	import ExtensionBanner from './ExtensionBanner.svelte';
 	import ExtensionUpdateBanner from './ExtensionUpdateBanner.svelte';
 	import Icon from './Icon.svelte';
@@ -20,10 +39,16 @@
 	const split = $derived(splitForRail(app.conversations, app.projects));
 
 	/** Projects the rail lists. A tag filter hides those with no matching conversation. */
-	const shownProjects = $derived(app.tagFilter ? app.projects.filter((p) => split.byProject.get(p.path)?.length) : app.projects);
+	const shownProjects = $derived(
+		app.tagFilter ? app.projects.filter((p) => split.byProject.get(p.path)?.length) : app.projects
+	);
 
 	/** The draft goes under its project when that project is listed, otherwise under Today. */
-	const draftProject = $derived(app.draft?.projectDir && app.projects.some((p) => p.path === app.draft!.projectDir) ? app.draft.projectDir : null);
+	const draftProject = $derived(
+		app.draft?.projectDir && app.projects.some((p) => p.path === app.draft!.projectDir)
+			? app.draft.projectDir
+			: null
+	);
 
 	/** A project's Gloss chats and outside sessions. Outside sessions carry no
 	 * tags, so a tag filter leaves them out. */
@@ -53,7 +78,9 @@
 			if (!out.has(g)) out.set(g, []);
 			out.get(g)!.push(c);
 		}
-		return ['Pinned', ...GROUPS].filter((g) => out.has(g)).map((g) => ({ label: g, items: out.get(g)! }));
+		return ['Pinned', ...GROUPS]
+			.filter((g) => out.has(g))
+			.map((g) => ({ label: g, items: out.get(g)! }));
 	});
 
 	/** Search hits grouped by conversation, in the order they first appear. */
@@ -71,7 +98,9 @@
 		return snippet
 			.split(/([\u0001][^\u0002]*[\u0002])/)
 			.filter(Boolean)
-			.map((s) => (s.startsWith('\u0001') ? { t: s.slice(1, -1), hit: true } : { t: s, hit: false }));
+			.map((s) =>
+				s.startsWith('\u0001') ? { t: s.slice(1, -1), hit: true } : { t: s, hit: false }
+			);
 	}
 
 	const agentName = $derived(AGENT_NAMES[app.activeAgentId]);
@@ -89,13 +118,25 @@
 
 	async function confirmDelete(e: MouseEvent, id: string, title: string) {
 		e.stopPropagation();
-		const yes = await (await api()).confirm(`Delete “${title}”?`, 'The conversation and its clarifications are removed from Gloss. The agent keeps its own session files.', 'Delete');
+		const yes = await (
+			await api()
+		).confirm(
+			`Delete “${title}”?`,
+			'The conversation and its clarifications are removed from Gloss. The agent keeps its own session files.',
+			'Delete'
+		);
 		if (yes) app.remove(id);
 	}
 
 	async function confirmRemoveProject(e: MouseEvent, p: Project) {
 		e.stopPropagation();
-		const yes = await (await api()).confirm(`Remove “${p.name}” from projects?`, 'Its conversations stay in Gloss and are listed by date. Nothing in the folder is changed.', 'Remove');
+		const yes = await (
+			await api()
+		).confirm(
+			`Remove “${p.name}” from projects?`,
+			'Its conversations stay in Gloss and are listed by date. Nothing in the folder is changed.',
+			'Remove'
+		);
 		if (yes) app.removeProject(p.path);
 	}
 
@@ -106,7 +147,9 @@
 
 	/** The top-level asks of a page, for its expanded rows: the open conversation's own when it is the page's. */
 	function asksOf(p: Page) {
-		return app.active?.id === p.conversationId ? app.active.clarifications.filter((c) => c.webAnchor && !c.parentId) : (app.pageAsks[p.urlKey] ?? []);
+		return app.active?.id === p.conversationId
+			? app.active.clarifications.filter((c) => c.webAnchor && !c.parentId)
+			: (app.pageAsks[p.urlKey] ?? []);
 	}
 
 	function openInBrowser(e: MouseEvent, p: Page) {
@@ -152,7 +195,15 @@
 
 {#snippet row(c: ConversationSummary, inProject = false)}
 	{@const current = app.active?.id === c.id}
-	<div class="navitem" class:on={current} aria-current={current ? 'page' : undefined} role="button" tabindex="0" onclick={() => app.open(c.id)} onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}>
+	<div
+		class="navitem"
+		class:on={current}
+		aria-current={current ? 'page' : undefined}
+		role="button"
+		tabindex="0"
+		onclick={() => app.open(c.id)}
+		onkeydown={(e) => e.key === 'Enter' && app.open(c.id)}
+	>
 		{#if inProject}
 			<span class="mono" title={AGENT_NAMES[c.agent]}>{mono(c.agent)}</span>
 		{:else if c.projectDir}
@@ -177,14 +228,38 @@
 			{#if c.clarificationCount > 0}
 				<span class="countpill">{c.clarificationCount}</span>
 			{/if}
-			<button type="button" class="act" title="Rename conversation" aria-label="Rename conversation" onclick={(e) => startRename(e, c)}><Icon name="pencil" size={12} /></button>
-			<button type="button" class="act" class:pinned={c.pinned} title={c.pinned ? 'Unpin' : 'Pin'} aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button>
-			<button type="button" class="act" title="Delete conversation" aria-label="Delete conversation" onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button>
+			<button
+				type="button"
+				class="act"
+				title="Rename conversation"
+				aria-label="Rename conversation"
+				onclick={(e) => startRename(e, c)}><Icon name="pencil" size={12} /></button
+			>
+			<button
+				type="button"
+				class="act"
+				class:pinned={c.pinned}
+				title={c.pinned ? 'Unpin' : 'Pin'}
+				aria-label={c.pinned ? 'Unpin conversation' : 'Pin conversation'}
+				onclick={(e) => pin(e, c.id)}><Icon name="pin" size={12} /></button
+			>
+			<button
+				type="button"
+				class="act"
+				title="Delete conversation"
+				aria-label="Delete conversation"
+				onclick={(e) => confirmDelete(e, c.id, c.title)}><Icon name="trash" size={12} /></button
+			>
 		{/if}
 	</div>
 	{#if current && app.active}
 		{#each app.active.clarifications as cl, i (cl.id)}
-			<button type="button" class="navsub" class:nested={isNested(cl.id)} onclick={() => app.jumpTo(cl.id)}>
+			<button
+				type="button"
+				class="navsub"
+				class:nested={isNested(cl.id)}
+				onclick={() => app.jumpTo(cl.id)}
+			>
 				<span class="dot"></span>
 				<span class="sub">Clarification {pad(i + 1)} · {short(cl.quote, 26)}</span>
 			</button>
@@ -194,7 +269,14 @@
 
 {#snippet sessionRow(s: ExternalSession, project: string)}
 	{@const current = app.viewing?.session.agent === s.agent && app.viewing?.session.id === s.id}
-	<button type="button" class="navitem outside" class:on={current} aria-current={current ? 'page' : undefined} title={sessionTip(s)} onclick={() => app.openSession(project, s)}>
+	<button
+		type="button"
+		class="navitem outside"
+		class:on={current}
+		aria-current={current ? 'page' : undefined}
+		title={sessionTip(s)}
+		onclick={() => app.openSession(project, s)}
+	>
 		<span class="mono">{mono(s.agent)}</span>
 		<span class="title">{s.title}</span>
 		<span class="ext"><Icon name="external" size={10} /></span>
@@ -205,11 +287,22 @@
 	<button type="button" class="ibtn newchat" onclick={() => app.newChat()}>
 		<Icon name="plus" size={14} /> New chat
 	</button>
-	<input class="iinput search" type="search" placeholder="Search conversations" value={app.search} oninput={onSearch} />
+	<input
+		class="iinput search"
+		type="search"
+		placeholder="Search conversations"
+		value={app.search}
+		oninput={onSearch}
+	/>
 	{#if app.tags.length}
 		<div class="tags">
 			{#each app.tags as t (t)}
-				<button type="button" class="tagchip" class:on={app.tagFilter === t} onclick={() => app.setTagFilter(t)}>{t}</button>
+				<button
+					type="button"
+					class="tagchip"
+					class:on={app.tagFilter === t}
+					onclick={() => app.setTagFilter(t)}>{t}</button
+				>
 			{/each}
 		</div>
 	{/if}
@@ -221,145 +314,268 @@
 			{/if}
 			{#each hitGroups as g (g.id)}
 				<div class="group">
-					<button type="button" class="navitem hitconv" class:on={app.active?.id === g.id} onclick={() => app.open(g.id)}>
+					<button
+						type="button"
+						class="navitem hitconv"
+						class:on={app.active?.id === g.id}
+						onclick={() => app.open(g.id)}
+					>
 						<span class="title">{g.title}</span>
 					</button>
 					{#each g.hits as h (h.turnId)}
 						<button type="button" class="hit" onclick={() => app.openHit(h)}>
-							<span class="who">{h.role === 'user' ? 'You' : 'Reply'}{h.clarificationId ? ' · clarification' : ''}</span>
-							<span class="snip">{#each pieces(h.snippet) as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}</span>
+							<span class="who"
+								>{h.role === 'user' ? 'You' : 'Reply'}{h.clarificationId
+									? ' · clarification'
+									: ''}</span
+							>
+							<span class="snip"
+								>{#each pieces(h.snippet) as p, i (i)}{#if p.hit}<mark>{p.t}</mark
+										>{:else}{p.t}{/if}{/each}</span
+							>
 						</button>
 					{/each}
 				</div>
 			{/each}
 		{:else}
-		<section class="projects" aria-label="Projects">
-			<div class="glabel prow">
-				<button type="button" class="sechead" aria-expanded={!app.railCollapsed.projects} onclick={() => app.toggleSection('projects')}>
-					<span class="schev"><Icon name={app.railCollapsed.projects ? 'chevron-right' : 'chevron-down'} size={11} /></span>Projects
-				</button>
-				<button type="button" class="act always" title="Add project" aria-label="Add project" onclick={() => app.addProject()}><Icon name="plus" size={12} /></button>
-			</div>
-			{#if app.railCollapsed.projects}
-				<!-- folded: only the header shows -->
-			{:else}
-			{#if !app.projects.length}
-				<button type="button" class="addproj" onclick={() => app.addProject()}>Add a folder as a project</button>
-			{/if}
-			{#each shownProjects as p (p.path)}
-				{@const open = !!app.expanded[p.path]}
-				<div class="navitem project" role="button" tabindex="0" title={p.path} aria-expanded={open} onclick={() => app.toggleProject(p.path)} onkeydown={(e) => e.key === 'Enter' && app.toggleProject(p.path)}>
-					<span class="chev"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
-					<span class="pmark"><Icon name="folder" size={13} /></span>
-					<span class="title">{p.name}</span>
-					<button type="button" class="act" title="Remove project" aria-label="Remove project" onclick={(e) => confirmRemoveProject(e, p)}><Icon name="x" size={12} /></button>
-					<button type="button" class="act always" title="New chat in {p.name}" aria-label="New chat in {p.name}" onclick={(e) => newChatIn(e, p.path)}><Icon name="plus" size={12} /></button>
+			<section class="projects" aria-label="Projects">
+				<div class="glabel prow">
+					<button
+						type="button"
+						class="sechead"
+						aria-expanded={!app.railCollapsed.projects}
+						onclick={() => app.toggleSection('projects')}
+					>
+						<span class="schev"
+							><Icon
+								name={app.railCollapsed.projects ? 'chevron-right' : 'chevron-down'}
+								size={11}
+							/></span
+						>Projects
+					</button>
+					<button
+						type="button"
+						class="act always"
+						title="Add project"
+						aria-label="Add project"
+						onclick={() => app.addProject()}><Icon name="plus" size={12} /></button
+					>
 				</div>
-				{#if open}
-					{@const entries = entriesOf(p.path)}
-					<div class="pchats">
-						{#if entries.agents.length > 1}
-							<div class="achips">
-								{#each entries.agents as a (a)}
-									<button type="button" class="achip" class:on={app.agentFilter[p.path] === a} title="Only {AGENT_NAMES[a]}" onclick={() => app.setAgentFilter(p.path, a)}>{mono(a)}</button>
+				{#if app.railCollapsed.projects}
+					<!-- folded: only the header shows -->
+				{:else}
+					{#if !app.projects.length}
+						<button type="button" class="addproj" onclick={() => app.addProject()}
+							>Add a folder as a project</button
+						>
+					{/if}
+					{#each shownProjects as p (p.path)}
+						{@const open = !!app.expanded[p.path]}
+						<div
+							class="navitem project"
+							role="button"
+							tabindex="0"
+							title={p.path}
+							aria-expanded={open}
+							onclick={() => app.toggleProject(p.path)}
+							onkeydown={(e) => e.key === 'Enter' && app.toggleProject(p.path)}
+						>
+							<span class="chev"
+								><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span
+							>
+							<span class="pmark"><Icon name="folder" size={13} /></span>
+							<span class="title">{p.name}</span>
+							<button
+								type="button"
+								class="act"
+								title="Remove project"
+								aria-label="Remove project"
+								onclick={(e) => confirmRemoveProject(e, p)}><Icon name="x" size={12} /></button
+							>
+							<button
+								type="button"
+								class="act always"
+								title="New chat in {p.name}"
+								aria-label="New chat in {p.name}"
+								onclick={(e) => newChatIn(e, p.path)}><Icon name="plus" size={12} /></button
+							>
+						</div>
+						{#if open}
+							{@const entries = entriesOf(p.path)}
+							<div class="pchats">
+								{#if entries.agents.length > 1}
+									<div class="achips">
+										{#each entries.agents as a (a)}
+											<button
+												type="button"
+												class="achip"
+												class:on={app.agentFilter[p.path] === a}
+												title="Only {AGENT_NAMES[a]}"
+												onclick={() => app.setAgentFilter(p.path, a)}>{mono(a)}</button
+											>
+										{/each}
+									</div>
+								{/if}
+								{#if draftProject === p.path}
+									<div class="navitem on" aria-current="page">
+										<span class="title">New conversation</span>
+									</div>
+								{:else}
+									<button type="button" class="navitem newin" onclick={() => app.newChat(p.path)}>
+										<Icon name="plus" size={12} /><span class="title">New chat</span>
+									</button>
+								{/if}
+								{#each entries.items as item (item.kind === 'chat' ? item.chat.id : `${item.session.agent}:${item.session.id}`)}
+									{#if item.kind === 'chat'}
+										{@render row(item.chat, true)}
+									{:else}
+										{@render sessionRow(item.session, p.path)}
+									{/if}
 								{/each}
+								{#if entries.hidden}
+									<button type="button" class="navitem newin" onclick={() => app.showMore(p.path)}
+										><span class="title">Show {entries.hidden} more</span></button
+									>
+								{/if}
 							</div>
 						{/if}
-						{#if draftProject === p.path}
-							<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
-						{:else}
-							<button type="button" class="navitem newin" onclick={() => app.newChat(p.path)}>
-								<Icon name="plus" size={12} /><span class="title">New chat</span>
-							</button>
-						{/if}
-						{#each entries.items as item (item.kind === 'chat' ? item.chat.id : `${item.session.agent}:${item.session.id}`)}
-							{#if item.kind === 'chat'}
-								{@render row(item.chat, true)}
-							{:else}
-								{@render sessionRow(item.session, p.path)}
-							{/if}
-						{/each}
-						{#if entries.hidden}
-							<button type="button" class="navitem newin" onclick={() => app.showMore(p.path)}><span class="title">Show {entries.hidden} more</span></button>
-						{/if}
-					</div>
-				{/if}
-			{/each}
-			{/if}
-		</section>
-		{#if app.pages.length}
-			<section class="pages" aria-label="Pages">
-				<div class="glabel prow">
-					<button type="button" class="sechead" aria-expanded={!app.railCollapsed.pages} onclick={() => app.toggleSection('pages')}>
-						<span class="schev"><Icon name={app.railCollapsed.pages ? 'chevron-right' : 'chevron-down'} size={11} /></span><span class="plabel"><Icon name="globe" size={12} /> Pages</span>
-					</button>
-				</div>
-				{#if !app.railCollapsed.pages}
-				{#each app.pages as p (p.urlKey)}
-					{@const open = !!app.pagesExpanded[p.urlKey]}
-					{@const current = app.active?.id === p.conversationId}
-					<div class="navitem pagerow" class:on={current} role="button" tabindex="0" title={p.url} aria-current={current ? 'page' : undefined} onclick={() => app.openPage(p.urlKey)} onkeydown={(e) => e.key === 'Enter' && app.openPage(p.urlKey)}>
-						<button type="button" class="chev" title={open ? 'Hide asks' : 'Show asks'} aria-label={open ? 'Hide asks' : 'Show asks'} aria-expanded={open} onclick={(e) => { e.stopPropagation(); app.togglePage(p.urlKey); }}>
-							<Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
-						</button>
-						<span class="favicon">
-							{#if p.faviconUrl}
-								<img src={p.faviconUrl} alt="" width="14" height="14" />
-							{:else}
-								<span class="letter">{hostOf(p.url).charAt(0).toUpperCase()}</span>
-							{/if}
-						</span>
-						<span class="title">{p.title || hostOf(p.url)}</span>
-						{#if p.orphanCount > 0}
-							<span class="orphan" title={orphanTip(p.orphanCount)}></span>
-						{/if}
-						{#if p.askCount > 0}
-							<span class="countpill">{p.askCount}</span>
-						{/if}
-						<button type="button" class="act" title="Open in browser" aria-label="Open in browser" onclick={(e) => openInBrowser(e, p)}><Icon name="external" size={12} /></button>
-						<button type="button" class="act" title="Delete page" aria-label="Delete page" onclick={(e) => deletePage(e, p)}><Icon name="trash" size={12} /></button>
-					</div>
-					{#if open}
-						{#each asksOf(p) as cl (cl.id)}
-							<button type="button" class="navsub" onclick={() => app.openPage(p.urlKey, cl.id)}>
-								<span class="dot" class:gone={cl.anchorState === 'orphan'}></span>
-								<span class="sub">{short(cl.quote, 26)}{cl.anchorState === 'orphan' ? ' · not on page' : ''}</span>
-							</button>
-						{/each}
-						{#if !asksOf(p).length}
-							<div class="navsub none-sub">{p.askCount ? 'Loading…' : 'No asks yet'}</div>
-						{/if}
-					{/if}
-				{/each}
+					{/each}
 				{/if}
 			</section>
-		{/if}
-		<section class="chats" aria-label="Chats">
-			<div class="glabel prow">
-				<button type="button" class="sechead" aria-expanded={!app.railCollapsed.chats} onclick={() => app.toggleSection('chats')}>
-					<span class="schev"><Icon name={app.railCollapsed.chats ? 'chevron-right' : 'chevron-down'} size={11} /></span>Chats
-				</button>
-			</div>
-			{#if !app.railCollapsed.chats}
-				{#if app.draft && !draftProject}
-					<div class="group">
-						<div class="glabel sub">Today</div>
-						<div class="navitem on" aria-current="page"><span class="title">New conversation</span></div>
+			{#if app.pages.length}
+				<section class="pages" aria-label="Pages">
+					<div class="glabel prow">
+						<button
+							type="button"
+							class="sechead"
+							aria-expanded={!app.railCollapsed.pages}
+							onclick={() => app.toggleSection('pages')}
+						>
+							<span class="schev"
+								><Icon
+									name={app.railCollapsed.pages ? 'chevron-right' : 'chevron-down'}
+									size={11}
+								/></span
+							><span class="plabel"><Icon name="globe" size={12} /> Pages</span>
+						</button>
 					</div>
-				{/if}
-				{#each grouped as g (g.label)}
-					<div class="group">
-						<div class="glabel sub">{g.label}</div>
-						{#each g.items as c (c.id)}
-							{@render row(c)}
+					{#if !app.railCollapsed.pages}
+						{#each app.pages as p (p.urlKey)}
+							{@const open = !!app.pagesExpanded[p.urlKey]}
+							{@const current = app.active?.id === p.conversationId}
+							<div
+								class="navitem pagerow"
+								class:on={current}
+								role="button"
+								tabindex="0"
+								title={p.url}
+								aria-current={current ? 'page' : undefined}
+								onclick={() => app.openPage(p.urlKey)}
+								onkeydown={(e) => e.key === 'Enter' && app.openPage(p.urlKey)}
+							>
+								<button
+									type="button"
+									class="chev"
+									title={open ? 'Hide asks' : 'Show asks'}
+									aria-label={open ? 'Hide asks' : 'Show asks'}
+									aria-expanded={open}
+									onclick={(e) => {
+										e.stopPropagation();
+										app.togglePage(p.urlKey);
+									}}
+								>
+									<Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
+								</button>
+								<span class="favicon">
+									{#if p.faviconUrl}
+										<img src={p.faviconUrl} alt="" width="14" height="14" />
+									{:else}
+										<span class="letter">{hostOf(p.url).charAt(0).toUpperCase()}</span>
+									{/if}
+								</span>
+								<span class="title">{p.title || hostOf(p.url)}</span>
+								{#if p.orphanCount > 0}
+									<span class="orphan" title={orphanTip(p.orphanCount)}></span>
+								{/if}
+								{#if p.askCount > 0}
+									<span class="countpill">{p.askCount}</span>
+								{/if}
+								<button
+									type="button"
+									class="act"
+									title="Open in browser"
+									aria-label="Open in browser"
+									onclick={(e) => openInBrowser(e, p)}><Icon name="external" size={12} /></button
+								>
+								<button
+									type="button"
+									class="act"
+									title="Delete page"
+									aria-label="Delete page"
+									onclick={(e) => deletePage(e, p)}><Icon name="trash" size={12} /></button
+								>
+							</div>
+							{#if open}
+								{#each asksOf(p) as cl (cl.id)}
+									<button
+										type="button"
+										class="navsub"
+										onclick={() => app.openPage(p.urlKey, cl.id)}
+									>
+										<span class="dot" class:gone={cl.anchorState === 'orphan'}></span>
+										<span class="sub"
+											>{short(cl.quote, 26)}{cl.anchorState === 'orphan'
+												? ' · not on page'
+												: ''}</span
+										>
+									</button>
+								{/each}
+								{#if !asksOf(p).length}
+									<div class="navsub none-sub">{p.askCount ? 'Loading…' : 'No asks yet'}</div>
+								{/if}
+							{/if}
 						{/each}
-					</div>
-				{/each}
-				{#if !grouped.length && !(app.draft && !draftProject)}
-					<div class="navitem none-sub">No chats yet</div>
-				{/if}
+					{/if}
+				</section>
 			{/if}
-		</section>
+			<section class="chats" aria-label="Chats">
+				<div class="glabel prow">
+					<button
+						type="button"
+						class="sechead"
+						aria-expanded={!app.railCollapsed.chats}
+						onclick={() => app.toggleSection('chats')}
+					>
+						<span class="schev"
+							><Icon
+								name={app.railCollapsed.chats ? 'chevron-right' : 'chevron-down'}
+								size={11}
+							/></span
+						>Chats
+					</button>
+				</div>
+				{#if !app.railCollapsed.chats}
+					{#if app.draft && !draftProject}
+						<div class="group">
+							<div class="glabel sub">Today</div>
+							<div class="navitem on" aria-current="page">
+								<span class="title">New conversation</span>
+							</div>
+						</div>
+					{/if}
+					{#each grouped as g (g.label)}
+						<div class="group">
+							<div class="glabel sub">{g.label}</div>
+							{#each g.items as c (c.id)}
+								{@render row(c)}
+							{/each}
+						</div>
+					{/each}
+					{#if !grouped.length && !(app.draft && !draftProject)}
+						<div class="navitem none-sub">No chats yet</div>
+					{/if}
+				{/if}
+			</section>
 		{/if}
 	</div>
 
@@ -368,13 +584,35 @@
 	<UpdateBanner />
 
 	<div class="foot">
-		<div class="mark" aria-hidden="true"><svg viewBox="120 104 220 148" width="14" height="10" fill="currentColor"><g transform="rotate(180 230 178)"><path d="M136 236 V176 Q136 120 192 120 H200 V156 H196 Q176 156 176 176 V184 H212 V236 Z"/><path d="M248 236 V176 Q248 120 304 120 H312 V156 H308 Q288 156 288 176 V184 H324 V236 Z"/></g></svg></div>
+		<div class="mark" aria-hidden="true">
+			<svg viewBox="120 104 220 148" width="14" height="10" fill="currentColor"
+				><g transform="rotate(180 230 178)"
+					><path
+						d="M136 236 V176 Q136 120 192 120 H200 V156 H196 Q176 156 176 176 V184 H212 V236 Z"
+					/><path
+						d="M248 236 V176 Q248 120 304 120 H312 V156 H308 Q288 156 288 176 V184 H324 V236 Z"
+					/></g
+				></svg
+			>
+		</div>
 		<div class="brand">
 			<div class="app">Gloss</div>
 			<div class="via">via {agentName}</div>
 		</div>
-		<button type="button" class="ico" title="Settings" aria-label="Settings" onclick={() => (app.settingsOpen = true)}><Icon name="settings" size={16} /></button>
-		<button type="button" class="ico" title="Toggle theme" aria-label="Toggle theme" onclick={() => app.toggleTheme()}>
+		<button
+			type="button"
+			class="ico"
+			title="Settings"
+			aria-label="Settings"
+			onclick={() => (app.settingsOpen = true)}><Icon name="settings" size={16} /></button
+		>
+		<button
+			type="button"
+			class="ico"
+			title="Toggle theme"
+			aria-label="Toggle theme"
+			onclick={() => app.toggleTheme()}
+		>
 			<Icon name={app.settings.theme === 'dark' ? 'sun' : 'moon'} size={16} />
 		</button>
 	</div>

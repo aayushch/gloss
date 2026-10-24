@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // In-memory stand-in for the engine, used when the app runs in a plain
 // browser. Replies stream a canned answer in small pieces so the pending
 // state, deltas and completion path are all exercised.
@@ -25,32 +28,151 @@ import type {
 } from './types';
 
 const AGENTS: AgentInfo[] = [
-	{ id: 'claude', name: 'Claude Code', command: 'claude', monogram: 'cc', available: true, path: '/usr/local/bin/claude', version: '2.1.296', supportsModelSelect: true, supportsWebSearch: true, modes: [{ id: 'manual', label: 'Manual', description: 'Asks before every edit and command', writes: true }, { id: 'acceptEdits', label: 'Accept edits', description: 'Edits files without asking; asks before commands', writes: true }, { id: 'plan', label: 'Plan', description: 'Reads and plans only; no edits', writes: false }], supportsRequests: true },
-	{ id: 'codex', name: 'Codex CLI', command: 'codex', monogram: 'cx', available: true, path: '/usr/local/bin/codex', version: '0.118.0', supportsModelSelect: true, supportsWebSearch: true, modes: [], supportsRequests: false },
-	{ id: 'gemini', name: 'Gemini CLI', command: 'gemini', monogram: 'gm', available: false, path: null, version: null, supportsModelSelect: true, supportsWebSearch: true, modes: [], supportsRequests: false },
-	{ id: 'pi', name: 'Pi', command: 'pi', monogram: 'pi', available: true, path: '/opt/homebrew/bin/pi', version: '0.79.6', supportsModelSelect: true, supportsWebSearch: false, modes: [], supportsRequests: false },
-	{ id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent', monogram: 'cu', available: false, path: null, version: null, supportsModelSelect: false, supportsWebSearch: true, modes: [], supportsRequests: false }
+	{
+		id: 'claude',
+		name: 'Claude Code',
+		command: 'claude',
+		monogram: 'cc',
+		available: true,
+		path: '/usr/local/bin/claude',
+		version: '2.1.296',
+		supportsModelSelect: true,
+		supportsWebSearch: true,
+		modes: [
+			{
+				id: 'manual',
+				label: 'Manual',
+				description: 'Asks before every edit and command',
+				writes: true
+			},
+			{
+				id: 'acceptEdits',
+				label: 'Accept edits',
+				description: 'Edits files without asking; asks before commands',
+				writes: true
+			},
+			{ id: 'plan', label: 'Plan', description: 'Reads and plans only; no edits', writes: false }
+		],
+		supportsRequests: true
+	},
+	{
+		id: 'codex',
+		name: 'Codex CLI',
+		command: 'codex',
+		monogram: 'cx',
+		available: true,
+		path: '/usr/local/bin/codex',
+		version: '0.118.0',
+		supportsModelSelect: true,
+		supportsWebSearch: true,
+		modes: [],
+		supportsRequests: false
+	},
+	{
+		id: 'gemini',
+		name: 'Gemini CLI',
+		command: 'gemini',
+		monogram: 'gm',
+		available: false,
+		path: null,
+		version: null,
+		supportsModelSelect: true,
+		supportsWebSearch: true,
+		modes: [],
+		supportsRequests: false
+	},
+	{
+		id: 'pi',
+		name: 'Pi',
+		command: 'pi',
+		monogram: 'pi',
+		available: true,
+		path: '/opt/homebrew/bin/pi',
+		version: '0.79.6',
+		supportsModelSelect: true,
+		supportsWebSearch: false,
+		modes: [],
+		supportsRequests: false
+	},
+	{
+		id: 'cursor',
+		name: 'Cursor Agent',
+		command: 'cursor-agent',
+		monogram: 'cu',
+		available: false,
+		path: null,
+		version: null,
+		supportsModelSelect: false,
+		supportsWebSearch: true,
+		modes: [],
+		supportsRequests: false
+	}
 ];
 
 const MODELS: Record<AgentId, ModelInfo[]> = {
 	claude: [
-		{ id: 'opus', name: 'Claude Opus', note: 'Most capable · slower', context: '200k', isDefault: false },
-		{ id: 'sonnet', name: 'Claude Sonnet', note: 'Balanced · default', context: '200k', isDefault: true },
-		{ id: 'haiku', name: 'Claude Haiku', note: 'Fastest · cheapest', context: '200k', isDefault: false }
+		{
+			id: 'opus',
+			name: 'Claude Opus',
+			note: 'Most capable · slower',
+			context: '200k',
+			isDefault: false
+		},
+		{
+			id: 'sonnet',
+			name: 'Claude Sonnet',
+			note: 'Balanced · default',
+			context: '200k',
+			isDefault: true
+		},
+		{
+			id: 'haiku',
+			name: 'Claude Haiku',
+			note: 'Fastest · cheapest',
+			context: '200k',
+			isDefault: false
+		}
 	],
 	codex: [
-		{ id: 'gpt-5-codex', name: 'GPT-5 Codex', note: 'Tuned for code · default', context: '400k', isDefault: true },
+		{
+			id: 'gpt-5-codex',
+			name: 'GPT-5 Codex',
+			note: 'Tuned for code · default',
+			context: '400k',
+			isDefault: true
+		},
 		{ id: 'gpt-5', name: 'GPT-5', note: 'General', context: '400k', isDefault: false }
 	],
 	gemini: [
-		{ id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', note: 'Most capable · default', context: '1M', isDefault: true },
-		{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', note: 'Fast', context: '1M', isDefault: false }
+		{
+			id: 'gemini-2.5-pro',
+			name: 'Gemini 2.5 Pro',
+			note: 'Most capable · default',
+			context: '1M',
+			isDefault: true
+		},
+		{
+			id: 'gemini-2.5-flash',
+			name: 'Gemini 2.5 Flash',
+			note: 'Fast',
+			context: '1M',
+			isDefault: false
+		}
 	],
-	pi: [{ id: 'lmstudio/qwen/qwen3.6-35b-a3b', name: 'qwen/qwen3.6-35b-a3b', note: 'lmstudio', context: '128K', isDefault: true }],
+	pi: [
+		{
+			id: 'lmstudio/qwen/qwen3.6-35b-a3b',
+			name: 'qwen/qwen3.6-35b-a3b',
+			note: 'lmstudio',
+			context: '128K',
+			isDefault: true
+		}
+	],
 	cursor: [{ id: 'auto', name: 'Auto', note: 'Chosen by Cursor', context: null, isDefault: true }]
 };
 
-const CAS_QUESTION = 'How do CPUs actually implement atomic compare-and-swap, and how do locks build on it?';
+const CAS_QUESTION =
+	'How do CPUs actually implement atomic compare-and-swap, and how do locks build on it?';
 const CAS_ANSWER = `The simplest way to say what CAS does: “compare the value at this address with what I expect; if they match, write the new value; and tell me whether it worked.” In C-like pseudocode:
 
 \`\`\`c
@@ -115,7 +237,12 @@ const nextId = (p: string) => `${p}_${(counter++).toString(36)}`;
 const now = () => Date.now();
 
 const MOCK_SESSION_TURNS: SessionTurn[] = [
-	{ role: 'user', text: 'The login page redirects back to itself after a successful sign-in. Find out why.', tools: [], at: 0 },
+	{
+		role: 'user',
+		text: 'The login page redirects back to itself after a successful sign-in. Find out why.',
+		tools: [],
+		at: 0
+	},
 	{
 		role: 'assistant',
 		text: 'The session cookie is set with `SameSite=Strict`, so the redirect from the identity provider arrives without it and the guard sends you back to `/login`.\n\nSwitching it to `Lax` fixes the loop.',
@@ -162,7 +289,10 @@ function makeTurn(conv: Conv, role: Turn['role'], text: string, extra: Partial<T
 		clarificationId: null,
 		model: role === 'assistant' ? conv.model || 'sonnet' : null,
 		error: null,
-		usage: role === 'assistant' ? { inputTokens: 1200, outputTokens: 480, costUsd: 0.0041, durationMs: 3200 } : null,
+		usage:
+			role === 'assistant'
+				? { inputTokens: 1200, outputTokens: 480, costUsd: 0.0041, durationMs: 3200 }
+				: null,
 		createdAt: now(),
 		completedAt: now(),
 		attachments: [],
@@ -231,7 +361,10 @@ function seed(): Conv[] {
 	};
 	cas.clarifications.push(cl);
 	cas.clarificationCount = 1;
-	makeTurn(cas, 'user', 'Who is actually doing this reordering — the compiler or the CPU?', { clarificationId: cl.id, promptText: `> "${cl.quote}"\n\nWho is actually doing this reordering — the compiler or the CPU?` });
+	makeTurn(cas, 'user', 'Who is actually doing this reordering — the compiler or the CPU?', {
+		clarificationId: cl.id,
+		promptText: `> "${cl.quote}"\n\nWho is actually doing this reordering — the compiler or the CPU?`
+	});
 	makeTurn(cas, 'assistant', CANNED_REPLY, { clarificationId: cl.id });
 
 	const rust: Conv = {
@@ -307,7 +440,9 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 		turns: [],
 		clarifications: []
 	};
-	makeTurn(conv, 'user', 'What is the main claim of this page?', { createdAt: now() - 5 * 3600_000 });
+	makeTurn(conv, 'user', 'What is the main claim of this page?', {
+		createdAt: now() - 5 * 3600_000
+	});
 	makeTurn(conv, 'assistant', STORE_BUFFER_PAGE_ANSWER, { createdAt: now() - 5 * 3600_000 + 4000 });
 	const anchored: Clarification = {
 		id: 'cl_web1',
@@ -319,7 +454,11 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 		open: true,
 		createdAt: now() - 4 * 3600_000,
 		webAnchor: {
-			quote: { exact: 'a store retires into the buffer before the cache line is owned', prefix: 'On every modern x86 core, ', suffix: ', which is what makes stores cheap.' },
+			quote: {
+				exact: 'a store retires into the buffer before the cache line is owned',
+				prefix: 'On every modern x86 core, ',
+				suffix: ', which is what makes stores cheap.'
+			},
 			position: { start: 1240, end: 1303 },
 			container: 'article > p:nth-of-type(3)'
 		},
@@ -335,7 +474,11 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 		open: false,
 		createdAt: now() - 2 * 3600_000,
 		webAnchor: {
-			quote: { exact: 'the buffer drains in program order', prefix: 'Because ', suffix: ', a core always sees its own stores in order.' },
+			quote: {
+				exact: 'the buffer drains in program order',
+				prefix: 'Because ',
+				suffix: ', a core always sees its own stores in order.'
+			},
 			position: null,
 			container: null
 		},
@@ -343,10 +486,21 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 	};
 	conv.clarifications.push(anchored, orphan);
 	conv.clarificationCount = 2;
-	makeTurn(conv, 'user', 'Why does it not wait for ownership first?', { clarificationId: anchored.id, promptText: `> "${anchored.quote}"\n\nWhy does it not wait for ownership first?` });
+	makeTurn(conv, 'user', 'Why does it not wait for ownership first?', {
+		clarificationId: anchored.id,
+		promptText: `> "${anchored.quote}"\n\nWhy does it not wait for ownership first?`
+	});
 	makeTurn(conv, 'assistant', STORE_BUFFER_ANSWER, { clarificationId: anchored.id });
-	makeTurn(conv, 'user', 'Is that true on ARM as well?', { clarificationId: orphan.id, promptText: `> "${orphan.quote}"\n\nIs that true on ARM as well?` });
-	makeTurn(conv, 'assistant', 'No. ARM lets the store buffer drain out of order to different addresses, so a core can observe its own stores out of program order unless it uses a barrier.', { clarificationId: orphan.id });
+	makeTurn(conv, 'user', 'Is that true on ARM as well?', {
+		clarificationId: orphan.id,
+		promptText: `> "${orphan.quote}"\n\nIs that true on ARM as well?`
+	});
+	makeTurn(
+		conv,
+		'assistant',
+		'No. ARM lets the store buffer drain out of order to different addresses, so a core can observe its own stores out of program order unless it uses a barrier.',
+		{ clarificationId: orphan.id }
+	);
 	const page: PageRecord = {
 		urlKey: STORE_BUFFER_URL,
 		url: STORE_BUFFER_URL,
@@ -369,14 +523,36 @@ export function mockApi(): Api {
 	const projects = new Map<string, number>();
 	const project = (path: string): Project => {
 		const createdAt = projects.get(path) ?? now();
-		const active = Math.max(createdAt, ...convs.filter((c) => c.projectDir === path).map((c) => c.updatedAt));
-		return { path, name: path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path, createdAt, lastActiveAt: active };
+		const active = Math.max(
+			createdAt,
+			...convs.filter((c) => c.projectDir === path).map((c) => c.updatedAt)
+		);
+		return {
+			path,
+			name:
+				path
+					.replace(/[\\/]+$/, '')
+					.split(/[\\/]/)
+					.pop() || path,
+			createdAt,
+			lastActiveAt: active
+		};
 	};
 	const addProject = (path: string): Project => {
 		if (!projects.has(path)) projects.set(path, now());
 		return project(path);
 	};
-	let settings: Settings = { defaultAgent: 'claude', defaultModel: { claude: 'sonnet' }, theme: 'light', webSearch: true, sendPageText: true, pageDenyList: ['*.bank.example'], extensionBannerSeen: false, safariBridge: true, pageAgent: null };
+	let settings: Settings = {
+		defaultAgent: 'claude',
+		defaultModel: { claude: 'sonnet' },
+		theme: 'light',
+		webSearch: true,
+		sendPageText: true,
+		pageDenyList: ['*.bank.example'],
+		extensionBannerSeen: false,
+		safariBridge: true,
+		pageAgent: null
+	};
 	const listeners = new Set<(e: TurnEventEnvelope) => void>();
 	const pageListeners = new Set<(e: PageEvent) => void>();
 	const settingsListeners = new Set<(s: Settings) => void>();
@@ -408,9 +584,18 @@ export function mockApi(): Api {
 			updatedAt: c?.updatedAt ?? r.lastSeen
 		};
 	};
-	const emitPage = (urlKey: string, deleted: boolean) => pageListeners.forEach((l) => l({ urlKey, deleted }));
+	const emitPage = (urlKey: string, deleted: boolean) =>
+		pageListeners.forEach((l) => l({ urlKey, deleted }));
 	const staged = new Map<string, { att: Attachment; url: string }>();
-	const full = (c: Conv): Conversation => ({ ...summary(c), agentSessionId: c.agentSessionId, continuedFrom: c.continuedFrom, running: c.running, pendingRequest: pending.get(c.id)?.request ?? null, turns: c.turns.map((t) => ({ ...t })), clarifications: c.clarifications.map((x) => ({ ...x })) });
+	const full = (c: Conv): Conversation => ({
+		...summary(c),
+		agentSessionId: c.agentSessionId,
+		continuedFrom: c.continuedFrom,
+		running: c.running,
+		pendingRequest: pending.get(c.id)?.request ?? null,
+		turns: c.turns.map((t) => ({ ...t })),
+		clarifications: c.clarifications.map((x) => ({ ...x }))
+	});
 	const find = (id: string): Conv => {
 		const c = convs.find((x) => x.id === id);
 		if (!c) throw new Error(`No conversation ${id}`);
@@ -427,26 +612,60 @@ export function mockApi(): Api {
 		const pieces = text.match(/[^\n]{1,12}|\n+/g) ?? [text];
 		const total = 1200;
 		const list: ReturnType<typeof setTimeout>[] = [];
-		list.push(setTimeout(() => emit({ conversationId: conv.id, turnId: turn.id, event: { type: 'started', sessionId: conv.agentSessionId, model: conv.model || 'sonnet' } }), 80));
-		list.push(setTimeout(() => emit({ conversationId: conv.id, turnId: turn.id, event: { type: 'activity', kind: 'thinking', label: 'Thinking…' } }), 120));
+		list.push(
+			setTimeout(
+				() =>
+					emit({
+						conversationId: conv.id,
+						turnId: turn.id,
+						event: {
+							type: 'started',
+							sessionId: conv.agentSessionId,
+							model: conv.model || 'sonnet'
+						}
+					}),
+				80
+			)
+		);
+		list.push(
+			setTimeout(
+				() =>
+					emit({
+						conversationId: conv.id,
+						turnId: turn.id,
+						event: { type: 'activity', kind: 'thinking', label: 'Thinking…' }
+					}),
+				120
+			)
+		);
 		pieces.forEach((p, i) => {
 			list.push(
-				setTimeout(() => {
-					turn.text += p;
-					emit({ conversationId: conv.id, turnId: turn.id, event: { type: 'delta', text: p } });
-				}, 300 + (total * i) / pieces.length)
+				setTimeout(
+					() => {
+						turn.text += p;
+						emit({ conversationId: conv.id, turnId: turn.id, event: { type: 'delta', text: p } });
+					},
+					300 + (total * i) / pieces.length
+				)
 			);
 		});
 		list.push(
-			setTimeout(() => {
-				turn.status = 'done';
-				turn.completedAt = now();
-				turn.usage = { inputTokens: 1800, outputTokens: 220, costUsd: 0.0027, durationMs: total };
-				conv.running = false;
-				conv.updatedAt = now();
-				timers.delete(conv.id);
-				emit({ conversationId: conv.id, turnId: turn.id, event: { type: 'done', turn: { ...turn } } });
-			}, 300 + total + 50)
+			setTimeout(
+				() => {
+					turn.status = 'done';
+					turn.completedAt = now();
+					turn.usage = { inputTokens: 1800, outputTokens: 220, costUsd: 0.0027, durationMs: total };
+					conv.running = false;
+					conv.updatedAt = now();
+					timers.delete(conv.id);
+					emit({
+						conversationId: conv.id,
+						turnId: turn.id,
+						event: { type: 'done', turn: { ...turn } }
+					});
+				},
+				300 + total + 50
+			)
 		);
 		timers.set(conv.id, list);
 	}
@@ -463,7 +682,12 @@ export function mockApi(): Api {
 		listConversations: async (query, tag) => {
 			const q = (query ?? '').trim().toLowerCase();
 			return convs
-				.filter((c) => !q || c.title.toLowerCase().includes(q) || c.turns.some((t) => t.text.toLowerCase().includes(q)))
+				.filter(
+					(c) =>
+						!q ||
+						c.title.toLowerCase().includes(q) ||
+						c.turns.some((t) => t.text.toLowerCase().includes(q))
+				)
 				.filter((c) => !tag || c.tags.includes(tag))
 				.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
 				.map(summary);
@@ -473,13 +697,39 @@ export function mockApi(): Api {
 			if (!q) return [];
 			const hits = [];
 			for (const c of convs) {
-				if (c.title.toLowerCase().includes(q)) hits.push({ conversationId: c.id, title: c.title, agent: c.agent, turnId: null, role: null, clarificationId: null, snippet: '', updatedAt: c.updatedAt });
+				if (c.title.toLowerCase().includes(q))
+					hits.push({
+						conversationId: c.id,
+						title: c.title,
+						agent: c.agent,
+						turnId: null,
+						role: null,
+						clarificationId: null,
+						snippet: '',
+						updatedAt: c.updatedAt
+					});
 				for (const t of c.turns) {
 					const i = t.text.toLowerCase().indexOf(q);
 					if (i < 0) continue;
 					const start = Math.max(0, i - 40);
-					const snippet = (start > 0 ? '…' : '') + t.text.slice(start, i) + '\u0001' + t.text.slice(i, i + q.length) + '\u0002' + t.text.slice(i + q.length, i + q.length + 60) + '…';
-					hits.push({ conversationId: c.id, title: c.title, agent: c.agent, turnId: t.id, role: t.role, clarificationId: t.clarificationId, snippet: snippet.replace(/\n/g, ' '), updatedAt: c.updatedAt });
+					const snippet =
+						(start > 0 ? '…' : '') +
+						t.text.slice(start, i) +
+						'\u0001' +
+						t.text.slice(i, i + q.length) +
+						'\u0002' +
+						t.text.slice(i + q.length, i + q.length + 60) +
+						'…';
+					hits.push({
+						conversationId: c.id,
+						title: c.title,
+						agent: c.agent,
+						turnId: t.id,
+						role: t.role,
+						clarificationId: t.clarificationId,
+						snippet: snippet.replace(/\n/g, ' '),
+						updatedAt: c.updatedAt
+					});
 				}
 			}
 			return hits;
@@ -496,21 +746,44 @@ export function mockApi(): Api {
 		},
 		listTags: async () => [...new Set(convs.flatMap((c) => c.tags))],
 		addAttachment: async (name, mime, bytes) => {
-			const isImage = /^image\/(png|jpeg|gif|webp)$/.test(mime) || /\.(png|jpe?g|gif|webp)$/i.test(name);
-			const att: Attachment = { id: nextId('att'), name, mime: mime || 'text/plain', kind: isImage ? 'image' : 'text', size: bytes.length, path: `/mock/${name}`, turnId: null, createdAt: now() };
-			staged.set(att.id, { att, url: URL.createObjectURL(new Blob([bytes.slice()], { type: att.mime })) });
+			const isImage =
+				/^image\/(png|jpeg|gif|webp)$/.test(mime) || /\.(png|jpe?g|gif|webp)$/i.test(name);
+			const att: Attachment = {
+				id: nextId('att'),
+				name,
+				mime: mime || 'text/plain',
+				kind: isImage ? 'image' : 'text',
+				size: bytes.length,
+				path: `/mock/${name}`,
+				turnId: null,
+				createdAt: now()
+			};
+			staged.set(att.id, {
+				att,
+				url: URL.createObjectURL(new Blob([bytes.slice()], { type: att.mime }))
+			});
 			return att;
 		},
 		addAttachmentPath: async (path) => {
 			const name = path.split(/[\\/]/).pop() || 'file';
 			const isImage = /\.(png|jpe?g|gif|webp)$/i.test(name);
-			const att: Attachment = { id: nextId('att'), name, mime: isImage ? 'image/png' : 'text/plain', kind: isImage ? 'image' : 'text', size: 0, path, turnId: null, createdAt: now() };
+			const att: Attachment = {
+				id: nextId('att'),
+				name,
+				mime: isImage ? 'image/png' : 'text/plain',
+				kind: isImage ? 'image' : 'text',
+				size: 0,
+				path,
+				turnId: null,
+				createdAt: now()
+			};
 			staged.set(att.id, { att, url: '' });
 			return att;
 		},
 		pickFiles: async () => null,
 		pickFolder: async () => '/Users/me/code/demo-project',
-		confirm: async (title, message) => (typeof window === 'undefined' ? true : window.confirm(`${title}\n\n${message}`)),
+		confirm: async (title, message) =>
+			typeof window === 'undefined' ? true : window.confirm(`${title}\n\n${message}`),
 		removeAttachment: async (id) => {
 			staged.delete(id);
 		},
@@ -523,18 +796,29 @@ export function mockApi(): Api {
 			return defaultName;
 		},
 		openArtifact: async (name, contents) => {
-			const type = name.endsWith('.html') ? 'text/html' : name.endsWith('.svg') ? 'image/svg+xml' : 'text/plain';
+			const type = name.endsWith('.html')
+				? 'text/html'
+				: name.endsWith('.svg')
+					? 'image/svg+xml'
+					: 'text/plain';
 			window.open(URL.createObjectURL(new Blob([contents], { type })), '_blank');
 			return name;
 		},
-		listProjects: async () => [...projects.keys()].map(project).sort((a, b) => b.lastActiveAt - a.lastActiveAt),
+		listProjects: async () =>
+			[...projects.keys()].map(project).sort((a, b) => b.lastActiveAt - a.lastActiveAt),
 		addProject: async (path) => addProject(path),
 		removeProject: async (path) => {
 			projects.delete(path);
 		},
 		listProjectSessions: async (path) => {
 			const ago = (h: number) => now() - h * 3_600_000;
-			const session = (agent: ExternalSession['agent'], id: string, title: string, origin: ExternalSession['origin'], hours: number): ExternalSession => ({
+			const session = (
+				agent: ExternalSession['agent'],
+				id: string,
+				title: string,
+				origin: ExternalSession['origin'],
+				hours: number
+			): ExternalSession => ({
 				agent,
 				id,
 				title,
@@ -615,13 +899,15 @@ export function mockApi(): Api {
 		},
 		setConversationMode: async (id, mode) => {
 			const c = find(id);
-			if (mode && !c.projectDir) throw new Error('only a conversation bound to a project folder has a mode');
+			if (mode && !c.projectDir)
+				throw new Error('only a conversation bound to a project folder has a mode');
 			c.mode = mode;
 			return summary(c);
 		},
 		answerRequest: async (conversationId, requestId, answer) => {
 			const p = pending.get(conversationId);
-			if (!p || p.request.id !== requestId) throw new Error(`the agent is not waiting on request ${requestId}`);
+			if (!p || p.request.id !== requestId)
+				throw new Error(`the agent is not waiting on request ${requestId}`);
 			pending.delete(conversationId);
 			const c = find(conversationId);
 			if (answer.kind === 'permission' && answer.allow && answer.setMode) c.mode = answer.setMode;
@@ -655,16 +941,28 @@ export function mockApi(): Api {
 				const cl = c.clarifications.find((x) => x.id === clarificationId);
 				promptText = `Follow-up about the excerpt "${cl?.quote.slice(0, 44) ?? ''}":\n\n${req.text}`;
 			}
-			if (c.turns.length === 0) c.title = req.text.length > 60 ? req.text.slice(0, 57).trimEnd() + '…' : req.text;
-			const attachments = (req.attachments ?? []).map((id) => staged.get(id)?.att).filter((a): a is Attachment => !!a);
+			if (c.turns.length === 0)
+				c.title = req.text.length > 60 ? req.text.slice(0, 57).trimEnd() + '…' : req.text;
+			const attachments = (req.attachments ?? [])
+				.map((id) => staged.get(id)?.att)
+				.filter((a): a is Attachment => !!a);
 			const userTurn = makeTurn(c, 'user', req.text, { clarificationId, promptText, attachments });
 			attachments.forEach((a) => (a.turnId = userTurn.id));
-			const assistantTurn = makeTurn(c, 'assistant', '', { clarificationId, status: 'pending', usage: null, completedAt: null });
+			const assistantTurn = makeTurn(c, 'assistant', '', {
+				clarificationId,
+				status: 'pending',
+				usage: null,
+				completedAt: null
+			});
 			c.updatedAt = now();
 			c.agentSessionId ??= nextId('sess');
 			// The engine's page event reaches the window after the command returns.
 			if (c.pageKey) setTimeout(() => emitPage(c.pageKey!, false), 0);
-			const reply = clarificationId ? CANNED_REPLY : req.text.toLowerCase().includes('rust') ? RUST_ANSWER : CAS_ANSWER;
+			const reply = clarificationId
+				? CANNED_REPLY
+				: req.text.toLowerCase().includes('rust')
+					? RUST_ANSWER
+					: CAS_ANSWER;
 			// "[ask]" or "[write]" in the message makes the mock agent stop
 			// and wait for an answer, the way a real agent does.
 			const ask = req.text.includes('[ask]');
@@ -673,11 +971,52 @@ export function mockApi(): Api {
 				c.running = true;
 				assistantTurn.status = 'streaming';
 				const request: AgentRequest = ask
-					? { id: nextId('req'), kind: 'question', questions: [{ question: 'Which style do you prefer?', header: 'Style', options: [{ label: 'Tabs', description: 'Indent with tabs' }, { label: 'Spaces', description: 'Indent with spaces' }], multiSelect: false }] }
-					: { id: nextId('req'), kind: 'permission', tool: 'Write', title: 'Write: NOTES.md', detail: 'hello from gloss\n', suggestions: [{ mode: 'acceptEdits', label: 'Accept edits' }] };
-				pending.set(c.id, { request, turnId: assistantTurn.id, resume: () => stream(c, assistantTurn, reply) });
-				setTimeout(() => emit({ conversationId: c.id, turnId: assistantTurn.id, event: { type: 'started', sessionId: c.agentSessionId, model: c.model || 'sonnet' } }), 40);
-				setTimeout(() => emit({ conversationId: c.id, turnId: assistantTurn.id, event: { type: 'request', request } }), 80);
+					? {
+							id: nextId('req'),
+							kind: 'question',
+							questions: [
+								{
+									question: 'Which style do you prefer?',
+									header: 'Style',
+									options: [
+										{ label: 'Tabs', description: 'Indent with tabs' },
+										{ label: 'Spaces', description: 'Indent with spaces' }
+									],
+									multiSelect: false
+								}
+							]
+						}
+					: {
+							id: nextId('req'),
+							kind: 'permission',
+							tool: 'Write',
+							title: 'Write: NOTES.md',
+							detail: 'hello from gloss\n',
+							suggestions: [{ mode: 'acceptEdits', label: 'Accept edits' }]
+						};
+				pending.set(c.id, {
+					request,
+					turnId: assistantTurn.id,
+					resume: () => stream(c, assistantTurn, reply)
+				});
+				setTimeout(
+					() =>
+						emit({
+							conversationId: c.id,
+							turnId: assistantTurn.id,
+							event: { type: 'started', sessionId: c.agentSessionId, model: c.model || 'sonnet' }
+						}),
+					40
+				);
+				setTimeout(
+					() =>
+						emit({
+							conversationId: c.id,
+							turnId: assistantTurn.id,
+							event: { type: 'request', request }
+						}),
+					80
+				);
 			} else {
 				stream(c, assistantTurn, reply);
 			}
@@ -689,12 +1028,18 @@ export function mockApi(): Api {
 			const list = timers.get(c.id) ?? [];
 			list.forEach(clearTimeout);
 			timers.delete(c.id);
-			const turn = c.turns.find((t) => t.role === 'assistant' && !['done', 'error', 'cancelled'].includes(t.status));
+			const turn = c.turns.find(
+				(t) => t.role === 'assistant' && !['done', 'error', 'cancelled'].includes(t.status)
+			);
 			c.running = false;
 			if (turn) {
 				turn.status = 'cancelled';
 				turn.completedAt = now();
-				emit({ conversationId: c.id, turnId: turn.id, event: { type: 'cancelled', turn: { ...turn } } });
+				emit({
+					conversationId: c.id,
+					turnId: turn.id,
+					event: { type: 'cancelled', turn: { ...turn } }
+				});
 			}
 		},
 		setClarificationOpen: async (id, open) => {
@@ -751,11 +1096,46 @@ export function mockApi(): Api {
 			bridgePath: '/Applications/Gloss.app/Contents/MacOS/gloss-bridge',
 			translocated: false,
 			browsers: [
-				{ id: 'chrome', name: 'Google Chrome', family: 'chromium', installed: true, registered: true, manifestPath: '~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.gloss.bridge.json', error: null },
-				{ id: 'brave', name: 'Brave', family: 'chromium', installed: true, registered: false, manifestPath: '~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/com.gloss.bridge.json', error: 'Permission denied' },
-				{ id: 'firefox', name: 'Firefox', family: 'firefox', installed: false, registered: false, manifestPath: '~/Library/Application Support/Mozilla/NativeMessagingHosts/com.gloss.bridge.json', error: null }
+				{
+					id: 'chrome',
+					name: 'Google Chrome',
+					family: 'chromium',
+					installed: true,
+					registered: true,
+					manifestPath:
+						'~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.gloss.bridge.json',
+					error: null
+				},
+				{
+					id: 'brave',
+					name: 'Brave',
+					family: 'chromium',
+					installed: true,
+					registered: false,
+					manifestPath:
+						'~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/com.gloss.bridge.json',
+					error: 'Permission denied'
+				},
+				{
+					id: 'firefox',
+					name: 'Firefox',
+					family: 'firefox',
+					installed: false,
+					registered: false,
+					manifestPath:
+						'~/Library/Application Support/Mozilla/NativeMessagingHosts/com.gloss.bridge.json',
+					error: null
+				}
 			],
-			sessions: [{ id: 1, transport: 'native', browser: 'chrome', extensionVersion: '1.0.1', connectedAt: now() - 600_000 }],
+			sessions: [
+				{
+					id: 1,
+					transport: 'native',
+					browser: 'chrome',
+					extensionVersion: '1.0.1',
+					connectedAt: now() - 600_000
+				}
+			],
 			bundledVersion: '1.0.1',
 			xpiBundled: true,
 			chromeStoreUrl: 'https://chromewebstore.google.com/detail/gloss/mock',
@@ -765,8 +1145,14 @@ export function mockApi(): Api {
 			safariBridgeFile: '/Users/me/Library/Group Containers/BG78RT6D5Z.sh.aay.gloss/bridge.json',
 			safariBridgeError: null
 		}),
-		registerNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: b.installed, error: null })),
-		unregisterNativeHosts: async () => (await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: false, error: null })),
+		registerNativeHosts: async () =>
+			(await api.extensionStatus()).browsers.map((b) => ({
+				...b,
+				registered: b.installed,
+				error: null
+			})),
+		unregisterNativeHosts: async () =>
+			(await api.extensionStatus()).browsers.map((b) => ({ ...b, registered: false, error: null })),
 		openUrl: async (url) => {
 			if (typeof window !== 'undefined') window.open(url, '_blank');
 		},

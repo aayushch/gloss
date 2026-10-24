@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Runs one agent process and hands its stdout to the caller line by line.
 
 use std::collections::{HashMap, VecDeque};
@@ -110,7 +113,11 @@ where
         .env_clear()
         .envs(base_env)
         .envs(spec.env.iter().cloned())
-        .stdin(if spec.stdin.is_some() || spec.interactive { Stdio::piped() } else { Stdio::null() })
+        .stdin(if spec.stdin.is_some() || spec.interactive {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -176,7 +183,9 @@ where
         buf.clear();
         // While the agent waits for the user there is nothing to time out.
         let timeout = match &waiting {
-            Some(w) if w.load(std::sync::atomic::Ordering::Relaxed) => Duration::from_secs(24 * 3600),
+            Some(w) if w.load(std::sync::atomic::Ordering::Relaxed) => {
+                Duration::from_secs(24 * 3600)
+            }
             _ => idle_timeout,
         };
         let read = tokio::select! {
@@ -314,12 +323,22 @@ mod tests {
     #[tokio::test]
     async fn stdin_bytes_reach_the_child() {
         // `sort` on Windows and `cat` elsewhere both echo a single stdin line.
-        let mut spec = if cfg!(windows) { spec("sort", &[]) } else { sh("cat") };
+        let mut spec = if cfg!(windows) {
+            spec("sort", &[])
+        } else {
+            sh("cat")
+        };
         spec.stdin = Some(b"from stdin\n".to_vec());
         let mut lines = Vec::new();
-        let out = run_lines(&spec, &HashMap::new(), Duration::from_secs(5), CancellationToken::new(), |l| lines.push(l.to_string()))
-            .await
-            .unwrap();
+        let out = run_lines(
+            &spec,
+            &HashMap::new(),
+            Duration::from_secs(5),
+            CancellationToken::new(),
+            |l| lines.push(l.to_string()),
+        )
+        .await
+        .unwrap();
         assert!(out.succeeded());
         assert_eq!(lines, vec!["from stdin"]);
     }
@@ -327,7 +346,11 @@ mod tests {
     #[tokio::test]
     async fn collects_lines_and_exit_code() {
         let mut lines = Vec::new();
-        let script = if cfg!(windows) { "echo a& echo b& echo err 1>&2& exit 3" } else { "printf 'a\\nb\\n'; echo err >&2; exit 3" };
+        let script = if cfg!(windows) {
+            "echo a& echo b& echo err 1>&2& exit 3"
+        } else {
+            "printf 'a\\nb\\n'; echo err >&2; exit 3"
+        };
         let out = run_lines(
             &sh(script),
             &std::env::vars().collect(),

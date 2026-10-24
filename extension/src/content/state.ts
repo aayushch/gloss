@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The content script's picture of one page: which asks exist, their turns,
 // where each one sits in the DOM, and whether a reply is running. The
 // functions here mutate the state in place; the UI re-renders when told.
@@ -9,7 +12,7 @@ import type {
 	GetPageResult,
 	PageAskResult,
 	Turn,
-	TurnEventEnvelope,
+	TurnEventEnvelope
 } from '../shared/protocol';
 import type { PassageSpot } from './spot';
 
@@ -71,7 +74,7 @@ export function loadPage(state: PageState, result: GetPageResult): void {
 			turns: turnsOf(conversation.turns, cl.id),
 			range: old?.range ?? null,
 			state: old?.state ?? 'pending',
-			spot: old?.spot ?? null,
+			spot: old?.spot ?? null
 		});
 	}
 	state.conversationId = conversation.id;
@@ -87,7 +90,12 @@ export function clearPage(state: PageState): void {
 }
 
 /** Adds the ask an `ask` request created. */
-export function addAsk(state: PageState, result: PageAskResult, range: Range | null, anchorState: AskAnchorState): AskEntry | null {
+export function addAsk(
+	state: PageState,
+	result: PageAskResult,
+	range: Range | null,
+	anchorState: AskAnchorState
+): AskEntry | null {
 	state.urlKey = result.urlKey;
 	state.conversationId = result.conversationId;
 	state.running = true;
@@ -97,7 +105,7 @@ export function addAsk(state: PageState, result: PageAskResult, range: Range | n
 		turns: [result.userTurn, result.assistantTurn],
 		range,
 		state: anchorState,
-		spot: null,
+		spot: null
 	};
 	state.asks.set(result.clarification.id, entry);
 	return entry;
@@ -122,7 +130,12 @@ export function setOpen(state: PageState, askId: string, open: boolean): void {
 	if (entry) entry.clarification = { ...entry.clarification, open };
 }
 
-export function setAnchor(state: PageState, askId: string, range: Range | null, anchorState: AskAnchorState): void {
+export function setAnchor(
+	state: PageState,
+	askId: string,
+	range: Range | null,
+	anchorState: AskAnchorState
+): void {
 	const entry = state.asks.get(askId);
 	if (!entry) return;
 	entry.range = range;
@@ -144,7 +157,9 @@ export function orderedAskIds(state: PageState, yOf: (entry: AskEntry) => number
 		if (y === null) rest.push(entry);
 		else placed.push([entry, y]);
 	}
-	const byNumber = (a: AskEntry, b: AskEntry) => a.clarification.number - b.clarification.number || a.clarification.createdAt - b.clarification.createdAt;
+	const byNumber = (a: AskEntry, b: AskEntry) =>
+		a.clarification.number - b.clarification.number ||
+		a.clarification.createdAt - b.clarification.createdAt;
 	placed.sort(([a, ya], [b, yb]) => {
 		if (ya !== yb) return ya - yb;
 		if (a.range && b.range) {
@@ -171,7 +186,11 @@ export function askOfTurn(state: PageState, turnId: string): string | null {
 /** True while an ask's last turn is still being produced. */
 export function isStreaming(entry: AskEntry): boolean {
 	const last = entry.turns[entry.turns.length - 1];
-	return !!last && last.role === 'assistant' && (last.status === 'pending' || last.status === 'streaming');
+	return (
+		!!last &&
+		last.role === 'assistant' &&
+		(last.status === 'pending' || last.status === 'streaming')
+	);
 }
 
 /**

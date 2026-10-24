@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Mirror of engine/src/types.rs. Field names are camelCase on both sides;
 // enums are snake_case strings. Keep the two files in sync.
 
@@ -350,7 +353,13 @@ export interface Question {
 
 /** Something the agent needs from the user before it can go on. */
 export type AgentRequest = { id: string } & (
-	| { kind: 'permission'; tool: string; title: string; detail: string | null; suggestions: ModeSuggestion[] }
+	| {
+			kind: 'permission';
+			tool: string;
+			title: string;
+			detail: string | null;
+			suggestions: ModeSuggestion[];
+	  }
 	| { kind: 'question'; questions: Question[] }
 );
 

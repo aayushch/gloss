@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Keeps the page from seeing what happens inside the Gloss UI. Modal
 // dialogs trap focus: their libraries listen on the document, often in the
 // capture phase, cancel presses outside the dialog and pull focus back,
@@ -28,7 +31,7 @@ export class UiGuard {
 	constructor(
 		private readonly host: Element,
 		private readonly shadow: ShadowRoot,
-		private readonly beforeKeydown: (e: KeyboardEvent) => void,
+		private readonly beforeKeydown: (e: KeyboardEvent) => void
 	) {}
 
 	readonly handle = (e: Event): void => {
@@ -44,7 +47,10 @@ export class UiGuard {
 			init.bubbles = true;
 			init.composed = false;
 			init.cancelable = e.cancelable;
-			copy = new (e.constructor as new (type: string, init: Record<string, unknown>) => Event)(e.type, init);
+			copy = new (e.constructor as new (type: string, init: Record<string, unknown>) => Event)(
+				e.type,
+				init
+			);
 		} catch {
 			return;
 		}
@@ -70,7 +76,8 @@ export class UiGuard {
 	 * inside the UI.
 	 */
 	private innerTarget(e: Event): Element | null {
-		const inside = (el: Element | null) => (el && el !== this.host && this.shadow.contains(el) ? el : null);
+		const inside = (el: Element | null) =>
+			el && el !== this.host && this.shadow.contains(el) ? el : null;
 		switch (e.type) {
 			case 'keydown':
 			case 'keypress':

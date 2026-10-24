@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The standalone ask window, used where no content script runs (PDF
 	// viewer, browser pages). It asks about raw selection text, so the ask
@@ -20,7 +23,7 @@
 		type PageAskRequest,
 		type PageAskResult,
 		type Turn,
-		type TurnEventEnvelope,
+		type TurnEventEnvelope
 	} from '../shared/protocol';
 	import { applyToTurn, isLive } from '../shared/reply';
 	import { renderMarkdown } from '../content/markdown';
@@ -35,7 +38,7 @@
 		{ label: 'Explain', text: 'Explain this.' },
 		{ label: 'Why?', text: 'Why is this the case?' },
 		{ label: 'Example', text: 'Give me a concrete example of this.' },
-		{ label: 'Translate', text: 'Translate this into English.' },
+		{ label: 'Translate', text: 'Translate this into English.' }
 	];
 
 	/** The view of the new question, as opposed to an existing note's id. */
@@ -67,7 +70,9 @@
 
 	const askable = $derived(/^(https?|file):/.test(pageUrl));
 	const views = $derived([...notes.map((n) => n.clarification.id), ...(draft ? [NEW] : [])]);
-	const note = $derived(view === NEW ? null : (notes.find((n) => n.clarification.id === view) ?? null));
+	const note = $derived(
+		view === NEW ? null : (notes.find((n) => n.clarification.id === view) ?? null)
+	);
 	const turns = $derived(note ? note.turns : draftTurns);
 	const quote = $derived(note ? note.clarification.quote : selection);
 	const running = $derived(turns.length > 0 && isLive(turns[turns.length - 1]));
@@ -83,7 +88,11 @@
 			} else if (event === 'turn') {
 				const env = data as TurnEventEnvelope;
 				draftTurns = draftTurns.map((t) => applyToTurn(t, env));
-				notes = notes.map((n) => (n.turns.some((t) => t.id === env.turnId) ? { ...n, turns: n.turns.map((t) => applyToTurn(t, env)) } : n));
+				notes = notes.map((n) =>
+					n.turns.some((t) => t.id === env.turnId)
+						? { ...n, turns: n.turns.map((t) => applyToTurn(t, env)) }
+						: n
+				);
 			} else if (event === 'page') {
 				void loadNotes();
 			} else if (event === 'app_state' && (data as { running: boolean }).running) {
@@ -120,7 +129,9 @@
 			.sort((a, b) => a.number - b.number || a.createdAt - b.createdAt)
 			.map((c) => ({
 				clarification: c,
-				turns: conversation.turns.filter((t) => t.clarificationId === c.id).sort((a, b) => a.seq - b.seq),
+				turns: conversation.turns
+					.filter((t) => t.clarificationId === c.id)
+					.sort((a, b) => a.seq - b.seq)
 			}));
 		client.subscribe({ urlKey: page.urlKey, conversationId: conversation.id });
 		// A note that was removed meanwhile, or a `focus` id that is not on this page.
@@ -142,17 +153,28 @@
 		error = null;
 		try {
 			if (note) {
-				const r = await client.request<FollowUpResult>('followUp', { clarificationId: note.clarification.id, question: q });
+				const r = await client.request<FollowUpResult>('followUp', {
+					clarificationId: note.clarification.id,
+					question: q
+				});
 				const id = note.clarification.id;
-				notes = notes.map((n) => (n.clarification.id === id ? { ...n, turns: [...n.turns, r.userTurn, r.assistantTurn] } : n));
+				notes = notes.map((n) =>
+					n.clarification.id === id ? { ...n, turns: [...n.turns, r.userTurn, r.assistantTurn] } : n
+				);
 			} else if (!result) {
 				const payload: PageAskRequest = {
 					page: { url: pageUrl, title: pageTitle },
-					anchor: selection ? { quote: { exact: selection, prefix: '', suffix: '' }, position: null, container: null } : null,
+					anchor: selection
+						? {
+								quote: { exact: selection, prefix: '', suffix: '' },
+								position: null,
+								container: null
+							}
+						: null,
 					context: { before: '', after: '' },
 					question: q,
 					pageText: null,
-					private: false,
+					private: false
 				};
 				const r = await client.request<PageAskResult>(selection ? 'ask' : 'askPage', payload);
 				result = r;
@@ -160,14 +182,24 @@
 				client.subscribe({ urlKey: r.urlKey, conversationId: r.conversationId });
 				if (r.clarification) {
 					// The question became a note: it joins the list and the window shows it there.
-					notes = [...notes.filter((n) => n.clarification.id !== r.clarification!.id), { clarification: r.clarification, turns: [r.userTurn, r.assistantTurn] }];
+					notes = [
+						...notes.filter((n) => n.clarification.id !== r.clarification!.id),
+						{ clarification: r.clarification, turns: [r.userTurn, r.assistantTurn] }
+					];
 					draft = false;
 					view = r.clarification.id;
 				} else {
 					draftTurns = [r.userTurn, r.assistantTurn];
 				}
 			} else {
-				const r = await client.request<PageAskResult>('askPage', { page: { url: pageUrl, title: pageTitle }, anchor: null, context: { before: '', after: '' }, question: q, pageText: null, private: false });
+				const r = await client.request<PageAskResult>('askPage', {
+					page: { url: pageUrl, title: pageTitle },
+					anchor: null,
+					context: { before: '', after: '' },
+					question: q,
+					pageText: null,
+					private: false
+				});
 				draftTurns = [...draftTurns, r.userTurn, r.assistantTurn];
 			}
 			appDown = false;
@@ -175,7 +207,9 @@
 		} catch (e) {
 			const f = failureOf(e);
 			if (f.code === 'app_not_running') appDown = true;
-			else error = f.code === 'busy' ? 'Gloss is still answering another question on this page.' : f.message;
+			else
+				error =
+					f.code === 'busy' ? 'Gloss is still answering another question on this page.' : f.message;
 		} finally {
 			sending = false;
 		}
@@ -197,7 +231,9 @@
 	function openInGloss() {
 		const key = urlKey ?? result?.urlKey;
 		if (!key) return;
-		client.request('openInGloss', { urlKey: key, clarificationId: note?.clarification.id ?? null }).catch(() => launch());
+		client
+			.request('openInGloss', { urlKey: key, clarificationId: note?.clarification.id ?? null })
+			.catch(() => launch());
 	}
 
 	function onkeydown(e: KeyboardEvent) {
@@ -228,7 +264,13 @@
 
 	{#if views.length > 1 || (notes.length > 0 && !draft)}
 		<div class="note-nav" role="toolbar" aria-label="Notes on this page">
-			<button class="btn note-step" title="Previous note (←)" aria-label="Previous note" disabled={views.length < 2} onclick={() => step(-1)}>‹</button>
+			<button
+				class="btn note-step"
+				title="Previous note (←)"
+				aria-label="Previous note"
+				disabled={views.length < 2}
+				onclick={() => step(-1)}>‹</button
+			>
 			<span class="note-pos">
 				{#if note}
 					Note {position + 1} of {notes.length}
@@ -236,7 +278,13 @@
 					New question · {notes.length} {notes.length === 1 ? 'note' : 'notes'}
 				{/if}
 			</span>
-			<button class="btn note-step" title="Next note (→)" aria-label="Next note" disabled={views.length < 2} onclick={() => step(1)}>›</button>
+			<button
+				class="btn note-step"
+				title="Next note (→)"
+				aria-label="Next note"
+				disabled={views.length < 2}
+				onclick={() => step(1)}>›</button
+			>
 		</div>
 	{/if}
 
@@ -245,15 +293,23 @@
 	{/if}
 
 	{#if !askable}
-		<div class="notice">Gloss cannot keep notes on this kind of page, but the question is sent with the text above.</div>
+		<div class="notice">
+			Gloss cannot keep notes on this kind of page, but the question is sent with the text above.
+		</div>
 	{/if}
 
 	{#if status.state === 'protocol_mismatch'}
-		<div class="notice">{status.mismatch === 'update_app' ? 'Update Gloss to use the extension.' : 'Update the Gloss extension.'}</div>
+		<div class="notice">
+			{status.mismatch === 'update_app'
+				? 'Update Gloss to use the extension.'
+				: 'Update the Gloss extension.'}
+		</div>
 	{:else if appDown || status.state === 'app_not_running'}
 		<div class="notice">
 			<span>Gloss isn't running.</span>
-			<button class="btn btn-accent" disabled={launching} onclick={launch}>{launching ? 'Opening…' : 'Open Gloss'}</button>
+			<button class="btn btn-accent" disabled={launching} onclick={launch}
+				>{launching ? 'Opening…' : 'Open Gloss'}</button
+			>
 		</div>
 	{/if}
 
@@ -265,10 +321,16 @@
 					{#if turn.role === 'user'}
 						<div class="turn-text">{turn.text}</div>
 					{:else}
-						<div class="turn-text md">{@html renderMarkdown(turn.text)}{#if isLive(turn)}<span class="cursor"></span>{/if}</div>
-						{#if turn.status === 'error'}<div class="error">{turn.error ?? 'The reply failed.'}</div>{/if}
+						<div class="turn-text md">
+							{@html renderMarkdown(turn.text)}{#if isLive(turn)}<span class="cursor"></span>{/if}
+						</div>
+						{#if turn.status === 'error'}<div class="error">
+								{turn.error ?? 'The reply failed.'}
+							</div>{/if}
 						{#if turn.status === 'cancelled'}<div class="muted">Cancelled.</div>{/if}
-						{#if turn.truncated}<div class="muted">Shortened here; the full reply is in Gloss.</div>{/if}
+						{#if turn.truncated}<div class="muted">
+								Shortened here; the full reply is in Gloss.
+							</div>{/if}
 					{/if}
 				</div>
 			{/each}
@@ -276,7 +338,13 @@
 	{:else if !note}
 		<div class="chips">
 			{#each PRESETS as p (p.label)}
-				<button class="chip" onclick={() => { text = p.text; textarea?.focus(); }}>{p.label}</button>
+				<button
+					class="chip"
+					onclick={() => {
+						text = p.text;
+						textarea?.focus();
+					}}>{p.label}</button
+				>
 			{/each}
 		</div>
 	{/if}
@@ -287,14 +355,15 @@
 		placeholder={turns.length ? 'Follow up…' : 'Ask about this…'}
 		bind:value={text}
 		disabled={sending || running}
-		{onkeydown}
-	></textarea>
+		{onkeydown}></textarea>
 	{#if error}<div class="error">{error}</div>{/if}
 	<div class="row">
 		<span class="muted">Enter to send</span>
 		<span class="spacer"></span>
 		{#if running}<button class="btn" onclick={cancel}>Stop</button>{/if}
 		{#if note || result}<button class="btn" onclick={openInGloss}>Open in Gloss</button>{/if}
-		<button class="btn btn-accent" disabled={sending || running || !text.trim()} onclick={send}>{sending ? 'Sending…' : 'Ask'}</button>
+		<button class="btn btn-accent" disabled={sending || running || !text.trim()} onclick={send}
+			>{sending ? 'Sending…' : 'Ask'}</button
+		>
 	</div>
 </div>

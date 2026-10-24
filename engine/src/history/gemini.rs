@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Gemini CLI keeps a project's sessions in `~/.gemini/tmp/<dir>/chats/`.
 //! Current versions name `<dir>` after the folder, as listed in
 //! `~/.gemini/projects.json` (`{ "projects": { "<path>": "<dir>" } }`), and
@@ -21,7 +24,10 @@ use crate::types::AgentId;
 const HEAD_BYTES: u64 = 512 * 1024;
 
 pub(super) fn project_hash(project: &str) -> String {
-    Sha256::digest(project.as_bytes()).iter().map(|b| format!("{:02x}", b)).collect()
+    Sha256::digest(project.as_bytes())
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
 }
 
 pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {
@@ -30,7 +36,12 @@ pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {
     let listed = std::fs::read_to_string(home.join("projects.json"))
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("projects")?.get(project)?.as_str().map(str::to_string));
+        .and_then(|v| {
+            v.get("projects")?
+                .get(project)?
+                .as_str()
+                .map(str::to_string)
+        });
     if let Some(name) = listed {
         dirs.push(tmp.join(name));
     }
@@ -52,21 +63,27 @@ pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {
         out.extend(files_in(&chats, "jsonl"));
         out.extend(files_in(&chats, "json"));
     }
-    out.retain(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("session-")));
+    out.retain(|p| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("session-"))
+    });
     out
 }
 
 pub(super) fn scan(path: &Path) -> Option<Scanned> {
-    let records: Vec<serde_json::Value> = if path.extension().and_then(|e| e.to_str()) == Some("json") {
-        let whole: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
-        let mut out = vec![whole.clone()];
-        if let Some(messages) = whole.get("messages").and_then(|m| m.as_array()) {
-            out.extend(messages.iter().cloned());
-        }
-        out
-    } else {
-        head_lines(path, HEAD_BYTES)
-    };
+    let records: Vec<serde_json::Value> =
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            let whole: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+            let mut out = vec![whole.clone()];
+            if let Some(messages) = whole.get("messages").and_then(|m| m.as_array()) {
+                out.extend(messages.iter().cloned());
+            }
+            out
+        } else {
+            head_lines(path, HEAD_BYTES)
+        };
     let header = records.first()?;
     // Subagent sessions are written beside the main ones; only `main` is a conversation.
     if str_at(header, "kind").is_some_and(|k| k != "main") {
@@ -94,7 +111,9 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
             title,
             origin: None,
             file: path.to_string_lossy().to_string(),
-            created_at: str_at(header, "startTime").and_then(parse_time).unwrap_or(0),
+            created_at: str_at(header, "startTime")
+                .and_then(parse_time)
+                .unwrap_or(0),
             updated_at: 0,
         },
     })
@@ -120,8 +139,17 @@ pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
             Some("user") => out.prompt(&all_text(content), at),
             Some("gemini") => {
                 out.text(&all_text(content), at);
-                for call in v.get("toolCalls").and_then(|c| c.as_array()).into_iter().flatten() {
-                    out.tool(str_at(call, "name").unwrap_or("tool"), call.get("args").unwrap_or(&serde_json::Value::Null), at);
+                for call in v
+                    .get("toolCalls")
+                    .and_then(|c| c.as_array())
+                    .into_iter()
+                    .flatten()
+                {
+                    out.tool(
+                        str_at(call, "name").unwrap_or("tool"),
+                        call.get("args").unwrap_or(&serde_json::Value::Null),
+                        at,
+                    );
                 }
             }
             _ => {}
@@ -134,7 +162,11 @@ pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
 fn all_text(content: &serde_json::Value) -> String {
     match content {
         serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Array(parts) => parts.iter().filter_map(|p| str_at(p, "text")).collect::<Vec<_>>().join("\n\n"),
+        serde_json::Value::Array(parts) => parts
+            .iter()
+            .filter_map(|p| str_at(p, "text"))
+            .collect::<Vec<_>>()
+            .join("\n\n"),
         _ => String::new(),
     }
 }

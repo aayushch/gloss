@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Claude Code keeps one JSONL file per session in
 //! `~/.claude/projects/<slug>/<session id>.jsonl`, where the slug is the
 //! folder path with every character other than a letter or digit replaced by
@@ -36,7 +39,10 @@ const NOT_PROMPTS: &[&str] = &[
 ];
 
 pub(super) fn slug(project: &str) -> String {
-    project.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+    project
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
 }
 
 pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {
@@ -63,7 +69,9 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
                     prompt = prompt_of(v);
                 }
             }
-            Some("custom-title") => custom = str_at(v, "customTitle").map(str::to_string).or(custom),
+            Some("custom-title") => {
+                custom = str_at(v, "customTitle").map(str::to_string).or(custom)
+            }
             Some("ai-title") => ai = str_at(v, "aiTitle").map(str::to_string).or(ai),
             _ => {}
         }
@@ -72,7 +80,9 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
     if file_len > HEAD_BYTES {
         for v in tail_lines(path, TAIL_BYTES) {
             match str_at(&v, "type") {
-                Some("custom-title") => custom = str_at(&v, "customTitle").map(str::to_string).or(custom),
+                Some("custom-title") => {
+                    custom = str_at(&v, "customTitle").map(str::to_string).or(custom)
+                }
                 Some("ai-title") => ai = str_at(&v, "aiTitle").map(str::to_string).or(ai),
                 _ => {}
             }
@@ -100,12 +110,17 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
 /// The prompt text of a `user` record, or None for a tool result, a
 /// sidechain or meta message, or a command wrapper.
 fn prompt_of(v: &serde_json::Value) -> Option<String> {
-    if v.get("isMeta").and_then(|x| x.as_bool()) == Some(true) || v.get("isSidechain").and_then(|x| x.as_bool()) == Some(true) {
+    if v.get("isMeta").and_then(|x| x.as_bool()) == Some(true)
+        || v.get("isSidechain").and_then(|x| x.as_bool()) == Some(true)
+    {
         return None;
     }
     let content = v.get("message")?.get("content")?;
     if let Some(parts) = content.as_array() {
-        if parts.iter().any(|p| str_at(p, "type") == Some("tool_result")) {
+        if parts
+            .iter()
+            .any(|p| str_at(p, "type") == Some("tool_result"))
+        {
             return None;
         }
     }
@@ -133,11 +148,21 @@ pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
                 }
             }
             Some("assistant") => {
-                let Some(parts) = v.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_array()) else { continue };
+                let Some(parts) = v
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_array())
+                else {
+                    continue;
+                };
                 for part in parts {
                     match str_at(part, "type") {
                         Some("text") => out.text(str_at(part, "text").unwrap_or(""), at),
-                        Some("tool_use") => out.tool(str_at(part, "name").unwrap_or("tool"), part.get("input").unwrap_or(&serde_json::Value::Null), at),
+                        Some("tool_use") => out.tool(
+                            str_at(part, "name").unwrap_or("tool"),
+                            part.get("input").unwrap_or(&serde_json::Value::Null),
+                            at,
+                        ),
                         _ => {}
                     }
                 }

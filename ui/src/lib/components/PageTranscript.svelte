@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The conversation of a web page asked about from the browser extension:
 	// a card naming the page, the questions asked about the page as a whole,
@@ -5,7 +8,13 @@
 	// renders inside Transcript, which owns selection, jumps and scrolling.
 	import type { Conversation, Turn } from '$lib/api/types';
 	import { app } from '$lib/state/app.svelte';
-	import { hostOf, pageQuestions, pageThreads, relativeTime, type Thread } from '$lib/state/threads';
+	import {
+		hostOf,
+		pageQuestions,
+		pageThreads,
+		relativeTime,
+		type Thread
+	} from '$lib/state/threads';
 	import AssistantTurn from './AssistantTurn.svelte';
 	import Icon from './Icon.svelte';
 	import PageAskCard from './PageAskCard.svelte';
@@ -37,12 +46,23 @@
 	</div>
 	<div class="text">
 		<div class="title">{title}</div>
-		<button type="button" class="url" title="Open {url} in the browser" onclick={() => app.openUrl(url)}>{url}</button>
+		<button
+			type="button"
+			class="url"
+			title="Open {url} in the browser"
+			onclick={() => app.openUrl(url)}>{url}</button
+		>
 		{#if page}
-			<div class="seen">Last seen {relativeTime(page.lastSeen)}{page.orphanCount ? ` · ${page.orphanCount} ${page.orphanCount === 1 ? 'ask is' : 'asks are'} not on the page any more` : ''}</div>
+			<div class="seen">
+				Last seen {relativeTime(page.lastSeen)}{page.orphanCount
+					? ` · ${page.orphanCount} ${page.orphanCount === 1 ? 'ask is' : 'asks are'} not on the page any more`
+					: ''}
+			</div>
 		{/if}
 	</div>
-	<button type="button" class="ibtn open" onclick={() => app.openUrl(url)}><Icon name="external" size={12} /> Open in browser</button>
+	<button type="button" class="ibtn open" onclick={() => app.openUrl(url)}
+		><Icon name="external" size={12} /> Open in browser</button
+	>
 </div>
 
 {#each questions as t, i (t.id)}
@@ -59,7 +79,9 @@
 		<PageAskCard thread={th} {conv} {threads} />
 	{/each}
 {:else if !questions.length}
-	<div class="empty">Highlight text on the page in your browser and ask about it, or ask about the whole page below.</div>
+	<div class="empty">
+		Highlight text on the page in your browser and ask about it, or ask about the whole page below.
+	</div>
 {/if}
 
 <style>

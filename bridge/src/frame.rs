@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Native-messaging framing: each message is UTF-8 JSON preceded by its
 //! length as a 32-bit integer in the machine's byte order.
 
@@ -18,7 +21,10 @@ pub fn read_frame(input: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
     }
     let len = u32::from_ne_bytes(len);
     if len > MAX_READ {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("frame of {} bytes is too large", len)));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("frame of {} bytes is too large", len),
+        ));
     }
     let mut body = vec![0u8; len as usize];
     input.read_exact(&mut body)?;

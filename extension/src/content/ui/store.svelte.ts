@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Reactive state of the in-page UI. The page state (asks and turns) is a
 // plain object; `version` ticks whenever it changes so components that
 // read it through `version` re-render.
@@ -17,7 +20,14 @@ export interface Rect {
 }
 
 export function rectOf(r: DOMRect | DOMRectReadOnly): Rect {
-	return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+	return {
+		left: r.left,
+		top: r.top,
+		right: r.right,
+		bottom: r.bottom,
+		width: r.width,
+		height: r.height
+	};
 }
 
 export interface PillState {

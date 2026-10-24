@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Where a passage sits on the page, kept while its text is on the page so
 // the navigator can scroll back to it after a page that renders only what
 // is on screen (long logs, feeds, virtual lists) has removed it. The spot is
@@ -27,10 +30,15 @@ function firstRect(range: Range): DOMRect | null {
 function scrollerOf(node: Node): Element | null {
 	const doc = node.ownerDocument;
 	const win = doc?.defaultView;
-	let el: Element | null = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+	let el: Element | null =
+		node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
 	for (; el && win && el !== doc.body && el !== doc.documentElement; el = el.parentElement) {
 		const overflow = win.getComputedStyle(el).overflowY;
-		if ((overflow === 'auto' || overflow === 'scroll' || overflow === 'overlay') && el.scrollHeight > el.clientHeight) return el;
+		if (
+			(overflow === 'auto' || overflow === 'scroll' || overflow === 'overlay') &&
+			el.scrollHeight > el.clientHeight
+		)
+			return el;
 	}
 	return null;
 }
@@ -44,7 +52,10 @@ export function spotOf(range: Range, previous: PassageSpot | null): PassageSpot 
 	const rect = firstRect(range);
 	if (!rect) return null;
 	const win = range.startContainer.ownerDocument?.defaultView ?? window;
-	const kept = previous && (previous.scroller === null || (previous.scroller.isConnected && previous.scroller.contains(range.startContainer)));
+	const kept =
+		previous &&
+		(previous.scroller === null ||
+			(previous.scroller.isConnected && previous.scroller.contains(range.startContainer)));
 	const scroller = kept ? previous.scroller : scrollerOf(range.startContainer);
 	if (!scroller) return { scroller: null, offset: rect.top + win.scrollY };
 	return { scroller, offset: rect.top - scroller.getBoundingClientRect().top + scroller.scrollTop };
@@ -54,7 +65,12 @@ export function spotOf(range: Range, previous: PassageSpot | null): PassageSpot 
 export function documentY(spot: PassageSpot): number | null {
 	if (!spot.scroller) return spot.offset;
 	if (!spot.scroller.isConnected) return null;
-	return spot.scroller.getBoundingClientRect().top + window.scrollY - spot.scroller.scrollTop + spot.offset;
+	return (
+		spot.scroller.getBoundingClientRect().top +
+		window.scrollY -
+		spot.scroller.scrollTop +
+		spot.offset
+	);
 }
 
 /**

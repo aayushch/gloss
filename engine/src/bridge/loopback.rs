@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! TCP listener on 127.0.0.1 for the Safari extension's native handler,
 //! which cannot reach a Unix socket from its sandbox. Every connection must
 //! start with a line `{"token": "<hex>"}` carrying the token Gloss wrote to
@@ -32,14 +35,20 @@ struct TokenLine {
 
 /// A fresh 256-bit token as lower-case hex.
 pub fn new_token() -> String {
-    format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple())
+    format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    )
 }
 
 /// Binds an ephemeral port on 127.0.0.1 and returns the listener with the
 /// port it got, so the caller can publish the port before serving.
 pub async fn bind() -> Result<(TcpListener, u16)> {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
-    let listener = TcpListener::bind(addr).await.context("bind loopback listener")?;
+    let listener = TcpListener::bind(addr)
+        .await
+        .context("bind loopback listener")?;
     let port = listener.local_addr()?.port();
     Ok((listener, port))
 }
@@ -68,7 +77,10 @@ pub fn write_info(info: &BridgeInfo, paths: &[&Path]) -> Vec<WriteFailure> {
         });
         if let Err(e) = written {
             warn!(path = %path.display(), error = %e, "could not write bridge info");
-            failures.push(WriteFailure { path: path.to_path_buf(), error: e.to_string() });
+            failures.push(WriteFailure {
+                path: path.to_path_buf(),
+                error: e.to_string(),
+            });
         }
     }
     failures
@@ -82,9 +94,16 @@ pub struct WriteFailure {
 }
 
 /// Serves connections on `listener` until the task is dropped.
-pub async fn serve(handler: Arc<BridgeHandler>, listener: TcpListener, token: String) -> Result<()> {
+pub async fn serve(
+    handler: Arc<BridgeHandler>,
+    listener: TcpListener,
+    token: String,
+) -> Result<()> {
     let token = Arc::new(token);
-    info!(port = listener.local_addr()?.port(), "loopback bridge listening");
+    info!(
+        port = listener.local_addr()?.port(),
+        "loopback bridge listening"
+    );
     loop {
         let (stream, peer) = match listener.accept().await {
             Ok(s) => s,
@@ -103,9 +122,12 @@ pub async fn serve(handler: Arc<BridgeHandler>, listener: TcpListener, token: St
             let (r, w) = stream.into_split();
             let mut reader = BufReader::new(r);
             let mut first = String::new();
-            let read = tokio::time::timeout(Duration::from_secs(2), reader.read_line(&mut first)).await;
+            let read =
+                tokio::time::timeout(Duration::from_secs(2), reader.read_line(&mut first)).await;
             let presented = match read {
-                Ok(Ok(n)) if n > 0 => serde_json::from_str::<TokenLine>(first.trim()).ok().map(|t| t.token),
+                Ok(Ok(n)) if n > 0 => serde_json::from_str::<TokenLine>(first.trim())
+                    .ok()
+                    .map(|t| t.token),
                 _ => None,
             };
             if presented.as_deref() != Some(token.as_str()) {
@@ -135,15 +157,21 @@ mod tests {
     #[tokio::test]
     async fn requires_the_token_first() {
         let dir = tempfile::tempdir().unwrap();
-        let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), test_env()).unwrap());
+        let engine =
+            Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), test_env()).unwrap());
         let handler = Arc::new(BridgeHandler::new(engine, "0.0.0-test"));
         let (listener, port) = bind().await.unwrap();
         let token = new_token();
         assert_eq!(token.len(), 64);
-        let info = BridgeInfo { port, token: token.clone(), protocol: super::super::PROTOCOL };
+        let info = BridgeInfo {
+            port,
+            token: token.clone(),
+            protocol: super::super::PROTOCOL,
+        };
         let file = dir.path().join("sub").join("bridge.json");
         let _ = write_info(&info, &[&file]);
-        let back: BridgeInfo = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        let back: BridgeInfo =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         assert_eq!(back, info);
         let server = tokio::spawn(serve(handler, listener, token.clone()));
 
@@ -161,7 +189,8 @@ mod tests {
             .await
             .unwrap();
         let mut lines = BufReader::new(r).lines();
-        let reply: serde_json::Value = serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        let reply: serde_json::Value =
+            serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
         assert_eq!(reply["result"]["protocol"], super::super::PROTOCOL);
         server.abort();
     }

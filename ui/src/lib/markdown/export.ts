@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Serialises a conversation, or one reply, back to markdown with every
 // clarification folded in: each well becomes a blockquote placed right after
 // the block its quote was highlighted in, and nested wells nest inside it.
@@ -43,7 +46,11 @@ export function blockToMarkdown(b: Block): string {
 		case 'code': {
 			const fence = fenceFor(b.code ?? '');
 			const pad = indent(b.depth);
-			return [`${pad}${fence}${b.lang ?? ''}`, ...(b.code ?? '').split('\n').map((l) => pad + l), `${pad}${fence}`].join('\n');
+			return [
+				`${pad}${fence}${b.lang ?? ''}`,
+				...(b.code ?? '').split('\n').map((l) => pad + l),
+				`${pad}${fence}`
+			].join('\n');
 		}
 		case 'quote':
 			return runsToMarkdown(b.runs)
@@ -54,8 +61,13 @@ export function blockToMarkdown(b: Block): string {
 			const rows = (b.rows ?? []).map((r) => r.map((c) => runsToMarkdown(c).replace(/\|/g, '\\|')));
 			if (!rows.length) return '';
 			const width = rows[0].length;
-			const line = (cells: string[]) => `| ${cells.concat(Array(Math.max(0, width - cells.length)).fill('')).join(' | ')} |`;
-			return [line(rows[0]), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.slice(1).map(line)].join('\n');
+			const line = (cells: string[]) =>
+				`| ${cells.concat(Array(Math.max(0, width - cells.length)).fill('')).join(' | ')} |`;
+			return [
+				line(rows[0]),
+				`| ${Array(width).fill('---').join(' | ')} |`,
+				...rows.slice(1).map(line)
+			].join('\n');
 		}
 		case 'hr':
 			return '---';
@@ -63,7 +75,8 @@ export function blockToMarkdown(b: Block): string {
 			const a = b.artifact;
 			if (!a) return '';
 			const fence = fenceFor(a.content);
-			const lang = a.type === 'code' ? a.lang : a.type === 'markdown' ? 'md' : a.type === 'text' ? '' : a.type;
+			const lang =
+				a.type === 'code' ? a.lang : a.type === 'markdown' ? 'md' : a.type === 'text' ? '' : a.type;
 			return [`**${a.title}**`, '', `${fence}${lang}`, a.content, fence].join('\n');
 		}
 	}
@@ -125,10 +138,16 @@ function turnBody(ctx: Ctx, turn: Turn): string {
 
 function wellMarkdown(ctx: Ctx, cl: Clarification): string {
 	const number = ctx.conv.clarifications.findIndex((c) => c.id === cl.id) + 1;
-	const lines: string[] = [`**Clarification ${number}** · on “${cl.quote.replace(/\s+/g, ' ').trim()}”`];
+	const lines: string[] = [
+		`**Clarification ${number}** · on “${cl.quote.replace(/\s+/g, ' ').trim()}”`
+	];
 	for (const t of ctx.byClarification.get(cl.id) ?? []) {
 		if (t.role === 'user') lines.push(`**Q:** ${t.text.trim()}`);
-		else lines.push(turnBody(ctx, t) || (t.status === 'error' ? `_The agent failed: ${t.error ?? 'no details'}_` : '_No reply._'));
+		else
+			lines.push(
+				turnBody(ctx, t) ||
+					(t.status === 'error' ? `_The agent failed: ${t.error ?? 'no details'}_` : '_No reply._')
+			);
 	}
 	return quoteLines(lines.join('\n\n'));
 }
@@ -142,13 +161,16 @@ export function exportTurn(conv: Conversation, turn: Turn): string {
 export function exportConversation(conv: Conversation): string {
 	const ctx = context(conv);
 	const agent = AGENT_NAMES[conv.agent] ?? conv.agent;
-	const meta = [agent, conv.model, new Date(conv.createdAt).toISOString().slice(0, 10)].filter(Boolean).join(' · ');
+	const meta = [agent, conv.model, new Date(conv.createdAt).toISOString().slice(0, 10)]
+		.filter(Boolean)
+		.join(' · ');
 	const parts: string[] = [`# ${conv.title}`, `_${meta}_`];
 	for (const t of conv.turns) {
 		if (t.clarificationId) continue;
 		if (t.role === 'user') {
 			parts.push('## You', t.text.trim());
-			if (t.attachments.length) parts.push(`_Attached: ${t.attachments.map((a) => a.name).join(', ')}_`);
+			if (t.attachments.length)
+				parts.push(`_Attached: ${t.attachments.map((a) => a.name).join(', ')}_`);
 		} else {
 			parts.push(`## ${agent}`, turnBody(ctx, t) || '_No reply._');
 		}
@@ -166,7 +188,9 @@ export function exportPage(conv: Conversation, page: Page | null): string {
 	const url = page?.url ?? conv.pageKey ?? '';
 	const parts: string[] = [`# ${title}`];
 	if (url) parts.push(`<${url}>`);
-	const answer = (t: Turn) => turnBody(ctx, t) || (t.status === 'error' ? `_The agent failed: ${t.error ?? 'no details'}_` : '_No reply._');
+	const answer = (t: Turn) =>
+		turnBody(ctx, t) ||
+		(t.status === 'error' ? `_The agent failed: ${t.error ?? 'no details'}_` : '_No reply._');
 	for (const t of conv.turns) {
 		if (t.clarificationId) continue;
 		parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));

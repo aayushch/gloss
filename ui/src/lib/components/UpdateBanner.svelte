@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Small card at the bottom of the rail that offers a newer Gloss, shows the
 	// download, and asks for a restart once it is installed. Hidden until a
@@ -5,7 +8,13 @@
 	import { updater } from '$lib/state/updater.svelte';
 	import Icon from './Icon.svelte';
 
-	const shown = $derived(!updater.dismissed && (updater.status === 'available' || updater.status === 'downloading' || updater.status === 'ready' || (updater.status === 'error' && updater.version !== null)));
+	const shown = $derived(
+		!updater.dismissed &&
+			(updater.status === 'available' ||
+				updater.status === 'downloading' ||
+				updater.status === 'ready' ||
+				(updater.status === 'error' && updater.version !== null))
+	);
 </script>
 
 {#if shown}
@@ -23,7 +32,13 @@
 				<span class="text">Gloss {updater.version} available</span>
 				<button type="button" class="act" onclick={() => updater.install()}>Update</button>
 			{/if}
-			<button type="button" class="close" title="Dismiss" aria-label="Dismiss update notice" onclick={() => (updater.dismissed = true)}><Icon name="x" size={12} /></button>
+			<button
+				type="button"
+				class="close"
+				title="Dismiss"
+				aria-label="Dismiss update notice"
+				onclick={() => (updater.dismissed = true)}><Icon name="x" size={12} /></button
+			>
 		</div>
 		{#if updater.status === 'downloading'}
 			<div class="bar"><div class="fill" style="width: {updater.progress}%"></div></div>

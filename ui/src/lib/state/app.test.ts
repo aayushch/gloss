@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { app } from './app.svelte';
 import { buildThreads } from './threads';
@@ -12,7 +15,11 @@ describe('app state against the mock api', () => {
 		const reply = app.active!.turns.find((t) => t.role === 'assistant')!;
 		const before = app.active!.clarifications.length;
 
-		app.composerFor = { blockId: `${reply.id}:2`, quote: 'useless for synchronization', parentId: null };
+		app.composerFor = {
+			blockId: `${reply.id}:2`,
+			quote: 'useless for synchronization',
+			parentId: null
+		};
 		await app.ask('Why useless?');
 		expect(app.active!.clarifications.length).toBe(before + 1);
 		const cl = app.active!.clarifications[before];
@@ -43,7 +50,11 @@ describe('app state against the mock api', () => {
 		await app.init();
 		const reply = app.active!.turns.find((t) => t.role === 'assistant')!;
 		const before = app.active!.turns.length;
-		app.composerFor = { blockId: `${reply.id}:2`, quote: 'useless for synchronization', parentId: null };
+		app.composerFor = {
+			blockId: `${reply.id}:2`,
+			quote: 'useless for synchronization',
+			parentId: null
+		};
 		await app.ask('First question');
 		expect(app.running).toBe(true);
 		expect(app.active!.turns.length).toBe(before + 2);
@@ -96,7 +107,11 @@ describe('app state against the mock api', () => {
 		expect(app.draft?.projectDir).toBeNull();
 		app.toggleProject('/Users/me/code/demo-project', true);
 		await settle(10);
-		expect(app.outside['/Users/me/code/demo-project'].map((x) => x.agent)).toEqual(['claude', 'codex', 'pi']);
+		expect(app.outside['/Users/me/code/demo-project'].map((x) => x.agent)).toEqual([
+			'claude',
+			'codex',
+			'pi'
+		]);
 		app.setAgentFilter('/Users/me/code/demo-project', 'codex');
 		expect(app.agentFilter['/Users/me/code/demo-project']).toBe('codex');
 		app.setAgentFilter('/Users/me/code/demo-project', 'codex');
@@ -136,13 +151,16 @@ describe('app state against the mock api', () => {
 		expect(app.earlier.length).toBe(2);
 	});
 
-	it('shows the agent\'s question as a request and resumes once answered', async () => {
+	it("shows the agent's question as a request and resumes once answered", async () => {
 		app.newChat();
 		await app.send('[ask] Which style?');
 		await settle(150);
 		const turn = app.active!.turns.find((t) => t.role === 'assistant')!;
 		expect(app.requests[turn.id]?.kind).toBe('question');
-		await app.answer(turn.id, { kind: 'question', answers: { 'Which style do you prefer?': 'Tabs' } });
+		await app.answer(turn.id, {
+			kind: 'question',
+			answers: { 'Which style do you prefer?': 'Tabs' }
+		});
 		await settle(50);
 		expect(app.requests[turn.id]).toBeUndefined();
 		expect(app.running).toBe(true);
@@ -162,7 +180,12 @@ describe('app state against the mock api', () => {
 		await settle(150);
 		const turn = app.active!.turns.find((t) => t.role === 'assistant')!;
 		expect(app.requests[turn.id]?.kind).toBe('permission');
-		await app.answer(turn.id, { kind: 'permission', allow: true, message: null, setMode: 'acceptEdits' });
+		await app.answer(turn.id, {
+			kind: 'permission',
+			allow: true,
+			message: null,
+			setMode: 'acceptEdits'
+		});
 		await settle(50);
 		expect(app.active?.mode).toBe('acceptEdits');
 		await settle(1900);
@@ -209,7 +232,10 @@ describe('app state against the mock api', () => {
 		await app.dismissExtensionBanner();
 		expect(app.settings.extensionBannerSeen).toBe(true);
 		await app.refreshExtensionStatus();
-		expect(app.extension?.sessions[0]).toMatchObject({ browser: 'chrome', extensionVersion: '1.0.1' });
+		expect(app.extension?.sessions[0]).toMatchObject({
+			browser: 'chrome',
+			extensionVersion: '1.0.1'
+		});
 		await app.unregisterHosts();
 		expect(app.extension?.browsers.every((b) => !b.registered)).toBe(true);
 		await app.registerHosts();
@@ -220,11 +246,22 @@ describe('app state against the mock api', () => {
 		await app.refreshExtensionStatus();
 		expect(app.outdatedExtensions).toEqual([]);
 		const base = app.extension!;
-		const session = (id: number, browser: string, extensionVersion: string) => ({ id, transport: 'native', browser, extensionVersion, connectedAt: 0 });
+		const session = (id: number, browser: string, extensionVersion: string) => ({
+			id,
+			transport: 'native',
+			browser,
+			extensionVersion,
+			connectedAt: 0
+		});
 		app.extension = {
 			...base,
 			bundledVersion: '2.0.10',
-			sessions: [session(1, 'firefox', '2.0.9'), session(2, 'firefox', '2.0.8'), session(3, 'chrome', '2.0.10'), session(4, 'safari', '2.0.6')]
+			sessions: [
+				session(1, 'firefox', '2.0.9'),
+				session(2, 'firefox', '2.0.8'),
+				session(3, 'chrome', '2.0.10'),
+				session(4, 'safari', '2.0.6')
+			]
 		};
 		expect(app.outdatedExtensions.map((s) => [s.browser, s.extensionVersion])).toEqual([
 			['firefox', '2.0.8'],

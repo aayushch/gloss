@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Copies text to the system clipboard. The async clipboard API is used when
 // the webview exposes it; otherwise a hidden textarea and the legacy copy
 // command do the work, which covers older WebKitGTK builds on Linux.

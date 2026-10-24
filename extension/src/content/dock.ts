@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Where the note navigator sits on the page. It always docks on the right
 // edge of the viewport, at a height the reader can change by dragging it
 // (stored for all sites as a fraction of the viewport height, the middle by
@@ -55,7 +58,7 @@ const INTERACTIVE = [
 	'[role="tab"]',
 	'[role="checkbox"]',
 	'[role="switch"]',
-	'[role="textbox"]',
+	'[role="textbox"]'
 ].join(',');
 
 /** Cost of covering a control inside a pinned element. */
@@ -92,7 +95,8 @@ export function obstruction(el: Element | null): number {
 	if (!win || el === doc.documentElement || el === doc.body) return 0;
 	for (let node: Element | null = el; node && node !== doc.body; node = node.parentElement) {
 		const position = win.getComputedStyle(node).position;
-		if (position === 'fixed' || position === 'sticky') return el.closest(INTERACTIVE) ? COVERS_PINNED_CONTROL : COVERS_PINNED;
+		if (position === 'fixed' || position === 'sticky')
+			return el.closest(INTERACTIVE) ? COVERS_PINNED_CONTROL : COVERS_PINNED;
 	}
 	return 0;
 }
@@ -102,7 +106,12 @@ export function obstruction(el: Element | null): number {
  * when nothing pinned is under it there; otherwise it takes the nearest
  * clear height, or the least covered one when no height is clear.
  */
-export function placeOnEdge(viewportWidth: number, viewportHeight: number, fraction: number, hit: HitTest): DockPosition {
+export function placeOnEdge(
+	viewportWidth: number,
+	viewportHeight: number,
+	fraction: number,
+	hit: HitTest
+): DockPosition {
 	const left = viewportWidth - NAV_WIDTH - EDGE;
 	const xs = [left - CLEARANCE, left + NAV_WIDTH / 2, left + NAV_WIDTH + CLEARANCE];
 	const preferred = topOf(fraction, viewportHeight);
@@ -118,7 +127,8 @@ export function placeOnEdge(viewportWidth: number, viewportHeight: number, fract
 	};
 	const costAt = (top: number): number => {
 		let cost = 0;
-		for (let y = top - CLEARANCE; y <= top + NAV_HEIGHT + CLEARANCE; y += ROW_STEP) cost += costOfRow(Math.round(y));
+		for (let y = top - CLEARANCE; y <= top + NAV_HEIGHT + CLEARANCE; y += ROW_STEP)
+			cost += costOfRow(Math.round(y));
 		return cost;
 	};
 
@@ -158,10 +168,11 @@ export class Dock {
 		private readonly hit: HitTest,
 		private readonly onMove: (pos: DockPosition) => void,
 		private readonly isHeld: () => boolean,
-		private readonly win: Window = window,
+		private readonly win: Window = window
 	) {
 		this.settle = this.settle.bind(this);
-		this.mutations = typeof MutationObserver === 'function' ? new MutationObserver(this.settle) : null;
+		this.mutations =
+			typeof MutationObserver === 'function' ? new MutationObserver(this.settle) : null;
 	}
 
 	/** The viewport size the navigator is placed in; clientWidth leaves out a classic scrollbar, which innerWidth includes. */
@@ -169,7 +180,7 @@ export class Dock {
 		const root = this.win.document.documentElement;
 		return {
 			width: root.clientWidth || this.win.innerWidth,
-			height: Math.min(this.win.innerHeight, root.clientHeight || this.win.innerHeight),
+			height: Math.min(this.win.innerHeight, root.clientHeight || this.win.innerHeight)
 		};
 	}
 

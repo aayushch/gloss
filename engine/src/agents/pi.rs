@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Pi adapter (`pi -p --mode json`).
 
 use std::path::PathBuf;
@@ -27,7 +30,9 @@ impl AgentAdapter for Pi {
 
     fn info(&self, env: &ShellEnv) -> AgentInfo {
         let path = resolve(env);
-        let version = path.as_ref().and_then(|p| probe_version(env, p, &["--version"]));
+        let version = path
+            .as_ref()
+            .and_then(|p| probe_version(env, p, &["--version"]));
         AgentInfo {
             id: AgentId::Pi,
             name: display_name(AgentId::Pi).into(),
@@ -46,13 +51,19 @@ impl AgentAdapter for Pi {
     /// `pi --list-models` prints a table whose rows are provider, model,
     /// context, max-out, thinking, images separated by runs of spaces.
     fn models(&self, env: &ShellEnv) -> Vec<ModelInfo> {
-        let Some(path) = resolve(env) else { return vec![] };
+        let Some(path) = resolve(env) else {
+            return vec![];
+        };
         let Some(out) = capture_text(env, &path, &["--list-models"], Duration::from_secs(8)) else {
             return vec![];
         };
         let settings = read_json_file(&home_file(".pi/agent/settings.json"));
         let default_id = settings.as_ref().and_then(|s| {
-            Some(format!("{}/{}", str_of(s, "defaultProvider")?, str_of(s, "defaultModel")?))
+            Some(format!(
+                "{}/{}",
+                str_of(s, "defaultProvider")?,
+                str_of(s, "defaultModel")?
+            ))
         });
         parse_pi_models(&out, default_id.as_deref())
     }
@@ -61,8 +72,12 @@ impl AgentAdapter for Pi {
         // Pi has no modes of its own, only tools to enable. The help lists
         // the built-in tools; the modes offered are the write set and the
         // write-plus-shell set, when those tools exist in this version.
-        let Some(path) = resolve(env) else { return Vec::new() };
-        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let Some(path) = resolve(env) else {
+            return Vec::new();
+        };
+        let Some(help) = help_text(env, &path, &["--help"]) else {
+            return Vec::new();
+        };
         let tools: Vec<String> = help
             .split("Built-in Tool Names:")
             .nth(1)
@@ -74,10 +89,20 @@ impl AgentAdapter for Pi {
         let has = |t: &str| tools.iter().any(|x| x == t);
         let mut out = Vec::new();
         if has("edit") && has("write") {
-            out.push(AgentMode { id: "edit".into(), label: "Edit files".into(), description: "Reads and edits files; no shell".into(), writes: true });
+            out.push(AgentMode {
+                id: "edit".into(),
+                label: "Edit files".into(),
+                description: "Reads and edits files; no shell".into(),
+                writes: true,
+            });
         }
         if has("edit") && has("write") && has("bash") {
-            out.push(AgentMode { id: "full".into(), label: "Edit and run commands".into(), description: "Reads, edits files and runs shell commands".into(), writes: true });
+            out.push(AgentMode {
+                id: "full".into(),
+                label: "Edit and run commands".into(),
+                description: "Reads, edits files and runs shell commands".into(),
+                writes: true,
+            });
         }
         out
     }
@@ -97,7 +122,10 @@ impl AgentAdapter for Pi {
         } else {
             args.push("--no-tools".into());
         }
-        args.extend(["--session-dir".into(), req.pi_session_dir.to_string_lossy().to_string()]);
+        args.extend([
+            "--session-dir".into(),
+            req.pi_session_dir.to_string_lossy().to_string(),
+        ]);
         match &req.agent_session_id {
             Some(sid) => args.extend(["--session".into(), sid.clone()]),
             None => args.extend(["--session-id".into(), req.new_session_id.clone()]),
@@ -132,11 +160,17 @@ impl AgentAdapter for Pi {
 
     fn parse_line(&mut self, line: &str) -> Vec<AgentEvent> {
         let Some(v) = parse_json(line) else {
-            return vec![activity(ActivityKind::Status, crate::prompt::truncate(line.trim(), 160))];
+            return vec![activity(
+                ActivityKind::Status,
+                crate::prompt::truncate(line.trim(), 160),
+            )];
         };
         match str_of(&v, "type").unwrap_or("") {
             "session" => match str_of(&v, "id") {
-                Some(id) => vec![AgentEvent::Session { id: id.to_string(), model: None }],
+                Some(id) => vec![AgentEvent::Session {
+                    id: id.to_string(),
+                    model: None,
+                }],
                 None => vec![],
             },
             "message_start" => {
@@ -188,7 +222,10 @@ impl AgentAdapter for Pi {
                     self.produced_text = true;
                 }
                 if let Some(u) = msg.get("usage") {
-                    let cost = u.get("cost").and_then(|c| c.get("total")).and_then(Value::as_f64);
+                    let cost = u
+                        .get("cost")
+                        .and_then(|c| c.get("total"))
+                        .and_then(Value::as_f64);
                     out.push(AgentEvent::Usage(Usage {
                         input_tokens: u64_of(u, "input"),
                         output_tokens: u64_of(u, "output"),
@@ -200,7 +237,10 @@ impl AgentAdapter for Pi {
             }
             "tool_execution_start" => {
                 let name = str_of(&v, "toolName").unwrap_or("tool");
-                vec![activity(ActivityKind::Tool, tool_label(name, v.get("args")))]
+                vec![activity(
+                    ActivityKind::Tool,
+                    tool_label(name, v.get("args")),
+                )]
             }
             "agent_end" => vec![AgentEvent::Done],
             _ => vec![],
@@ -224,7 +264,11 @@ fn text_blocks(msg: &Value) -> String {
 fn parse_pi_models(table: &str, default_id: Option<&str>) -> Vec<ModelInfo> {
     let mut out = Vec::new();
     for line in table.lines().skip(1) {
-        let cols: Vec<&str> = line.split("  ").map(str::trim).filter(|c| !c.is_empty()).collect();
+        let cols: Vec<&str> = line
+            .split("  ")
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .collect();
         if cols.len() < 2 || cols[0] == "provider" {
             continue;
         }
@@ -233,7 +277,15 @@ fn parse_pi_models(table: &str, default_id: Option<&str>) -> Vec<ModelInfo> {
         out.push(ModelInfo {
             is_default: default_id == Some(id.as_str()),
             name: cols[1].to_string(),
-            note: Some(format!("{}{}", cols[0], if thinking == "yes" { " · thinking" } else { "" })),
+            note: Some(format!(
+                "{}{}",
+                cols[0],
+                if thinking == "yes" {
+                    " · thinking"
+                } else {
+                    ""
+                }
+            )),
             context: cols.get(2).map(|c| c.to_string()),
             id,
         });
@@ -253,8 +305,16 @@ mod tests {
     fn streams_text_and_reads_usage() {
         let mut a = Pi::default();
         let events = run(&mut a, &fixture("pi_pong.jsonl"));
-        assert_eq!(events[0], AgentEvent::Session { id: "875aec79-f129-4a57-8f71-0f83c27d2706".into(), model: None });
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Model(m) if m == "lmstudio/qwen/qwen3.6-35b-a3b")));
+        assert_eq!(
+            events[0],
+            AgentEvent::Session {
+                id: "875aec79-f129-4a57-8f71-0f83c27d2706".into(),
+                model: None
+            }
+        );
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::Model(m) if m == "lmstudio/qwen/qwen3.6-35b-a3b")));
         assert_eq!(text_of(&events), "pong");
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Usage(_))));
         assert_eq!(events.last(), Some(&AgentEvent::Done));
@@ -283,9 +343,15 @@ mod tests {
         let mut r = req("hi");
         r.project = true;
         let spec = Pi::default().build_command(&r, &env).unwrap();
-        assert!(spec.args.windows(2).any(|w| w == ["--tools", "read,grep,find,ls"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w == ["--tools", "read,grep,find,ls"]));
         assert!(!spec.args.contains(&"--no-tools".to_string()));
-        assert!(spec.args.windows(2).any(|w| w == ["--session-id", "11111111-2222-3333-4444-555555555555"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w == ["--session-id", "11111111-2222-3333-4444-555555555555"]));
         assert!(spec.args.windows(2).any(|w| w == ["--name", "Title"]));
         assert_eq!(spec.args.last().unwrap(), "hi");
         let mut r = req("again");
@@ -293,7 +359,9 @@ mod tests {
         let spec = Pi::default().build_command(&r, &env).unwrap();
         assert!(spec.args.windows(2).any(|w| w == ["--session", "abc"]));
         assert!(spec.args.windows(2).any(|w| w == ["--name", "Title"]));
-        let spec = Pi::default().build_command(&req_with_image("hi"), &env).unwrap();
+        let spec = Pi::default()
+            .build_command(&req_with_image("hi"), &env)
+            .unwrap();
         let n = spec.args.len();
         assert_eq!(&spec.args[n - 2..], ["@attachments/att_1/red.png", "hi"]);
     }

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { watchUrl } from '../src/content/urlwatch';
 
@@ -18,7 +21,12 @@ describe('watchUrl', () => {
 		history.pushState({}, '', '/three');
 		window.dispatchEvent(new PopStateEvent('popstate'));
 		vi.advanceTimersByTime(150);
-		expect(seen.map((h) => new URL(h).pathname + new URL(h).hash)).toEqual(['/one', '/two', '/two#part', '/three']);
+		expect(seen.map((h) => new URL(h).pathname + new URL(h).hash)).toEqual([
+			'/one',
+			'/two',
+			'/two#part',
+			'/three'
+		]);
 		stop();
 	});
 

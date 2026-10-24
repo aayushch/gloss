@@ -1,5 +1,14 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
-import { artifactFileName, collectArtifacts, extractArtifacts, injectCsp, previewDocument } from './artifacts';
+import {
+	artifactFileName,
+	collectArtifacts,
+	extractArtifacts,
+	injectCsp,
+	previewDocument
+} from './artifacts';
 import { parseBlocks } from './blocks';
 import { blocksToMarkdown } from './export';
 
@@ -10,7 +19,13 @@ describe('extractArtifacts', () => {
 		const text = `Here is the page.\n\n<artifact id="hello-page" type="text/html" title="Hello page">\n${PAGE}\n</artifact>\n\nLet me know.`;
 		const { text: rest, artifacts } = extractArtifacts(text);
 		expect(artifacts).toHaveLength(1);
-		expect(artifacts[0]).toMatchObject({ identifier: 'hello-page', type: 'html', title: 'Hello page', content: PAGE, complete: true });
+		expect(artifacts[0]).toMatchObject({
+			identifier: 'hello-page',
+			type: 'html',
+			title: 'Hello page',
+			content: PAGE,
+			complete: true
+		});
 		expect(rest).toContain('Here is the page.');
 		expect(rest).toContain('Let me know.');
 		expect(rest).toContain('artifact:0');
@@ -18,13 +33,16 @@ describe('extractArtifacts', () => {
 	});
 
 	it('marks an unterminated artifact as incomplete and keeps streaming text', () => {
-		const { artifacts } = extractArtifacts('Sure.\n\n<artifact id="x" type="text/plain" title="Notes">\nline one\nline tw');
+		const { artifacts } = extractArtifacts(
+			'Sure.\n\n<artifact id="x" type="text/plain" title="Notes">\nline one\nline tw'
+		);
 		expect(artifacts[0].complete).toBe(false);
 		expect(artifacts[0].content).toBe('line one\nline tw');
 	});
 
 	it('drops a code fence wrapped around an artifact', () => {
-		const text = 'Done:\n\n```html\n<artifact id="a" type="text/html" title="A">\n<p>x</p>\n</artifact>\n```\n\nEnd.';
+		const text =
+			'Done:\n\n```html\n<artifact id="a" type="text/html" title="A">\n<p>x</p>\n</artifact>\n```\n\nEnd.';
 		const { text: rest, artifacts } = extractArtifacts(text);
 		expect(artifacts[0].content).toBe('<p>x</p>');
 		expect(rest).not.toContain('```');
@@ -32,7 +50,9 @@ describe('extractArtifacts', () => {
 	});
 
 	it('reads code artifacts with a lang attribute and single quotes', () => {
-		const { artifacts } = extractArtifacts("<artifact id='s' type='text/code' lang='python' title='Script'>\nprint(1)\n</artifact>");
+		const { artifacts } = extractArtifacts(
+			"<artifact id='s' type='text/code' lang='python' title='Script'>\nprint(1)\n</artifact>"
+		);
 		expect(artifacts[0]).toMatchObject({ type: 'code', lang: 'python', title: 'Script' });
 		expect(artifactFileName(artifacts[0])).toBe('script.py');
 	});
@@ -61,7 +81,10 @@ describe('parseBlocks with artifacts', () => {
 	});
 
 	it('exports an artifact block as a titled fence', () => {
-		const blocks = parseBlocks('<artifact id="a" type="text/markdown" title="Memo">\n# Hello\n</artifact>', 'T');
+		const blocks = parseBlocks(
+			'<artifact id="a" type="text/markdown" title="Memo">\n# Hello\n</artifact>',
+			'T'
+		);
 		expect(blocksToMarkdown(blocks)).toBe('**Memo**\n\n```md\n# Hello\n```');
 	});
 });
@@ -71,9 +94,18 @@ describe('collectArtifacts', () => {
 		const turn = (id: string, text: string) => ({ id, role: 'assistant' as const, text });
 		const groups = collectArtifacts({
 			turns: [
-				turn('t1', '<artifact id="app" type="text/html" title="App v1">\n<p>1</p>\n</artifact>') as never,
-				turn('t2', '<artifact id="other" type="text/plain" title="Other">\nx\n</artifact>') as never,
-				turn('t3', '<artifact id="app" type="text/html" title="App v2">\n<p>2</p>\n</artifact>') as never
+				turn(
+					't1',
+					'<artifact id="app" type="text/html" title="App v1">\n<p>1</p>\n</artifact>'
+				) as never,
+				turn(
+					't2',
+					'<artifact id="other" type="text/plain" title="Other">\nx\n</artifact>'
+				) as never,
+				turn(
+					't3',
+					'<artifact id="app" type="text/html" title="App v2">\n<p>2</p>\n</artifact>'
+				) as never
 			]
 		});
 		expect(groups.map((g) => g.identifier)).toEqual(['app', 'other']);
@@ -98,10 +130,19 @@ describe('preview documents', () => {
 	});
 
 	it('locks scripts and network down unless asked', () => {
-		const a = { identifier: 'a', type: 'html' as const, title: '', lang: '', content: PAGE, complete: true };
+		const a = {
+			identifier: 'a',
+			type: 'html' as const,
+			title: '',
+			lang: '',
+			content: PAGE,
+			complete: true
+		};
 		expect(previewDocument(a, { scripts: false, network: false })).toContain("default-src 'none'");
 		expect(previewDocument(a, { scripts: false, network: false })).not.toContain('script-src');
-		expect(previewDocument(a, { scripts: true, network: false })).toContain("script-src 'unsafe-inline'");
+		expect(previewDocument(a, { scripts: true, network: false })).toContain(
+			"script-src 'unsafe-inline'"
+		);
 		expect(previewDocument(a, { scripts: true, network: true })).toContain('default-src * ');
 		const svg = { ...a, type: 'svg' as const, content: '<svg/>' };
 		expect(previewDocument(svg, { scripts: true, network: true })).toContain("default-src 'none'");

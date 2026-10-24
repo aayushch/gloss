@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Gloss engine.
 //!
 //! Drives installed CLI coding agents (Claude Code, Codex, Gemini CLI, Pi,

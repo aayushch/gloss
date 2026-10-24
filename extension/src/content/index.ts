@@ -1,12 +1,28 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The content script: shows the "Ask about this" pill on a selection, the
 // composer, the glyphs and the reply popover; anchors every ask of the
 // page on load and keeps it anchored as the page changes. It talks to
 // Gloss only through the background.
 
 import { mount, unmount } from 'svelte';
-import { browser, inPrivateContext, localGet, localSet, SETTINGS_KEY, storageGet } from '../shared/browser';
+import {
+	browser,
+	inPrivateContext,
+	localGet,
+	localSet,
+	SETTINGS_KEY,
+	storageGet
+} from '../shared/browser';
 import { connectClient, type Client } from '../shared/client';
-import type { BackgroundMessage, ConnectionStatus, NavigatorState, PageTextReply, TabMessage } from '../shared/messages';
+import type {
+	BackgroundMessage,
+	ConnectionStatus,
+	NavigatorState,
+	PageTextReply,
+	TabMessage
+} from '../shared/messages';
 import {
 	DEFAULT_SETTINGS,
 	BridgeFailure,
@@ -22,7 +38,7 @@ import {
 	type PageAskResult,
 	type PageEventData,
 	type TurnEventEnvelope,
-	type WebAnchor,
+	type WebAnchor
 } from '../shared/protocol';
 import { describe, resolve } from './anchor';
 import { Dock, fractionOf } from './dock';
@@ -30,7 +46,19 @@ import { GUARD_KEY, GUARDED_EVENTS, guardListening, type GuardHolder } from './e
 import { UiGuard } from './uiguard';
 import { GlyphLayer } from './glyphs';
 import { HighlightLayer } from './highlight';
-import { addAsk, addFollowUp, applyTurnEvent, clearPage, loadPage, orderedAskIds, removeAsk, setAnchor, setOpen, type AskAnchorState, type AskEntry } from './state';
+import {
+	addAsk,
+	addFollowUp,
+	applyTurnEvent,
+	clearPage,
+	loadPage,
+	orderedAskIds,
+	removeAsk,
+	setAnchor,
+	setOpen,
+	type AskAnchorState,
+	type AskEntry
+} from './state';
 import { passageY, scrollToSpot, spotOf } from './spot';
 import styles from './styles.css';
 import { HOST_TAG, normalise, TextIndex } from './text';
@@ -97,7 +125,12 @@ class ContentApp {
 	private stopUrlWatch: (() => void) | null = null;
 	private disposed = false;
 	private uiGuard!: UiGuard;
-	private readonly listeners: [EventTarget, string, EventListener, AddEventListenerOptions | boolean | undefined][] = [];
+	private readonly listeners: [
+		EventTarget,
+		string,
+		EventListener,
+		AddEventListenerOptions | boolean | undefined
+	][] = [];
 
 	constructor(private settings: ExtensionSettings) {}
 
@@ -129,7 +162,7 @@ class ContentApp {
 				this.highlights.repaint();
 				this.updateAnchorRect();
 				this.refreshSpots();
-			},
+			}
 		});
 		this.dock = new Dock(
 			(x, y) => {
@@ -137,7 +170,10 @@ class ContentApp {
 				return null;
 			},
 			(pos) => (this.store.dock = { left: pos.left, top: pos.top }),
-			() => !!this.shadow.querySelector('.gloss-nav:hover, .gloss-nav:focus-within, .gloss-nav.is-dragging'),
+			() =>
+				!!this.shadow.querySelector(
+					'.gloss-nav:hover, .gloss-nav:focus-within, .gloss-nav.is-dragging'
+				)
 		);
 		void localGet<number>(NAV_HEIGHT_KEY).then((f) => {
 			if (typeof f === 'number' && !this.disposed) this.dock.setFraction(f);
@@ -148,7 +184,10 @@ class ContentApp {
 		});
 		this.mutations.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-		this.app = mount(App, { target: uiRoot, props: { store: this.store, actions: this.actions() } });
+		this.app = mount(App, {
+			target: uiRoot,
+			props: { store: this.store, actions: this.actions() }
+		});
 
 		this.client = connectClient();
 		this.client.onEvent((event, data) => this.onEvent(event, data));
@@ -197,7 +236,12 @@ class ContentApp {
 		return this.disposed || this.host.isConnected;
 	}
 
-	private listen(target: EventTarget, type: string, fn: EventListener, options?: AddEventListenerOptions | boolean): void {
+	private listen(
+		target: EventTarget,
+		type: string,
+		fn: EventListener,
+		options?: AddEventListenerOptions | boolean
+	): void {
 		target.addEventListener(type, fn, options);
 		this.listeners.push([target, type, fn, options]);
 	}
@@ -262,7 +306,8 @@ class ContentApp {
 				result = await this.client.request<GetPageResult>('getPage', this.pageMeta());
 			} catch (e) {
 				const f = failureOf(e);
-				if (f.code !== 'app_not_running' && f.code !== 'internal' && f.code !== 'protocol') console.warn('gloss: getPage failed', f.message);
+				if (f.code !== 'app_not_running' && f.code !== 'internal' && f.code !== 'protocol')
+					console.warn('gloss: getPage failed', f.message);
 				return;
 			}
 			if (this.disposed) return;
@@ -280,7 +325,11 @@ class ContentApp {
 
 	private subscribe(): void {
 		const page = this.store.page;
-		this.client.subscribe({ urlKey: page.urlKey, conversationId: page.conversationId, askCount: page.asks.size });
+		this.client.subscribe({
+			urlKey: page.urlKey,
+			conversationId: page.conversationId,
+			askCount: page.asks.size
+		});
 	}
 
 	/** Resolves every ask that has no anchor yet and reports the states to Gloss. */
@@ -309,7 +358,8 @@ class ContentApp {
 		const found = resolve(anchor, index, approximate);
 		if (entry.range) this.highlights.remove(entry.range);
 		if (!found) {
-			const seen = entry.state === 'anchored' || entry.state === 'fuzzy' || entry.state === 'detached';
+			const seen =
+				entry.state === 'anchored' || entry.state === 'fuzzy' || entry.state === 'detached';
 			setAnchor(this.store.page, id, null, seen ? 'detached' : 'orphan');
 			this.glyphs.remove(id);
 			if (this.store.popover?.askId === id) this.store.anchorRect = null;
@@ -321,7 +371,7 @@ class ContentApp {
 		this.glyphs.set(id, found.range, {
 			open: entry.clarification.open,
 			active: this.store.popover?.askId === id,
-			fuzzy: found.state === 'fuzzy',
+			fuzzy: found.state === 'fuzzy'
 		});
 		if (this.store.popover?.askId === id) {
 			this.highlights.setActive(found.range);
@@ -332,7 +382,8 @@ class ContentApp {
 	/** Tells Gloss the anchor states found; `detached` and `pending` stay on this page. */
 	private report(all: Record<string, AskAnchorState>): void {
 		const states: Record<string, AnchorState> = {};
-		for (const [id, state] of Object.entries(all)) if (state !== 'detached' && state !== 'pending') states[id] = state;
+		for (const [id, state] of Object.entries(all))
+			if (state !== 'detached' && state !== 'pending') states[id] = state;
 		if (!Object.keys(states).length) return;
 		this.client.request('reportAnchors', { states }).catch(() => {});
 	}
@@ -341,13 +392,19 @@ class ContentApp {
 	private refreshSpots(): void {
 		for (const entry of this.store.page.asks.values()) {
 			const range = entry.range;
-			if (!range || (entry.state !== 'anchored' && entry.state !== 'fuzzy') || !document.contains(range.startContainer)) continue;
+			if (
+				!range ||
+				(entry.state !== 'anchored' && entry.state !== 'fuzzy') ||
+				!document.contains(range.startContainer)
+			)
+				continue;
 			entry.spot = spotOf(range, entry.spot) ?? entry.spot;
 		}
 	}
 
 	private hasMissing(): boolean {
-		for (const entry of this.store.page.asks.values()) if (entry.state === 'orphan' || entry.state === 'detached') return true;
+		for (const entry of this.store.page.asks.values())
+			if (entry.state === 'orphan' || entry.state === 'detached') return true;
 		return false;
 	}
 
@@ -399,7 +456,7 @@ class ContentApp {
 					}
 					this.report(states);
 					this.bump();
-				}, delay),
+				}, delay)
 			);
 		}
 	}
@@ -516,7 +573,12 @@ class ContentApp {
 	private onDocumentMouseDown(e: MouseEvent): void {
 		if (e.composedPath().includes(this.host)) return;
 		this.store.pill = null;
-		if (this.store.composer && !this.store.composer.text.trim() && this.store.composer.phase === 'idle') this.cancelComposer();
+		if (
+			this.store.composer &&
+			!this.store.composer.text.trim() &&
+			this.store.composer.phase === 'idle'
+		)
+			this.cancelComposer();
 	}
 
 	private onDocumentKeyDown(e: KeyboardEvent): void {
@@ -548,14 +610,20 @@ class ContentApp {
 			range: captured,
 			context: {
 				before: index.text.slice(Math.max(0, start - CONTEXT_CHARS), start),
-				after: index.text.slice(end, end + CONTEXT_CHARS),
-			},
+				after: index.text.slice(end, end + CONTEXT_CHARS)
+			}
 		};
 		const rect = lastRect(captured) ?? captured.getBoundingClientRect();
 		this.store.pill = null;
 		this.closePopover();
 		this.highlights.setActive(captured);
-		this.store.composer = { quote: anchor.quote.exact, rect: rectOf(rect), text: '', phase: 'idle', error: null };
+		this.store.composer = {
+			quote: anchor.quote.exact,
+			rect: rectOf(rect),
+			text: '',
+			phase: 'idle',
+			error: null
+		};
 	}
 
 	private cancelComposer(): void {
@@ -580,7 +648,7 @@ class ContentApp {
 			context: pending.context,
 			question: text,
 			pageText: this.settings.sendPageText ? this.pageText() : null,
-			private: inPrivateContext(),
+			private: inPrivateContext()
 		};
 		try {
 			const result = await this.client.request<PageAskResult>('ask', payload);
@@ -592,7 +660,11 @@ class ContentApp {
 			if (entry && result.clarification) {
 				this.navigatorHidden = false;
 				this.highlights.add(pending.range);
-				this.glyphs.set(result.clarification.id, pending.range, { open: true, active: false, fuzzy: false });
+				this.glyphs.set(result.clarification.id, pending.range, {
+					open: true,
+					active: false,
+					fuzzy: false
+				});
 				this.openPopover(result.clarification.id);
 			}
 			this.subscribe();
@@ -685,7 +757,9 @@ class ContentApp {
 		} else if (entry.state === 'detached' && entry.spot && scrollToSpot(entry.spot)) {
 			// The page puts the passage back once its spot is on screen.
 			for (const t of this.scrollBackTimers) clearTimeout(t);
-			this.scrollBackTimers = SCROLL_BACK_RETRY_MS.map((ms) => setTimeout(() => this.retryMissing(), ms));
+			this.scrollBackTimers = SCROLL_BACK_RETRY_MS.map((ms) =>
+				setTimeout(() => this.retryMissing(), ms)
+			);
 		} else if (warnOrphan) {
 			this.store.showToast("This note's passage is no longer on the page.");
 		}
@@ -758,7 +832,10 @@ class ContentApp {
 				const entry = this.store.page.asks.get(askId);
 				if (!entry) return;
 				try {
-					const r = await this.client.request<FollowUpResult>('followUp', { clarificationId: askId, question: text });
+					const r = await this.client.request<FollowUpResult>('followUp', {
+						clarificationId: askId,
+						question: text
+					});
 					addFollowUp(this.store.page, askId, r);
 					this.bump();
 				} catch (e) {
@@ -766,7 +843,9 @@ class ContentApp {
 				}
 			},
 			cancel: (askId) => {
-				const conversationId = this.store.page.asks.get(askId)?.clarification.conversationId ?? this.store.page.conversationId;
+				const conversationId =
+					this.store.page.asks.get(askId)?.clarification.conversationId ??
+					this.store.page.conversationId;
 				if (conversationId) this.client.request('cancel', { conversationId }).catch(() => {});
 			},
 			collapse: (askId) => {
@@ -793,10 +872,11 @@ class ContentApp {
 				try {
 					await this.client.request('openInGloss', { urlKey, clarificationId: askId });
 				} catch (e) {
-					if (failureOf(e).code === 'app_not_running') this.client.request('launchApp', { urlKey }).catch(() => {});
+					if (failureOf(e).code === 'app_not_running')
+						this.client.request('launchApp', { urlKey }).catch(() => {});
 					else this.store.showToast(describeFailure(e));
 				}
-			},
+			}
 		};
 	}
 
@@ -852,7 +932,11 @@ class ContentApp {
 		if (isDeniedHost(location.hostname, settings.denyList)) this.dispose();
 	}
 
-	private readonly onTabMessage = (msg: TabMessage, _sender: unknown, sendResponse: (r: unknown) => void): void => {
+	private readonly onTabMessage = (
+		msg: TabMessage,
+		_sender: unknown,
+		sendResponse: (r: unknown) => void
+	): void => {
 		switch (msg.type) {
 			case 'ping':
 				sendResponse({ ok: true });
@@ -862,7 +946,10 @@ class ContentApp {
 				sendResponse({ ok: true });
 				return;
 			case 'navigator-state': {
-				const reply: NavigatorState = { hidden: this.navigatorHidden, notes: this.store.page.asks.size };
+				const reply: NavigatorState = {
+					hidden: this.navigatorHidden,
+					notes: this.store.page.asks.size
+				};
 				sendResponse(reply);
 				return;
 			}
@@ -887,7 +974,8 @@ class ContentApp {
 function isEditable(node: Node): boolean {
 	const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
 	if (!el) return false;
-	if (el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return true;
+	if (el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
+		return true;
 	return (el as HTMLElement).isContentEditable === true;
 }
 
@@ -902,7 +990,9 @@ function lastRect(range: Range): DOMRect | null {
 }
 
 function faviconUrl(): string | null {
-	const link = document.querySelector<HTMLLinkElement>('link[rel~="icon"], link[rel="shortcut icon"]');
+	const link = document.querySelector<HTMLLinkElement>(
+		'link[rel~="icon"], link[rel="shortcut icon"]'
+	);
 	if (link?.href) return link.href;
 	try {
 		return new URL('/favicon.ico', location.origin).href;

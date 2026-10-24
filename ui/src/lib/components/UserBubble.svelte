@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The user's message, right-aligned, with the files sent alongside it:
 	// image attachments as thumbnails, text files as named chips.
@@ -16,7 +19,9 @@
 					{#if att.kind === 'image' && app.thumbs[att.id]}
 						<img class="thumb" src={app.thumbs[att.id]} alt={att.name} title={att.name} />
 					{:else}
-						<span class="chip" title="{att.name} · {formatSize(att.size)}"><Icon name="file" size={12} />{att.name}</span>
+						<span class="chip" title="{att.name} · {formatSize(att.size)}"
+							><Icon name="file" size={12} />{att.name}</span
+						>
 					{/if}
 				{/each}
 			</div>

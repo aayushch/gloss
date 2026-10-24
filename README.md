@@ -95,6 +95,10 @@ cd ui && npm run check && npm test && npm run build
 cd extension && npm run check && npm test && npm run build
 ```
 
+Format before committing; CI does not check it. `npm install` once at the
+repo root, then `npm run format` (Prettier, for TypeScript, JavaScript and
+Svelte) and `cargo fmt --all` (rustfmt).
+
 `gloss-engine serve --loopback` runs the browser bridge without the app and
 `node scripts/bridge-smoke.mjs` drives the native-messaging host like a
 browser would.

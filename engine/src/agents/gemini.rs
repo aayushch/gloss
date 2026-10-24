@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Gemini CLI adapter (`gemini -p -o stream-json`).
 
 use std::path::PathBuf;
@@ -32,7 +35,11 @@ fn is_noise(line: &str) -> bool {
 const FALLBACK_MODELS: &[(&str, &str, &str)] = &[
     ("gemini-2.5-pro", "Gemini 2.5 Pro", "Most capable"),
     ("gemini-2.5-flash", "Gemini 2.5 Flash", "Fast"),
-    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Fastest · cheapest"),
+    (
+        "gemini-2.5-flash-lite",
+        "Gemini 2.5 Flash Lite",
+        "Fastest · cheapest",
+    ),
 ];
 
 impl AgentAdapter for Gemini {
@@ -42,7 +49,9 @@ impl AgentAdapter for Gemini {
 
     fn info(&self, env: &ShellEnv) -> AgentInfo {
         let path = resolve(env);
-        let version = path.as_ref().and_then(|p| probe_version(env, p, &["--version"]));
+        let version = path
+            .as_ref()
+            .and_then(|p| probe_version(env, p, &["--version"]));
         AgentInfo {
             id: AgentId::Gemini,
             name: display_name(AgentId::Gemini).into(),
@@ -61,8 +70,10 @@ impl AgentAdapter for Gemini {
     }
 
     fn models(&self, _env: &ShellEnv) -> Vec<ModelInfo> {
-        let configured = read_json_file(&home_file(".gemini/settings.json"))
-            .and_then(|v| v.get("model").and_then(|m| str_of(m, "name").map(str::to_string)));
+        let configured = read_json_file(&home_file(".gemini/settings.json")).and_then(|v| {
+            v.get("model")
+                .and_then(|m| str_of(m, "name").map(str::to_string))
+        });
         let mut out: Vec<ModelInfo> = FALLBACK_MODELS
             .iter()
             .map(|(id, name, note)| ModelInfo {
@@ -96,12 +107,19 @@ impl AgentAdapter for Gemini {
     }
 
     fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
-        let Some(path) = resolve(env) else { return Vec::new() };
-        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let Some(path) = resolve(env) else {
+            return Vec::new();
+        };
+        let Some(help) = help_text(env, &path, &["--help"]) else {
+            return Vec::new();
+        };
         // The help line reads "...: default (prompt for approval), auto_edit
         // (auto-approve edit tools), ..."; each mode's own words become its
         // description. Plan mode is the read-only default and is not listed.
-        let line = help.lines().find(|l| l.contains("--approval-mode")).unwrap_or("");
+        let line = help
+            .lines()
+            .find(|l| l.contains("--approval-mode"))
+            .unwrap_or("");
         flag_choices(&help, "--approval-mode")
             .into_iter()
             .filter(|id| id != "plan")
@@ -111,7 +129,12 @@ impl AgentAdapter for Gemini {
                     .map(|i| &line[i + id.len() + 2..])
                     .and_then(|r| r.find(')').map(|j| r[..j].to_string()))
                     .unwrap_or_default();
-                AgentMode { label: id.replace('_', " "), description, writes: true, id }
+                AgentMode {
+                    label: id.replace('_', " "),
+                    description,
+                    writes: true,
+                    id,
+                }
             })
             .collect()
     }
@@ -128,7 +151,11 @@ impl AgentAdapter for Gemini {
         }
         // Plan mode is Gemini's read-only mode; a chosen mode replaces it
         // inside a project folder.
-        let mode = req.mode.as_deref().filter(|_| req.project).unwrap_or("plan");
+        let mode = req
+            .mode
+            .as_deref()
+            .filter(|_| req.project)
+            .unwrap_or("plan");
         let mut args: Vec<String> = vec![
             "-p".into(),
             prompt,
@@ -174,13 +201,17 @@ impl AgentAdapter for Gemini {
         let Some(v) = parse_json(line) else {
             if line.contains(UNTRUSTED_MSG) {
                 return vec![AgentEvent::Error(
-                    "Gemini CLI refused to run: the Gloss workspace is not a trusted directory".into(),
+                    "Gemini CLI refused to run: the Gloss workspace is not a trusted directory"
+                        .into(),
                 )];
             }
             if is_noise(line) {
                 return vec![];
             }
-            return vec![activity(ActivityKind::Status, crate::prompt::truncate(line.trim(), 160))];
+            return vec![activity(
+                ActivityKind::Status,
+                crate::prompt::truncate(line.trim(), 160),
+            )];
         };
         match str_of(&v, "type").unwrap_or("") {
             "init" => match str_of(&v, "session_id") {
@@ -208,7 +239,10 @@ impl AgentAdapter for Gemini {
             }
             "tool_use" => {
                 let name = str_of(&v, "tool_name").unwrap_or("tool");
-                vec![activity(ActivityKind::Tool, tool_label(name, v.get("parameters")))]
+                vec![activity(
+                    ActivityKind::Tool,
+                    tool_label(name, v.get("parameters")),
+                )]
             }
             "result" => {
                 let mut out = Vec::new();
@@ -244,15 +278,20 @@ mod tests {
     fn captures_session_skips_noise_and_surfaces_api_error() {
         let mut a = Gemini::default();
         let events = run(&mut a, &fixture("gemini_error.txt"));
-        assert_eq!(events[0], AgentEvent::Session {
-            id: "3a744804-df5f-4f68-8095-61b78c4120f5".into(),
-            model: Some("gemini-3-flash-preview".into()),
-        });
+        assert_eq!(
+            events[0],
+            AgentEvent::Session {
+                id: "3a744804-df5f-4f68-8095-61b78c4120f5".into(),
+                model: Some("gemini-3-flash-preview".into()),
+            }
+        );
         // Startup diagnostics and stack frames never reach the UI.
         assert!(!events.iter().any(|e| matches!(e, AgentEvent::Activity { label, .. } if label.contains("STARTUP") || label.trim_start().starts_with("at "))));
         // The stack trace header does, as a status line.
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Activity { kind: ActivityKind::Status, label } if label.starts_with("Error when talking to Gemini API"))));
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Error(m) if m.contains("API key not valid"))));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::Error(m) if m.contains("API key not valid"))));
         assert_eq!(text_of(&events), "");
         assert_eq!(events.last(), Some(&AgentEvent::Done));
     }
@@ -271,9 +310,17 @@ mod tests {
         ];
         let events = run(&mut a, &lines.join("\n"));
         assert_eq!(text_of(&events), "pong");
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::SetFull(t) if t == "pong")));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::SetFull(t) if t == "pong")));
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Activity { kind: ActivityKind::Tool, label } if label == "google_web_search: x")));
-        let usage = events.iter().find_map(|e| match e { AgentEvent::Usage(u) => Some(u.clone()), _ => None }).unwrap();
+        let usage = events
+            .iter()
+            .find_map(|e| match e {
+                AgentEvent::Usage(u) => Some(u.clone()),
+                _ => None,
+            })
+            .unwrap();
         assert_eq!(usage.input_tokens, Some(10));
         assert!(!events.iter().any(|e| matches!(e, AgentEvent::Error(_))));
     }
@@ -292,8 +339,13 @@ mod tests {
             return;
         }
         let spec = Gemini::default().build_command(&req("hi"), &env).unwrap();
-        assert!(spec.env.contains(&("GEMINI_CLI_TRUST_WORKSPACE".to_string(), "true".to_string())));
-        assert!(spec.args.windows(2).any(|w| w == ["--approval-mode", "plan"]));
+        assert!(spec
+            .env
+            .contains(&("GEMINI_CLI_TRUST_WORKSPACE".to_string(), "true".to_string())));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w == ["--approval-mode", "plan"]));
         assert!(spec.args.contains(&"--session-id".to_string()));
     }
 }

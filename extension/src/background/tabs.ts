@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The registry of connected clients: every content script, popup and ask
 // window holds a port here with the keys pushed events are routed by.
 

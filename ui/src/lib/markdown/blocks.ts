@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Turns an assistant turn's markdown into a flat list of blocks. Each block
 // carries inline runs (text with formatting flags) and its plain text, which
 // is what clarification quotes are matched against. Block i of turn T has the
@@ -105,7 +108,13 @@ function mergeRuns(runs: Run[]): Run[] {
 }
 
 function sameFlags(a: Run, b: Run): boolean {
-	return !!a.b === !!b.b && !!a.i === !!b.i && !!a.code === !!b.code && !!a.del === !!b.del && a.href === b.href;
+	return (
+		!!a.b === !!b.b &&
+		!!a.i === !!b.i &&
+		!!a.code === !!b.code &&
+		!!a.del === !!b.del &&
+		a.href === b.href
+	);
 }
 
 const ENTITIES: Record<string, string> = {
@@ -131,7 +140,10 @@ export function parseBlocks(markdown: string, turnId: string): Block[] {
 	// A paragraph holding an artifact placeholder becomes the artifact's block.
 	const push = (b: Omit<Block, 'id'>) => {
 		const idx = b.kind === 'p' ? placeholderIndex(b.text) : null;
-		const block = idx !== null && artifacts[idx] ? { kind: 'artifact' as const, runs: [], text: '', artifact: artifacts[idx] } : b;
+		const block =
+			idx !== null && artifacts[idx]
+				? { kind: 'artifact' as const, runs: [], text: '', artifact: artifacts[idx] }
+				: b;
 		blocks.push({ ...block, id: `${turnId}:${blocks.length}` });
 	};
 	let tokens: Token[];
@@ -172,7 +184,14 @@ function walk(tokens: Token[], push: Push, depth: number): void {
 			}
 			case 'code': {
 				const c = tok as Tokens.Code;
-				push({ kind: 'code', lang: (c.lang ?? '').trim().split(/\s+/)[0] || '', code: c.text, runs: [], text: c.text, depth: depth || undefined });
+				push({
+					kind: 'code',
+					lang: (c.lang ?? '').trim().split(/\s+/)[0] || '',
+					code: c.text,
+					runs: [],
+					text: c.text,
+					depth: depth || undefined
+				});
 				break;
 			}
 			case 'blockquote': {
@@ -194,7 +213,10 @@ function walk(tokens: Token[], push: Push, depth: number): void {
 				break;
 			case 'table': {
 				const t = tok as Tokens.Table;
-				const rows: Run[][][] = [t.header.map((c) => inlineRuns(c.tokens)), ...t.rows.map((r) => r.map((c) => inlineRuns(c.tokens)))];
+				const rows: Run[][][] = [
+					t.header.map((c) => inlineRuns(c.tokens)),
+					...t.rows.map((r) => r.map((c) => inlineRuns(c.tokens)))
+				];
 				const text = rows.map((r) => r.map((c) => textOf(c)).join(' | ')).join('\n');
 				push({ kind: 'table', rows, runs: [], text });
 				break;
@@ -210,7 +232,8 @@ function walk(tokens: Token[], push: Push, depth: number): void {
 			default: {
 				const any = tok as { tokens?: Token[]; text?: string; raw?: string };
 				if (any.tokens) walk(any.tokens, push, depth);
-				else if (any.raw?.trim()) push({ kind: 'p', runs: [{ t: any.raw.trim() }], text: any.raw.trim() });
+				else if (any.raw?.trim())
+					push({ kind: 'p', runs: [{ t: any.raw.trim() }], text: any.raw.trim() });
 			}
 		}
 	}
@@ -237,7 +260,14 @@ function listBlocks(list: Tokens.List, push: Push, depth: number): void {
 		const runs = inlineRuns(own);
 		const prefix = item.task ? (item.checked ? '[x] ' : '[ ] ') : '';
 		if (prefix) runs.unshift({ t: prefix });
-		push({ kind: 'li', runs, text: textOf(runs), depth, ordered: list.ordered, num: list.ordered ? start + idx : undefined });
+		push({
+			kind: 'li',
+			runs,
+			text: textOf(runs),
+			depth,
+			ordered: list.ordered,
+			num: list.ordered ? start + idx : undefined
+		});
 		for (const t of rest) {
 			if (t.type === 'list') listBlocks(t as Tokens.List, push, depth + 1);
 			else walk([t], push, depth + 1);

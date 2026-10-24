@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The events the content script keeps from the page and the names under
 // which guard.ts and the main content script share the guard.
 
@@ -8,7 +11,20 @@
  * see `UiGuard` in uiguard.ts. Nothing is guarded while no Gloss UI is
  * showing, since only events aimed inside it are affected.
  */
-export const GUARDED_EVENTS = ['focusin', 'focusout', 'focus', 'blur', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'keydown', 'keypress', 'keyup'];
+export const GUARDED_EVENTS = [
+	'focusin',
+	'focusout',
+	'focus',
+	'blur',
+	'pointerdown',
+	'pointerup',
+	'mousedown',
+	'mouseup',
+	'click',
+	'keydown',
+	'keypress',
+	'keyup'
+];
 
 /** Global property holding the main content script's guard function. */
 export const GUARD_KEY = '__glossEventGuard';

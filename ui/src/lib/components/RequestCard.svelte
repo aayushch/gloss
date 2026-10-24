@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// What the agent is waiting on, shown under its pending reply: a tool
 	// call to approve or refuse, or questions to answer. Submitting hands the
@@ -5,7 +8,8 @@
 	import type { AgentRequest, RequestAnswer } from '$lib/api/types';
 	import Icon from './Icon.svelte';
 
-	let { request, onanswer }: { request: AgentRequest; onanswer: (answer: RequestAnswer) => void } = $props();
+	let { request, onanswer }: { request: AgentRequest; onanswer: (answer: RequestAnswer) => void } =
+		$props();
 
 	let reason = $state('');
 	let busy = $state(false);
@@ -16,14 +20,20 @@
 	function toggle(q: { question: string; multiSelect: boolean }, label: string) {
 		const cur = chosen[q.question] ?? [];
 		if (q.multiSelect) {
-			chosen = { ...chosen, [q.question]: cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label] };
+			chosen = {
+				...chosen,
+				[q.question]: cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
+			};
 		} else {
 			chosen = { ...chosen, [q.question]: [label] };
 		}
 	}
 
 	const complete = $derived(
-		request.kind === 'question' && request.questions.every((q) => (chosen[q.question]?.length ?? 0) > 0 || (typed[q.question] ?? '').trim())
+		request.kind === 'question' &&
+			request.questions.every(
+				(q) => (chosen[q.question]?.length ?? 0) > 0 || (typed[q.question] ?? '').trim()
+			)
 	);
 
 	function submit(answer: RequestAnswer) {
@@ -43,18 +53,54 @@
 	}
 </script>
 
-<div class="card" role="group" aria-label={request.kind === 'permission' ? 'Permission request' : 'Questions from the agent'}>
+<div
+	class="card"
+	role="group"
+	aria-label={request.kind === 'permission' ? 'Permission request' : 'Questions from the agent'}
+>
 	{#if request.kind === 'permission'}
-		<div class="head"><Icon name="file" size={12} /> The agent wants to run <strong>{request.tool}</strong></div>
+		<div class="head">
+			<Icon name="file" size={12} /> The agent wants to run <strong>{request.tool}</strong>
+		</div>
 		<div class="title">{request.title}</div>
 		{#if request.detail}<pre class="detail">{request.detail}</pre>{/if}
-		<input class="iinput reason" placeholder="Reason, if you refuse (optional)" bind:value={reason} disabled={busy} />
+		<input
+			class="iinput reason"
+			placeholder="Reason, if you refuse (optional)"
+			bind:value={reason}
+			disabled={busy}
+		/>
 		<div class="actions">
-			<button type="button" class="ibtn primary" disabled={busy} onclick={() => submit({ kind: 'permission', allow: true, message: null, setMode: null })}>Allow</button>
+			<button
+				type="button"
+				class="ibtn primary"
+				disabled={busy}
+				onclick={() => submit({ kind: 'permission', allow: true, message: null, setMode: null })}
+				>Allow</button
+			>
 			{#each request.suggestions as s (s.mode)}
-				<button type="button" class="ibtn" disabled={busy} title="Allow this call and switch the conversation to {s.label} so calls like it stop asking" onclick={() => submit({ kind: 'permission', allow: true, message: null, setMode: s.mode })}>Allow and switch to {s.label}</button>
+				<button
+					type="button"
+					class="ibtn"
+					disabled={busy}
+					title="Allow this call and switch the conversation to {s.label} so calls like it stop asking"
+					onclick={() =>
+						submit({ kind: 'permission', allow: true, message: null, setMode: s.mode })}
+					>Allow and switch to {s.label}</button
+				>
 			{/each}
-			<button type="button" class="ibtn" disabled={busy} onclick={() => submit({ kind: 'permission', allow: false, message: reason.trim() || null, setMode: null })}>Refuse</button>
+			<button
+				type="button"
+				class="ibtn"
+				disabled={busy}
+				onclick={() =>
+					submit({
+						kind: 'permission',
+						allow: false,
+						message: reason.trim() || null,
+						setMode: null
+					})}>Refuse</button
+			>
 		</div>
 	{:else}
 		<div class="head"><Icon name="file" size={12} /> The agent has a question</div>
@@ -64,17 +110,33 @@
 				<div class="qtext">{q.question}</div>
 				<div class="options">
 					{#each q.options as o (o.label)}
-						<button type="button" class="opt" class:on={(chosen[q.question] ?? []).includes(o.label)} disabled={busy} onclick={() => toggle(q, o.label)}>
+						<button
+							type="button"
+							class="opt"
+							class:on={(chosen[q.question] ?? []).includes(o.label)}
+							disabled={busy}
+							onclick={() => toggle(q, o.label)}
+						>
 							<span class="olabel">{o.label}</span>
 							{#if o.description}<span class="odesc">{o.description}</span>{/if}
 						</button>
 					{/each}
 				</div>
-				<input class="iinput other" placeholder="Or type an answer" bind:value={typed[q.question]} disabled={busy} />
+				<input
+					class="iinput other"
+					placeholder="Or type an answer"
+					bind:value={typed[q.question]}
+					disabled={busy}
+				/>
 			</div>
 		{/each}
 		<div class="actions">
-			<button type="button" class="ibtn primary" disabled={busy || !complete} onclick={submitQuestions}>Send answer</button>
+			<button
+				type="button"
+				class="ibtn primary"
+				disabled={busy || !complete}
+				onclick={submitQuestions}>Send answer</button
+			>
 		</div>
 	{/if}
 </div>

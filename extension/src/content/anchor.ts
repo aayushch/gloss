@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Describes a selected passage as a WebAnchor and finds that passage again
 // on a later visit, even when the page has changed around it.
 
@@ -16,7 +19,8 @@ export interface Resolved {
 
 /** The nearest block-level ancestor element of a node, as a short CSS path. */
 export function containerPath(node: Node): string | null {
-	let el: Element | null = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+	let el: Element | null =
+		node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
 	const doc = node.ownerDocument;
 	const win = doc?.defaultView;
 	while (el && el !== doc?.body) {
@@ -29,7 +33,37 @@ export function containerPath(node: Node): string | null {
 	return cssPath(el);
 }
 
-const INLINE_TAGS = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr', 'label', 'font', 'del', 'ins']);
+const INLINE_TAGS = new Set([
+	'a',
+	'abbr',
+	'b',
+	'bdi',
+	'bdo',
+	'cite',
+	'code',
+	'data',
+	'dfn',
+	'em',
+	'i',
+	'kbd',
+	'mark',
+	'q',
+	's',
+	'samp',
+	'small',
+	'span',
+	'strong',
+	'sub',
+	'sup',
+	'time',
+	'u',
+	'var',
+	'wbr',
+	'label',
+	'font',
+	'del',
+	'ins'
+]);
 
 /** A selector like `main > article > p:nth-of-type(3)`, cut short at the first element with an id. */
 export function cssPath(el: Element): string {
@@ -66,10 +100,10 @@ export function describe(range: Range, index: TextIndex): WebAnchor | null {
 		quote: {
 			exact: text.slice(start, end),
 			prefix: text.slice(Math.max(0, start - CONTEXT_CHARS), start),
-			suffix: text.slice(end, end + CONTEXT_CHARS),
+			suffix: text.slice(end, end + CONTEXT_CHARS)
 		},
 		position: { start, end },
-		container: containerPath(range.startContainer),
+		container: containerPath(range.startContainer)
 	};
 }
 
@@ -128,7 +162,7 @@ export function resolve(anchor: WebAnchor, index: TextIndex, approximate = true)
 	const found = (start: number, end: number, state: 'anchored' | 'fuzzy'): Resolved => ({
 		range: index.toRange(start, end),
 		offsets: { start, end },
-		state,
+		state
 	});
 
 	// 1. Unchanged page: the quote still sits where it was.

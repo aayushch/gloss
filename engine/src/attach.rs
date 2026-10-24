@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Attachment handling: deciding what kind of file the user attached, naming
 //! its stored copy, and turning text attachments into prompt text.
 
@@ -36,7 +39,11 @@ pub fn classify(name: &str, mime: &str, bytes: &[u8]) -> Option<(AttachmentKind,
     if let Some((m, _)) = IMAGE_MIMES.iter().find(|(m, _)| *m == mime) {
         return Some((AttachmentKind::Image, m.to_string()));
     }
-    let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     if let Some((_, m)) = IMAGE_EXTS.iter().find(|(e, _)| *e == ext) {
         return Some((AttachmentKind::Image, m.to_string()));
     }
@@ -66,16 +73,29 @@ fn looks_like_text(bytes: &[u8]) -> bool {
 /// A file name that is safe to put in a path and in an agent prompt: ASCII
 /// letters, digits, dot, dash and underscore only, at most 80 characters.
 pub fn safe_name(name: &str) -> String {
-    let base = Path::new(name).file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let base = Path::new(name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
     let mut out: String = base
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     while out.starts_with('.') {
         out.remove(0);
     }
     if out.len() > 80 {
-        let ext = Path::new(&out).extension().and_then(|e| e.to_str()).map(|e| format!(".{}", e)).unwrap_or_default();
+        let ext = Path::new(&out)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| format!(".{}", e))
+            .unwrap_or_default();
         let keep = 80 - ext.len();
         out = format!("{}{}", &out[..keep], ext);
     }
@@ -88,7 +108,11 @@ pub fn safe_name(name: &str) -> String {
 
 /// Prompt text for one inlined text attachment.
 pub fn inline_text(name: &str, contents: &str) -> String {
-    format!("<attachment name=\"{}\">\n{}\n</attachment>", name, contents.trim_end_matches('\n'))
+    format!(
+        "<attachment name=\"{}\">\n{}\n</attachment>",
+        name,
+        contents.trim_end_matches('\n')
+    )
 }
 
 #[cfg(test)]
@@ -97,10 +121,22 @@ mod tests {
 
     #[test]
     fn classifies_by_mime_extension_and_content() {
-        assert_eq!(classify("a.bin", "image/png", b"x"), Some((AttachmentKind::Image, "image/png".into())));
-        assert_eq!(classify("Photo.JPG", "", b"x"), Some((AttachmentKind::Image, "image/jpeg".into())));
-        assert_eq!(classify("main.rs", "", b"fn main() {}"), Some((AttachmentKind::Text, "text/plain".into())));
-        assert_eq!(classify("d.json", "application/json", b"{}"), Some((AttachmentKind::Text, "application/json".into())));
+        assert_eq!(
+            classify("a.bin", "image/png", b"x"),
+            Some((AttachmentKind::Image, "image/png".into()))
+        );
+        assert_eq!(
+            classify("Photo.JPG", "", b"x"),
+            Some((AttachmentKind::Image, "image/jpeg".into()))
+        );
+        assert_eq!(
+            classify("main.rs", "", b"fn main() {}"),
+            Some((AttachmentKind::Text, "text/plain".into()))
+        );
+        assert_eq!(
+            classify("d.json", "application/json", b"{}"),
+            Some((AttachmentKind::Text, "application/json".into()))
+        );
         assert_eq!(classify("x.pdf", "application/pdf", b"%PDF\0\x01"), None);
     }
 

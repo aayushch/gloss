@@ -1,8 +1,12 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The WebExtension API object. Firefox and Safari expose the promise-based
 // `browser` namespace; Chrome's MV3 `chrome` namespace returns promises too
 // when no callback is passed, so both can be used through one name.
 
-export const browser: typeof chrome = ((globalThis as { browser?: typeof chrome }).browser ?? chrome) as typeof chrome;
+export const browser: typeof chrome = ((globalThis as { browser?: typeof chrome }).browser ??
+	chrome) as typeof chrome;
 
 /** The extension's version from its manifest. */
 export function extensionVersion(): string {

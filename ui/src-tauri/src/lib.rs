@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Tauri shell for Gloss. Each command is a thin wrapper over the engine
 //! crate; turn progress reaches the webview as the `turn-event` event. The
 //! shell also runs the browser bridge, keeps the app alive in the menu bar
@@ -90,7 +93,11 @@ fn get_settings(engine: State<'_, Eng>) -> Result<Settings, String> {
 }
 
 #[tauri::command]
-fn update_settings(app: AppHandle, engine: State<'_, Eng>, settings: Settings) -> Result<Settings, String> {
+fn update_settings(
+    app: AppHandle,
+    engine: State<'_, Eng>,
+    settings: Settings,
+) -> Result<Settings, String> {
     let saved = engine.update_settings(settings).map_err(err)?;
     apply_safari_bridge(&app, saved.safari_bridge);
     Ok(saved)
@@ -123,10 +130,17 @@ fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> Ext
     // Each lock is taken and released on its own line: a guard created
     // inside the struct literal would live until the literal is complete,
     // and a second lock of the same mutex there would never return.
-    let loopback_port = status.loopback.lock().unwrap().as_ref().map(|(port, _)| *port);
+    let loopback_port = status
+        .loopback
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|(port, _)| *port);
     let safari_bridge_error = status.safari_bridge_error.lock().unwrap().clone();
     let safari_bridge_file = match (loopback_port, &safari_bridge_error) {
-        (Some(_), None) => app_group_dir().map(|d| d.join("bridge.json").to_string_lossy().to_string()),
+        (Some(_), None) => {
+            app_group_dir().map(|d| d.join("bridge.json").to_string_lossy().to_string())
+        }
         _ => None,
     };
     ExtensionStatus {
@@ -139,7 +153,11 @@ fn extension_status(app: AppHandle, status: State<'_, Arc<BridgeStatus>>) -> Ext
             format!("{}.{}.{}", v.major, v.minor, v.patch)
         },
         xpi_bundled: xpi.is_some(),
-        chrome_store_url: format!("{}{}", native_host::CHROME_STORE_URL, native_host::CHROME_EXTENSION_ID.trim()),
+        chrome_store_url: format!(
+            "{}{}",
+            native_host::CHROME_STORE_URL,
+            native_host::CHROME_EXTENSION_ID.trim()
+        ),
         firefox_xpi_path: xpi.map(|p| p.to_string_lossy().to_string()),
         safari_available: safari_appex_path().is_some(),
         loopback_port,
@@ -169,7 +187,9 @@ async fn safari_extension_state() -> Result<SafariExtensionState, String> {
 }
 
 #[tauri::command]
-fn register_native_hosts(status: State<'_, Arc<BridgeStatus>>) -> Vec<native_host::BrowserRegistration> {
+fn register_native_hosts(
+    status: State<'_, Arc<BridgeStatus>>,
+) -> Vec<native_host::BrowserRegistration> {
     native_host::register_all(&status.bridge_path)
 }
 
@@ -192,7 +212,8 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
 /// never falls to whatever program owns `.xpi` files.
 #[tauri::command]
 fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
-    let path = firefox_xpi_path(&app).ok_or("this build of Gloss does not include the Firefox add-on")?;
+    let path =
+        firefox_xpi_path(&app).ok_or("this build of Gloss does not include the Firefox add-on")?;
     let xpi = path.to_string_lossy().to_string();
     #[cfg(target_os = "macos")]
     {
@@ -203,7 +224,11 @@ fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
         let candidates = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
             .iter()
             .filter_map(|v| std::env::var_os(v))
-            .map(|base| PathBuf::from(base).join("Mozilla Firefox").join("firefox.exe"))
+            .map(|base| {
+                PathBuf::from(base)
+                    .join("Mozilla Firefox")
+                    .join("firefox.exe")
+            })
             .chain(std::iter::once(PathBuf::from("firefox.exe")));
         for exe in candidates {
             if std::process::Command::new(&exe).arg(&xpi).spawn().is_ok() {
@@ -242,18 +267,26 @@ async fn open_safari_extensions(app: AppHandle) -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
-        match tauri::async_runtime::spawn_blocking(safari::show_preferences).await.map_err(err)? {
+        match tauri::async_runtime::spawn_blocking(safari::show_preferences)
+            .await
+            .map_err(err)?
+        {
             Ok(()) => return Ok(()),
             Err(reason) => tracing::warn!(reason, "Safari could not show the extension's settings"),
         }
     }
-    app.opener().open_path("/Applications/Safari.app", None::<&str>).map_err(err)
+    app.opener()
+        .open_path("/Applications/Safari.app", None::<&str>)
+        .map_err(err)
 }
 
 /// The bundled Firefox add-on, when this build includes a real one. A
 /// placeholder file of size zero stands in when it was not downloaded.
 fn firefox_xpi_path(app: &AppHandle) -> Option<PathBuf> {
-    let path = app.path().resolve("gloss.xpi", tauri::path::BaseDirectory::Resource).ok()?;
+    let path = app
+        .path()
+        .resolve("gloss.xpi", tauri::path::BaseDirectory::Resource)
+        .ok()?;
     let size = std::fs::metadata(&path).ok()?.len();
     (size > 0).then_some(path)
 }
@@ -264,7 +297,11 @@ fn safari_appex_path() -> Option<PathBuf> {
         return None;
     }
     let exe = std::env::current_exe().ok()?;
-    let plugins = exe.parent()?.parent()?.join("PlugIns").join("Gloss Extension.appex");
+    let plugins = exe
+        .parent()?
+        .parent()?
+        .join("PlugIns")
+        .join("Gloss Extension.appex");
     plugins.is_dir().then_some(plugins)
 }
 
@@ -273,7 +310,11 @@ fn safari_appex_path() -> Option<PathBuf> {
 fn bridge_binary_path() -> PathBuf {
     let exe = std::env::current_exe().unwrap_or_default();
     let dir = exe.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    dir.join(if cfg!(windows) { "gloss-bridge.exe" } else { "gloss-bridge" })
+    dir.join(if cfg!(windows) {
+        "gloss-bridge.exe"
+    } else {
+        "gloss-bridge"
+    })
 }
 
 /// Shows and focuses the main window, bringing the app back from the menu bar.
@@ -304,14 +345,26 @@ fn handle_deep_link(app: &AppHandle, url: &tauri::Url) {
         return;
     }
     let key = url.path().trim_start_matches('/');
-    let Ok(url_key) = percent_decode_str(key) else { return };
-    let ask = url.query_pairs().find(|(k, _)| k == "ask").map(|(_, v)| v.into_owned());
-    let _ = app.emit("open-page", serde_json::json!({ "urlKey": url_key, "clarificationId": ask }));
+    let Ok(url_key) = percent_decode_str(key) else {
+        return;
+    };
+    let ask = url
+        .query_pairs()
+        .find(|(k, _)| k == "ask")
+        .map(|(_, v)| v.into_owned());
+    let _ = app.emit(
+        "open-page",
+        serde_json::json!({ "urlKey": url_key, "clarificationId": ask }),
+    );
 }
 
 fn percent_decode_str(s: &str) -> Result<String, ()> {
     let decoded = percent_decode(s);
-    if decoded.is_empty() && !s.is_empty() { Err(()) } else { Ok(decoded) }
+    if decoded.is_empty() && !s.is_empty() {
+        Err(())
+    } else {
+        Ok(decoded)
+    }
 }
 
 /// Starts or stops the loopback listener the Safari extension uses, to
@@ -344,7 +397,11 @@ fn apply_safari_bridge(app: &AppHandle, enabled: bool) {
             return;
         };
         let token = bridge::loopback::new_token();
-        let info = bridge::loopback::BridgeInfo { port, token: token.clone(), protocol: bridge::PROTOCOL };
+        let info = bridge::loopback::BridgeInfo {
+            port,
+            token: token.clone(),
+            protocol: bridge::PROTOCOL,
+        };
         let mut targets = vec![json_path.clone()];
         if let Some(group) = app_group_dir() {
             targets.push(group.join("bridge.json"));
@@ -380,7 +437,8 @@ fn app_group_dir() -> Option<PathBuf> {
     {
         use objc2_foundation::{NSFileManager, NSString};
         let group = NSString::from_str(APP_GROUP);
-        let url = NSFileManager::defaultManager().containerURLForSecurityApplicationGroupIdentifier(&group)?;
+        let url = NSFileManager::defaultManager()
+            .containerURLForSecurityApplicationGroupIdentifier(&group)?;
         let path = url.path()?;
         Some(PathBuf::from(path.to_string()))
     }
@@ -396,7 +454,9 @@ fn list_conversations(
     query: Option<String>,
     tag: Option<String>,
 ) -> Result<Vec<ConversationSummary>, String> {
-    engine.list_conversations(query.as_deref(), tag.as_deref()).map_err(err)
+    engine
+        .list_conversations(query.as_deref(), tag.as_deref())
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -405,12 +465,20 @@ fn search(engine: State<'_, Eng>, query: String) -> Result<Vec<SearchHit>, Strin
 }
 
 #[tauri::command]
-fn set_pinned(engine: State<'_, Eng>, id: String, pinned: bool) -> Result<ConversationSummary, String> {
+fn set_pinned(
+    engine: State<'_, Eng>,
+    id: String,
+    pinned: bool,
+) -> Result<ConversationSummary, String> {
     engine.set_pinned(&id, pinned).map_err(err)
 }
 
 #[tauri::command]
-fn set_tags(engine: State<'_, Eng>, id: String, tags: Vec<String>) -> Result<ConversationSummary, String> {
+fn set_tags(
+    engine: State<'_, Eng>,
+    id: String,
+    tags: Vec<String>,
+) -> Result<ConversationSummary, String> {
     engine.set_tags(&id, &tags).map_err(err)
 }
 
@@ -447,7 +515,11 @@ fn add_attachment(engine: State<'_, Eng>, request: Request<'_>) -> Result<Attach
 #[tauri::command]
 fn add_attachment_path(engine: State<'_, Eng>, path: String) -> Result<Attachment, String> {
     let file = std::path::Path::new(&path);
-    let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file")
+        .to_string();
     let bytes = std::fs::read(file).map_err(|e| format!("could not read {}: {}", name, e))?;
     engine.add_attachment(&name, "", &bytes).map_err(err)
 }
@@ -468,7 +540,11 @@ fn attachment_bytes(engine: State<'_, Eng>, id: String) -> Result<Response, Stri
 /// The dialog's type filter follows the extension of `default_name`.
 /// Returns the chosen path, or None when the dialog was dismissed.
 #[tauri::command]
-async fn save_text_file(app: AppHandle, default_name: String, contents: String) -> Result<Option<String>, String> {
+async fn save_text_file(
+    app: AppHandle,
+    default_name: String,
+    contents: String,
+) -> Result<Option<String>, String> {
     let ext = std::path::Path::new(&default_name)
         .extension()
         .and_then(|e| e.to_str())
@@ -488,9 +564,16 @@ async fn save_text_file(app: AppHandle, default_name: String, contents: String) 
 /// Writes an artifact to the artifacts folder and opens it with the system's
 /// default application for that file type, which for HTML is the browser.
 #[tauri::command]
-fn open_artifact(app: AppHandle, engine: State<'_, Eng>, name: String, contents: String) -> Result<String, String> {
+fn open_artifact(
+    app: AppHandle,
+    engine: State<'_, Eng>,
+    name: String,
+    contents: String,
+) -> Result<String, String> {
     let path = engine.write_artifact_file(&name, &contents).map_err(err)?;
-    app.opener().open_path(path.to_string_lossy().to_string(), None::<&str>).map_err(err)?;
+    app.opener()
+        .open_path(path.to_string_lossy().to_string(), None::<&str>)
+        .map_err(err)?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -526,7 +609,10 @@ fn add_project(engine: State<'_, Eng>, path: String) -> Result<Project, String> 
 /// Agent sessions recorded for the project folder outside Gloss. Reading the
 /// agents' files can take a moment on first use, so it runs off the main thread.
 #[tauri::command]
-async fn list_project_sessions(engine: State<'_, Eng>, path: String) -> Result<Vec<ExternalSession>, String> {
+async fn list_project_sessions(
+    engine: State<'_, Eng>,
+    path: String,
+) -> Result<Vec<ExternalSession>, String> {
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || engine.list_project_sessions(&path))
         .await
@@ -536,7 +622,12 @@ async fn list_project_sessions(engine: State<'_, Eng>, path: String) -> Result<V
 
 /// The turns of one of those sessions, read from the agent's file.
 #[tauri::command]
-async fn read_project_session(engine: State<'_, Eng>, path: String, agent: AgentId, id: String) -> Result<Vec<SessionTurn>, String> {
+async fn read_project_session(
+    engine: State<'_, Eng>,
+    path: String,
+    agent: AgentId,
+    id: String,
+) -> Result<Vec<SessionTurn>, String> {
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || engine.read_project_session(&path, agent, &id))
         .await
@@ -546,7 +637,12 @@ async fn read_project_session(engine: State<'_, Eng>, path: String, agent: Agent
 
 /// Starts a conversation that resumes one of those sessions in place.
 #[tauri::command]
-async fn continue_project_session(engine: State<'_, Eng>, path: String, agent: AgentId, id: String) -> Result<Conversation, String> {
+async fn continue_project_session(
+    engine: State<'_, Eng>,
+    path: String,
+    agent: AgentId,
+    id: String,
+) -> Result<Conversation, String> {
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || engine.continue_project_session(&path, agent, &id))
         .await
@@ -556,7 +652,10 @@ async fn continue_project_session(engine: State<'_, Eng>, path: String, agent: A
 
 /// The turns a continued conversation's session had before Gloss took it over.
 #[tauri::command]
-async fn conversation_history(engine: State<'_, Eng>, id: String) -> Result<Vec<SessionTurn>, String> {
+async fn conversation_history(
+    engine: State<'_, Eng>,
+    id: String,
+) -> Result<Vec<SessionTurn>, String> {
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || engine.conversation_history(&id))
         .await
@@ -583,11 +682,17 @@ fn create_conversation(
     web_search: Option<bool>,
     project_dir: Option<String>,
 ) -> Result<Conversation, String> {
-    engine.create_conversation(agent, model, web_search, project_dir).map_err(err)
+    engine
+        .create_conversation(agent, model, web_search, project_dir)
+        .map_err(err)
 }
 
 #[tauri::command]
-fn rename_conversation(engine: State<'_, Eng>, id: String, title: String) -> Result<ConversationSummary, String> {
+fn rename_conversation(
+    engine: State<'_, Eng>,
+    id: String,
+    title: String,
+) -> Result<ConversationSummary, String> {
     engine.rename_conversation(&id, &title).map_err(err)
 }
 
@@ -597,7 +702,11 @@ fn delete_conversation(engine: State<'_, Eng>, id: String) -> Result<(), String>
 }
 
 #[tauri::command]
-fn set_conversation_model(engine: State<'_, Eng>, id: String, model: String) -> Result<ConversationSummary, String> {
+fn set_conversation_model(
+    engine: State<'_, Eng>,
+    id: String,
+    model: String,
+) -> Result<ConversationSummary, String> {
     engine.set_conversation_model(&id, &model).map_err(err)
 }
 
@@ -607,7 +716,9 @@ fn set_conversation_web_search(
     id: String,
     enabled: bool,
 ) -> Result<ConversationSummary, String> {
-    engine.set_conversation_web_search(&id, enabled).map_err(err)
+    engine
+        .set_conversation_web_search(&id, enabled)
+        .map_err(err)
 }
 
 /// Turn progress reaches the window through the engine's event broadcast
@@ -630,19 +741,27 @@ fn forward_events(app: AppHandle, engine: Eng) {
                     }
                 }
                 Ok(AppEvent::Page { url_key, deleted }) => {
-                    let _ = app.emit("page-event", serde_json::json!({ "urlKey": url_key, "deleted": deleted }));
+                    let _ = app.emit(
+                        "page-event",
+                        serde_json::json!({ "urlKey": url_key, "deleted": deleted }),
+                    );
                 }
                 Ok(AppEvent::Settings(s)) => {
                     let _ = app.emit("settings-event", &*s);
                 }
-                Ok(AppEvent::Focus { url_key, clarification_id }) => {
+                Ok(AppEvent::Focus {
+                    url_key,
+                    clarification_id,
+                }) => {
                     show_main(&app);
                     let _ = app.emit("open-page", serde_json::json!({ "urlKey": url_key, "clarificationId": clarification_id }));
                 }
                 Ok(AppEvent::Extensions) => {
                     let _ = app.emit("extensions-event", ());
                 }
-                Ok(AppEvent::Shutdown) | Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                Ok(AppEvent::Shutdown) | Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break
+                }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
             }
         }
@@ -656,7 +775,11 @@ fn cancel_turn(engine: State<'_, Eng>, conversation_id: String) {
 
 /// Sets the working mode of a project-bound conversation; `None` is read-only.
 #[tauri::command]
-fn set_conversation_mode(engine: State<'_, Eng>, id: String, mode: Option<String>) -> Result<ConversationSummary, String> {
+fn set_conversation_mode(
+    engine: State<'_, Eng>,
+    id: String,
+    mode: Option<String>,
+) -> Result<ConversationSummary, String> {
     engine.set_conversation_mode(&id, mode).map_err(err)
 }
 
@@ -668,7 +791,9 @@ fn answer_request(
     request_id: String,
     answer: RequestAnswer,
 ) -> Result<(), String> {
-    engine.answer_request(&conversation_id, &request_id, answer).map_err(err)
+    engine
+        .answer_request(&conversation_id, &request_id, answer)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -689,8 +814,14 @@ fn set_theme(app: AppHandle, engine: State<'_, Eng>, theme: Theme) -> Result<(),
 /// as part of the page.
 fn apply_native_theme(app: &AppHandle, theme: Theme) {
     let (native, bg) = match theme {
-        Theme::Light => (tauri::Theme::Light, tauri::window::Color(0xf7, 0xf6, 0xf3, 0xff)),
-        Theme::Dark => (tauri::Theme::Dark, tauri::window::Color(0x1f, 0x1e, 0x1b, 0xff)),
+        Theme::Light => (
+            tauri::Theme::Light,
+            tauri::window::Color(0xf7, 0xf6, 0xf3, 0xff),
+        ),
+        Theme::Dark => (
+            tauri::Theme::Dark,
+            tauri::window::Color(0x1f, 0x1e, 0x1b, 0xff),
+        ),
     };
     for window in app.webview_windows().values() {
         let _ = window.set_theme(Some(native));
@@ -709,24 +840,37 @@ fn open_log_file() -> Option<std::fs::File> {
     let paths = GlossPaths::from_env();
     std::fs::create_dir_all(&paths.logs).ok()?;
     let file = paths.logs.join("gloss.log");
-    if std::fs::metadata(&file).map(|m| m.len() > LOG_ROTATE_BYTES).unwrap_or(false) {
+    if std::fs::metadata(&file)
+        .map(|m| m.len() > LOG_ROTATE_BYTES)
+        .unwrap_or(false)
+    {
         let _ = std::fs::rename(&file, paths.logs.join("gloss.log.1"));
     }
-    std::fs::OpenOptions::new().create(true).append(true).open(file).ok()
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file)
+        .ok()
 }
 
 pub fn run() {
     use tracing_subscriber::fmt::writer::MakeWriterExt;
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    let builder = tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false);
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_ansi(false);
     match open_log_file() {
-        Some(file) => builder.with_writer(std::io::stderr.and(std::sync::Mutex::new(file))).init(),
+        Some(file) => builder
+            .with_writer(std::io::stderr.and(std::sync::Mutex::new(file)))
+            .init(),
         None => builder.with_writer(std::io::stderr).init(),
     }
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main(app)
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -734,7 +878,8 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let paths = GlossPaths::from_env();
-            let engine = Engine::open(paths.clone()).map_err(|e| std::io::Error::other(e.to_string()))?;
+            let engine =
+                Engine::open(paths.clone()).map_err(|e| std::io::Error::other(e.to_string()))?;
             // The stored theme decides the native window appearance at launch.
             let settings = engine.settings().unwrap_or_default();
             apply_native_theme(app.handle(), settings.theme);
@@ -745,7 +890,10 @@ pub fn run() {
             // The browser bridge: a Unix socket for the native-messaging
             // host, host manifests so browsers can find that host, and the
             // loopback listener for Safari when the setting is on.
-            let handler = Arc::new(BridgeHandler::new(engine.clone(), app.package_info().version.to_string().as_str()));
+            let handler = Arc::new(BridgeHandler::new(
+                engine.clone(),
+                app.package_info().version.to_string().as_str(),
+            ));
             let status = Arc::new(BridgeStatus {
                 handler: handler.clone(),
                 bridge_path: bridge_binary_path(),
@@ -764,15 +912,25 @@ pub fn run() {
             }
             for reg in native_host::register_all(&status.bridge_path) {
                 if let Some(e) = reg.error {
-                    tracing::warn!(browser = reg.name, error = e, "could not register the native messaging host");
+                    tracing::warn!(
+                        browser = reg.name,
+                        error = e,
+                        "could not register the native messaging host"
+                    );
                 }
             }
             apply_safari_bridge(app.handle(), settings.safari_bridge);
 
             // Menu-bar icon: the app keeps running after its window closes.
-            let menu = MenuBuilder::new(app).text("open", "Open Gloss").separator().text("quit", "Quit Gloss").build()?;
+            let menu = MenuBuilder::new(app)
+                .text("open", "Open Gloss")
+                .separator()
+                .text("quit", "Quit Gloss")
+                .build()?;
             TrayIconBuilder::with_id("main")
-                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+                .icon(tauri::image::Image::from_bytes(include_bytes!(
+                    "../icons/tray.png"
+                ))?)
                 .icon_as_template(true)
                 .tooltip("Gloss")
                 .menu(&menu)

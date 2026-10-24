@@ -1,8 +1,20 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Derives the clarification threads of a conversation from its flat turn
 // list, and provides the small formatting helpers the transcript and rail
 // share.
 
-import type { AgentId, AnchorState, Clarification, Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
+import type {
+	AgentId,
+	AnchorState,
+	Clarification,
+	Conversation,
+	ConversationSummary,
+	ExternalSession,
+	Project,
+	Turn
+} from '$lib/api/types';
 
 export interface ThreadTurn {
 	question: Turn;
@@ -87,7 +99,10 @@ export function groupOf(ms: number): Group {
 }
 
 /** Plain text and nesting context of every rendered block, keyed by block id. */
-export const blockRegistry = new Map<string, { text: string; parentId: string | null; kind: string }>();
+export const blockRegistry = new Map<
+	string,
+	{ text: string; parentId: string | null; kind: string }
+>();
 
 /** Ids of the clarifications whose question, reply or quoted text contains
  * `query` (case-insensitive, whitespace collapsed). Find uses it to open the
@@ -98,7 +113,8 @@ export function wellsContaining(conv: Conversation, query: string): string[] {
 	if (!q) return [];
 	const hit = new Set<string>();
 	for (const cl of conv.clarifications) if (flat(cl.quote).includes(q)) hit.add(cl.id);
-	for (const t of conv.turns) if (t.clarificationId && flat(t.text).includes(q)) hit.add(t.clarificationId);
+	for (const t of conv.turns)
+		if (t.clarificationId && flat(t.text).includes(q)) hit.add(t.clarificationId);
 	return [...hit];
 }
 
@@ -110,7 +126,11 @@ export function wellsContaining(conv: Conversation, query: string): string[] {
 export function splitForRail(
 	conversations: ConversationSummary[],
 	projects: Project[]
-): { byProject: Map<string, ConversationSummary[]>; pages: ConversationSummary[]; rest: ConversationSummary[] } {
+): {
+	byProject: Map<string, ConversationSummary[]>;
+	pages: ConversationSummary[];
+	rest: ConversationSummary[];
+} {
 	const byProject = new Map<string, ConversationSummary[]>(projects.map((p) => [p.path, []]));
 	const pages: ConversationSummary[] = [];
 	const rest: ConversationSummary[] = [];
@@ -164,17 +184,31 @@ export function anchorLabel(state: AnchorState | null): string {
 
 /** One entry in a project's rail list: a Gloss conversation, or a session
  * the agent recorded outside Gloss. */
-export type ProjectItem = { kind: 'chat'; chat: ConversationSummary } | { kind: 'session'; session: ExternalSession };
+export type ProjectItem =
+	{ kind: 'chat'; chat: ConversationSummary } | { kind: 'session'; session: ExternalSession };
 
 /** A project's entries: pinned conversations first, then conversations and
  * outside sessions together, newest first. `agent`, when set, keeps only
  * that agent's entries. */
-export function projectItems(chats: ConversationSummary[], sessions: ExternalSession[], agent: AgentId | null): ProjectItem[] {
+export function projectItems(
+	chats: ConversationSummary[],
+	sessions: ExternalSession[],
+	agent: AgentId | null
+): ProjectItem[] {
 	const keep = (a: AgentId) => !agent || a === agent;
-	const pinned: ProjectItem[] = chats.filter((c) => c.pinned && keep(c.agent)).map((chat) => ({ kind: 'chat', chat }));
+	const pinned: ProjectItem[] = chats
+		.filter((c) => c.pinned && keep(c.agent))
+		.map((chat) => ({ kind: 'chat', chat }));
 	const rest = [
-		...chats.filter((c) => !c.pinned && keep(c.agent)).map((chat) => ({ at: chat.updatedAt, item: { kind: 'chat', chat } as ProjectItem })),
-		...sessions.filter((s) => keep(s.agent)).map((session) => ({ at: session.updatedAt, item: { kind: 'session', session } as ProjectItem }))
+		...chats
+			.filter((c) => !c.pinned && keep(c.agent))
+			.map((chat) => ({ at: chat.updatedAt, item: { kind: 'chat', chat } as ProjectItem })),
+		...sessions
+			.filter((s) => keep(s.agent))
+			.map((session) => ({
+				at: session.updatedAt,
+				item: { kind: 'session', session } as ProjectItem
+			}))
 	].sort((a, b) => b.at - a.at);
 	return [...pinned, ...rest.map((r) => r.item)];
 }

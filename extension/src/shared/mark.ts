@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The quote mark of the Gloss icon as inline SVG, so the mark on the page,
 // in the pill and in the popover is the same shape the app icon shows. It
 // is sized by the surrounding font size (`width: 1em`) and filled with the

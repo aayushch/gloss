@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Paints asked passages with rounded tinted boxes, one per line of the
 // passage, drawn in the extension's shadow root over the page text: the
 // same look the Gloss app gives a quoted span. The boxes let pointer
@@ -64,7 +67,7 @@ export function clipBox(box: Box, clip: Box): Box | null {
 		left: Math.max(box.left, clip.left),
 		top: Math.max(box.top, clip.top),
 		right: Math.min(box.right, clip.right),
-		bottom: Math.min(box.bottom, clip.bottom),
+		bottom: Math.min(box.bottom, clip.bottom)
 	};
 	return r.right - r.left > 0.5 && r.bottom - r.top > 0.5 ? r : null;
 }
@@ -77,13 +80,19 @@ export function clipBox(box: Box, clip: Box): Box | null {
 function visibleArea(range: Range, win: Window): Box {
 	let clip: Box = { left: -1e9, top: -1e9, right: 1e9, bottom: 1e9 };
 	const start = range.commonAncestorContainer;
-	let el: Element | null = start.nodeType === Node.ELEMENT_NODE ? (start as Element) : start.parentElement;
+	let el: Element | null =
+		start.nodeType === Node.ELEMENT_NODE ? (start as Element) : start.parentElement;
 	const doc = win.document;
 	while (el && el !== doc.body && el !== doc.documentElement) {
 		const style = win.getComputedStyle(el);
 		if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
 			const r = el.getBoundingClientRect();
-			clip = { left: Math.max(clip.left, r.left), top: Math.max(clip.top, r.top), right: Math.min(clip.right, r.right), bottom: Math.min(clip.bottom, r.bottom) };
+			clip = {
+				left: Math.max(clip.left, r.left),
+				top: Math.max(clip.top, r.top),
+				right: Math.min(clip.right, r.right),
+				bottom: Math.min(clip.bottom, r.bottom)
+			};
 		}
 		el = el.parentElement;
 	}
@@ -102,7 +111,7 @@ export class HighlightLayer {
 
 	constructor(
 		private readonly container: HTMLElement,
-		private readonly win: Window = window,
+		private readonly win: Window = window
 	) {}
 
 	add(range: Range): void {
@@ -148,7 +157,11 @@ export class HighlightLayer {
 		const doc = this.win.document;
 		const range = p.range;
 		let boxes: Box[] = [];
-		if (!range.collapsed && doc.contains(range.startContainer) && doc.contains(range.endContainer)) {
+		if (
+			!range.collapsed &&
+			doc.contains(range.startContainer) &&
+			doc.contains(range.endContainer)
+		) {
 			const clip = visibleArea(range, this.win);
 			boxes = mergeRects(range.getClientRects())
 				.map((b) => clipBox(b, clip))

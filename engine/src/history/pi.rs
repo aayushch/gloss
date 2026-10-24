@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Pi keeps a project's sessions in `~/.pi/agent/sessions/--<slug>--/`,
 //! where the slug is the folder path without its first character when that
 //! is `/` or `\`, and with every other `/`, `\` and `:` replaced by `-`
@@ -28,7 +31,9 @@ pub(super) fn files(home: &Path, project: &str) -> Vec<PathBuf> {
 
 pub(super) fn scan(path: &Path) -> Option<Scanned> {
     let lines = head_lines(path, HEAD_BYTES);
-    let header = lines.iter().find(|v| str_at(v, "type") == Some("session"))?;
+    let header = lines
+        .iter()
+        .find(|v| str_at(v, "type") == Some("session"))?;
     let name = lines
         .iter()
         .rev()
@@ -38,7 +43,9 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
     let prompt = lines.iter().find_map(|v| {
         let m = v.get("message")?;
         if str_at(v, "type") == Some("message") && str_at(m, "role") == Some("user") {
-            first_text(m.get("content")?).filter(|t| !is_slash_command(t)).map(str::to_string)
+            first_text(m.get("content")?)
+                .filter(|t| !is_slash_command(t))
+                .map(str::to_string)
         } else {
             None
         }
@@ -53,7 +60,9 @@ pub(super) fn scan(path: &Path) -> Option<Scanned> {
             title,
             origin: None,
             file: path.to_string_lossy().to_string(),
-            created_at: str_at(header, "timestamp").and_then(parse_time).unwrap_or(0),
+            created_at: str_at(header, "timestamp")
+                .and_then(parse_time)
+                .unwrap_or(0),
             updated_at: 0,
         },
     })
@@ -80,7 +89,11 @@ pub(super) fn turns(path: &Path) -> Vec<crate::types::SessionTurn> {
                 for part in content.as_array().into_iter().flatten() {
                     match str_at(part, "type") {
                         Some("text") => out.text(str_at(part, "text").unwrap_or(""), at),
-                        Some("toolCall") => out.tool(str_at(part, "name").unwrap_or("tool"), part.get("arguments").unwrap_or(&serde_json::Value::Null), at),
+                        Some("toolCall") => out.tool(
+                            str_at(part, "name").unwrap_or("tool"),
+                            part.get("arguments").unwrap_or(&serde_json::Value::Null),
+                            at,
+                        ),
                         _ => {}
                     }
                 }

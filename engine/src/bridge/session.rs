@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! One bridge connection: reads request lines, answers them, and forwards
 //! engine events, whichever transport carries the bytes.
 
@@ -26,7 +29,9 @@ where
     let writer_task = tokio::spawn(async move {
         let mut writer = writer;
         while let Some(line) = rx.recv().await {
-            if writer.write_all(line.as_bytes()).await.is_err() || writer.write_all(b"\n").await.is_err() {
+            if writer.write_all(line.as_bytes()).await.is_err()
+                || writer.write_all(b"\n").await.is_err()
+            {
                 break;
             }
             if writer.flush().await.is_err() {
@@ -37,7 +42,11 @@ where
 
     let mut events = handler.engine.subscribe();
     let mut state = SessionState::new(handler.next_session_id(), label);
-    info!(session = state.id, transport = label, "bridge session opened");
+    info!(
+        session = state.id,
+        transport = label,
+        "bridge session opened"
+    );
     let mut lines = reader.lines();
     // Why the loop ended, for the log line that closes the session.
     let mut reason = "the engine shut down";
@@ -86,7 +95,12 @@ where
     handler.forget_session(state.id);
     drop(tx);
     let _ = writer_task.await;
-    info!(session = state.id, transport = label, reason, "bridge session closed");
+    info!(
+        session = state.id,
+        transport = label,
+        reason,
+        "bridge session closed"
+    );
 }
 
 /// The line a session sends for an engine event, or None for events the
@@ -94,7 +108,10 @@ where
 fn event_line(ev: AppEvent) -> Option<Outgoing> {
     match ev {
         AppEvent::Turn(env) => Some(Outgoing::event("turn", json!(env))),
-        AppEvent::Page { url_key, deleted } => Some(Outgoing::event("page", json!({ "urlKey": url_key, "deleted": deleted }))),
+        AppEvent::Page { url_key, deleted } => Some(Outgoing::event(
+            "page",
+            json!({ "urlKey": url_key, "deleted": deleted }),
+        )),
         AppEvent::Settings(s) => Some(Outgoing::event(
             "settings",
             json!({ "sendPageText": s.send_page_text, "denyList": s.page_deny_list }),
@@ -114,6 +131,10 @@ pub fn encode(out: Outgoing) -> String {
         Outgoing::Response { id, .. } | Outgoing::Error { id, .. } => id.clone(),
         Outgoing::Event { .. } => String::new(),
     };
-    serde_json::to_string(&Outgoing::err(&id, ErrorCode::Internal, "reply too large for the browser; open it in Gloss"))
-        .unwrap_or_else(|_| "{}".into())
+    serde_json::to_string(&Outgoing::err(
+        &id,
+        ErrorCode::Internal,
+        "reply too large for the browser; open it in Gloss",
+    ))
+    .unwrap_or_else(|_| "{}".into())
 }

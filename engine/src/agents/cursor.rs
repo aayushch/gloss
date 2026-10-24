@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Cursor Agent adapter (`cursor-agent -p --output-format stream-json`).
 
 use std::path::PathBuf;
@@ -21,9 +24,18 @@ pub struct Cursor {
 /// The words that follow `key` in the help text, up to the end of that
 /// sentence, with the line-wrapping whitespace collapsed.
 fn help_sentence(help: &str, key: &str) -> String {
-    let Some(i) = help.find(key) else { return String::new() };
-    let rest: String = help[i + key.len()..].split_whitespace().collect::<Vec<_>>().join(" ");
-    let end = rest.find(". ").or_else(|| rest.find(" (default")).or_else(|| rest.find(" --")).unwrap_or(rest.len().min(140));
+    let Some(i) = help.find(key) else {
+        return String::new();
+    };
+    let rest: String = help[i + key.len()..]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let end = rest
+        .find(". ")
+        .or_else(|| rest.find(" (default"))
+        .or_else(|| rest.find(" --"))
+        .unwrap_or(rest.len().min(140));
     rest[..end].trim().trim_end_matches('.').to_string()
 }
 
@@ -31,7 +43,9 @@ fn resolve(env: &ShellEnv) -> Option<PathBuf> {
     if let Some(p) = env.path_lookup("cursor-agent") {
         return Some(p);
     }
-    env.path_lookup_all("agent").into_iter().find(|p| is_cursor_agent(env, p))
+    env.path_lookup_all("agent")
+        .into_iter()
+        .find(|p| is_cursor_agent(env, p))
 }
 
 fn is_cursor_agent(env: &ShellEnv, candidate: &std::path::Path) -> bool {
@@ -49,7 +63,9 @@ fn is_cursor_agent(env: &ShellEnv, candidate: &std::path::Path) -> bool {
 /// e.g. "2026.10.01-e373342"
 fn looks_like_cursor_version(v: &str) -> bool {
     let v = v.trim();
-    let Some((date, hash)) = v.split_once('-') else { return false };
+    let Some((date, hash)) = v.split_once('-') else {
+        return false;
+    };
     date.split('.').count() == 3
         && date.chars().all(|c| c.is_ascii_digit() || c == '.')
         && !hash.is_empty()
@@ -63,7 +79,9 @@ impl AgentAdapter for Cursor {
 
     fn info(&self, env: &ShellEnv) -> AgentInfo {
         let path = resolve(env);
-        let version = path.as_ref().and_then(|p| probe_version(env, p, &["--version"]));
+        let version = path
+            .as_ref()
+            .and_then(|p| probe_version(env, p, &["--version"]));
         AgentInfo {
             id: AgentId::Cursor,
             name: display_name(AgentId::Cursor).into(),
@@ -83,16 +101,23 @@ impl AgentAdapter for Cursor {
     /// `cursor-agent --list-models` prints "id - Name" lines after a header; the
     /// line marked "(current" is the default.
     fn models(&self, env: &ShellEnv) -> Vec<ModelInfo> {
-        let Some(path) = resolve(env) else { return vec![] };
-        let Some(out) = capture_text(env, &path, &["--list-models"], Duration::from_secs(10)) else {
+        let Some(path) = resolve(env) else {
+            return vec![];
+        };
+        let Some(out) = capture_text(env, &path, &["--list-models"], Duration::from_secs(10))
+        else {
             return vec![];
         };
         parse_cursor_models(&out)
     }
 
     fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
-        let Some(path) = resolve(env) else { return Vec::new() };
-        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let Some(path) = resolve(env) else {
+            return Vec::new();
+        };
+        let Some(help) = help_text(env, &path, &["--help"]) else {
+            return Vec::new();
+        };
         let mut out: Vec<AgentMode> = flag_choices(&help, "--mode")
             .into_iter()
             .filter(|id| id != "ask")
@@ -166,7 +191,10 @@ impl AgentAdapter for Cursor {
 
     fn parse_line(&mut self, line: &str) -> Vec<AgentEvent> {
         let Some(v) = parse_json(line) else {
-            return vec![activity(ActivityKind::Status, crate::prompt::truncate(line.trim(), 160))];
+            return vec![activity(
+                ActivityKind::Status,
+                crate::prompt::truncate(line.trim(), 160),
+            )];
         };
         match str_of(&v, "type").unwrap_or("") {
             "system" => {
@@ -235,7 +263,9 @@ impl AgentAdapter for Cursor {
                 let is_error = v.get("is_error").and_then(Value::as_bool).unwrap_or(false);
                 if is_error {
                     out.push(AgentEvent::Error(
-                        str_of(&v, "result").unwrap_or("Cursor reported an error").to_string(),
+                        str_of(&v, "result")
+                            .unwrap_or("Cursor reported an error")
+                            .to_string(),
                     ));
                 } else if self.text.is_empty() {
                     if let Some(r) = str_of(&v, "result").filter(|r| !r.is_empty()) {
@@ -255,17 +285,14 @@ fn parse_cursor_models(out: &str) -> Vec<ModelInfo> {
     let mut models = Vec::new();
     for line in out.lines() {
         let line = line.trim();
-        let Some((id, rest)) = line.split_once(" - ") else { continue };
+        let Some((id, rest)) = line.split_once(" - ") else {
+            continue;
+        };
         if id.contains(' ') || id.is_empty() {
             continue;
         }
         let is_default = rest.contains("(current") || rest.contains("default)");
-        let name = rest
-            .split('(')
-            .next()
-            .unwrap_or(rest)
-            .trim()
-            .to_string();
+        let name = rest.split('(').next().unwrap_or(rest).trim().to_string();
         models.push(ModelInfo {
             id: id.to_string(),
             name,
@@ -286,10 +313,28 @@ mod tests {
     fn parses_recorded_ask_run() {
         let mut a = Cursor::default();
         let events = run(&mut a, &fixture("cursor_pong.jsonl"));
-        assert_eq!(events[0], AgentEvent::Session { id: "171eba98-f068-4012-bde9-e2104051430b".into(), model: Some("Auto".into()) });
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Activity { kind: ActivityKind::Thinking, .. })));
+        assert_eq!(
+            events[0],
+            AgentEvent::Session {
+                id: "171eba98-f068-4012-bde9-e2104051430b".into(),
+                model: Some("Auto".into())
+            }
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            AgentEvent::Activity {
+                kind: ActivityKind::Thinking,
+                ..
+            }
+        )));
         assert_eq!(text_of(&events), "pong");
-        let usage = events.iter().find_map(|e| match e { AgentEvent::Usage(u) => Some(u.clone()), _ => None }).unwrap();
+        let usage = events
+            .iter()
+            .find_map(|e| match e {
+                AgentEvent::Usage(u) => Some(u.clone()),
+                _ => None,
+            })
+            .unwrap();
         assert_eq!(usage.input_tokens, Some(8808));
         assert_eq!(events.last(), Some(&AgentEvent::Done));
     }
@@ -309,7 +354,9 @@ mod tests {
 
     #[test]
     fn model_list_and_version_shape() {
-        let models = parse_cursor_models("Available models\n\nauto - Auto (current, default)\ngpt-5.2 - GPT-5.2\n");
+        let models = parse_cursor_models(
+            "Available models\n\nauto - Auto (current, default)\ngpt-5.2 - GPT-5.2\n",
+        );
         assert_eq!(models.len(), 2);
         assert!(models[0].is_default);
         assert_eq!(models[0].name, "Auto");

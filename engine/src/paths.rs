@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Locations of everything Gloss writes to disk.
 
 use std::path::{Path, PathBuf};
@@ -60,7 +63,14 @@ impl GlossPaths {
 
     /// Create every directory Gloss needs. Safe to call repeatedly.
     pub fn ensure(&self) -> std::io::Result<()> {
-        for dir in [&self.home, &self.workspace, &self.attachments, &self.pi_sessions, &self.artifacts, &self.logs] {
+        for dir in [
+            &self.home,
+            &self.workspace,
+            &self.attachments,
+            &self.pi_sessions,
+            &self.artifacts,
+            &self.logs,
+        ] {
             std::fs::create_dir_all(dir)?;
         }
         Ok(())

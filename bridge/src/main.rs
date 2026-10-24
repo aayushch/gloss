@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! `gloss-bridge`: the native-messaging host browsers spawn for the Gloss
 //! extension. It relays frames from the browser to the running Gloss app
 //! over the Unix socket in the Gloss home folder, and lines from the app
@@ -30,7 +33,9 @@ fn socket_path() -> PathBuf {
     if let Some(home) = std::env::var_os("GLOSS_HOME").filter(|h| !h.is_empty()) {
         return PathBuf::from(home).join("bridge.sock");
     }
-    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .unwrap_or_default();
     PathBuf::from(home).join(".gloss").join("bridge.sock")
 }
 
@@ -85,9 +90,16 @@ impl Bridge {
         if guard.is_some() {
             return true;
         }
-        let Ok(stream) = UnixStream::connect(&self.socket) else { return false };
-        let Ok(reader) = stream.try_clone() else { return false };
-        let generation = self.generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let Ok(stream) = UnixStream::connect(&self.socket) else {
+            return false;
+        };
+        let Ok(reader) = stream.try_clone() else {
+            return false;
+        };
+        let generation = self
+            .generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
         *guard = Some((generation, stream));
         drop(guard);
         self.emit(&json!({ "event": "app_state", "data": { "running": true } }));
@@ -120,8 +132,14 @@ impl Bridge {
         #[cfg(unix)]
         {
             let mut guard = self.conn.lock().unwrap();
-            let Some((_, stream)) = guard.as_mut() else { return false };
-            let ok = stream.write_all(line.as_bytes()).and_then(|_| stream.write_all(b"\n")).and_then(|_| stream.flush()).is_ok();
+            let Some((_, stream)) = guard.as_mut() else {
+                return false;
+            };
+            let ok = stream
+                .write_all(line.as_bytes())
+                .and_then(|_| stream.write_all(b"\n"))
+                .and_then(|_| stream.flush())
+                .is_ok();
             if !ok {
                 *guard = None;
             }
@@ -144,7 +162,10 @@ impl Bridge {
                 return;
             }
         };
-        let id = value.get("id").cloned().unwrap_or(Value::String(String::new()));
+        let id = value
+            .get("id")
+            .cloned()
+            .unwrap_or(Value::String(String::new()));
         let method = value.get("method").and_then(|m| m.as_str()).unwrap_or("");
         self.connect();
         if self.connected() && method != "launchApp" {
@@ -187,7 +208,9 @@ fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }

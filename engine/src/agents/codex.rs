@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Codex CLI adapter (`codex exec --json`).
 
 use std::path::PathBuf;
@@ -30,10 +33,13 @@ impl AgentAdapter for Codex {
 
     fn info(&self, env: &ShellEnv) -> AgentInfo {
         let path = resolve(env);
-        let version = path.as_ref().and_then(|p| probe_version(env, p, &["--version"])).map(|v| {
-            // "codex-cli 0.118.0" → "0.118.0"
-            v.split_whitespace().last().unwrap_or(&v).to_string()
-        });
+        let version = path
+            .as_ref()
+            .and_then(|p| probe_version(env, p, &["--version"]))
+            .map(|v| {
+                // "codex-cli 0.118.0" → "0.118.0"
+                v.split_whitespace().last().unwrap_or(&v).to_string()
+            });
         AgentInfo {
             id: AgentId::Codex,
             name: display_name(AgentId::Codex).into(),
@@ -104,15 +110,21 @@ impl AgentAdapter for Codex {
     }
 
     fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
-        let Some(path) = resolve(env) else { return Vec::new() };
-        let Some(help) = help_text(env, &path, &["exec", "--help"]) else { return Vec::new() };
+        let Some(path) = resolve(env) else {
+            return Vec::new();
+        };
+        let Some(help) = help_text(env, &path, &["exec", "--help"]) else {
+            return Vec::new();
+        };
         flag_choices(&help, "--sandbox")
             .into_iter()
             .filter(|id| id != "read-only")
             .map(|id| AgentMode {
                 label: id.replace('-', " "),
                 description: match id.as_str() {
-                    "workspace-write" => "Edits files inside the folder; commands run in the sandbox".into(),
+                    "workspace-write" => {
+                        "Edits files inside the folder; commands run in the sandbox".into()
+                    }
                     "danger-full-access" => "No sandbox at all".into(),
                     _ => String::new(),
                 },
@@ -130,7 +142,11 @@ impl AgentAdapter for Codex {
         }
         // The sandbox level is the mode; headless runs never prompt, so a
         // chosen level decides what Codex may touch on its own.
-        let sandbox = req.mode.as_deref().filter(|_| req.project).unwrap_or("read-only");
+        let sandbox = req
+            .mode
+            .as_deref()
+            .filter(|_| req.project)
+            .unwrap_or("read-only");
         args.extend([
             "--json".into(),
             "--sandbox".into(),
@@ -160,11 +176,17 @@ impl AgentAdapter for Codex {
 
     fn parse_line(&mut self, line: &str) -> Vec<AgentEvent> {
         let Some(v) = parse_json(line) else {
-            return vec![activity(ActivityKind::Status, crate::prompt::truncate(line.trim(), 160))];
+            return vec![activity(
+                ActivityKind::Status,
+                crate::prompt::truncate(line.trim(), 160),
+            )];
         };
         match str_of(&v, "type").unwrap_or("") {
             "thread.started" => match str_of(&v, "thread_id") {
-                Some(id) => vec![AgentEvent::Session { id: id.to_string(), model: None }],
+                Some(id) => vec![AgentEvent::Session {
+                    id: id.to_string(),
+                    model: None,
+                }],
                 None => vec![],
             },
             "item.started" | "item.updated" | "item.completed" => {
@@ -187,7 +209,11 @@ impl AgentAdapter for Codex {
             "turn.failed" | "error" => {
                 let msg = str_of(&v, "message")
                     .map(str::to_string)
-                    .or_else(|| v.get("error").and_then(|e| str_of(e, "message")).map(str::to_string))
+                    .or_else(|| {
+                        v.get("error")
+                            .and_then(|e| str_of(e, "message"))
+                            .map(str::to_string)
+                    })
                     .unwrap_or_else(|| "Codex reported an error".into());
                 vec![AgentEvent::Error(msg)]
             }
@@ -227,20 +253,33 @@ impl Codex {
                     return vec![];
                 }
                 let cmd = str_of(item, "command").unwrap_or("");
-                vec![activity(ActivityKind::Tool, format!("shell: {}", crate::prompt::truncate(cmd, 80)))]
+                vec![activity(
+                    ActivityKind::Tool,
+                    format!("shell: {}", crate::prompt::truncate(cmd, 80)),
+                )]
             }
             "web_search" => {
                 if completed {
                     return vec![];
                 }
                 let q = str_of(item, "query").unwrap_or("");
-                vec![activity(ActivityKind::Tool, if q.is_empty() { "Web search".to_string() } else { format!("Web search: {}", crate::prompt::truncate(q, 80)) })]
+                vec![activity(
+                    ActivityKind::Tool,
+                    if q.is_empty() {
+                        "Web search".to_string()
+                    } else {
+                        format!("Web search: {}", crate::prompt::truncate(q, 80))
+                    },
+                )]
             }
             "mcp_tool_call" => {
                 if completed {
                     return vec![];
                 }
-                vec![activity(ActivityKind::Tool, str_of(item, "tool").unwrap_or("tool"))]
+                vec![activity(
+                    ActivityKind::Tool,
+                    str_of(item, "tool").unwrap_or("tool"),
+                )]
             }
             _ => vec![],
         }
@@ -256,7 +295,13 @@ mod tests {
     fn parses_recorded_exec_stream() {
         let mut a = Codex::default();
         let events = run(&mut a, &fixture("codex_exec.jsonl"));
-        assert_eq!(events[0], AgentEvent::Session { id: "019d5324-d8b3-7353-b3a8-a96df1f97ac1".into(), model: None });
+        assert_eq!(
+            events[0],
+            AgentEvent::Session {
+                id: "019d5324-d8b3-7353-b3a8-a96df1f97ac1".into(),
+                model: None
+            }
+        );
         let text = text_of(&events);
         assert!(text.starts_with("I’m going to map the repository structure"));
         assert!(text.contains("\n\nI’ve confirmed this is a multi-part repo"));
@@ -288,7 +333,10 @@ mod tests {
         let mut env = env;
         let mut dirs = vec![dir.path().to_path_buf()];
         dirs.extend(env.path_dirs());
-        let joined = std::env::join_paths(&dirs).unwrap().to_string_lossy().into_owned();
+        let joined = std::env::join_paths(&dirs)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         env.vars.insert("PATH".into(), joined);
         let spec = a.build_command(&req("hi"), &env).unwrap();
         assert_eq!(spec.args[..2], ["exec", "--json"]);
@@ -301,7 +349,10 @@ mod tests {
         assert_eq!(spec.args[..3], ["exec", "resume", "t1"]);
         assert!(!spec.args.contains(&"--search".to_string()));
         let spec = a.build_command(&req_with_image("look"), &env).unwrap();
-        assert!(spec.args.windows(2).any(|w| w[0] == "--image" && w[1].ends_with("red.png")));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w[0] == "--image" && w[1].ends_with("red.png")));
         assert_eq!(spec.args.last().unwrap(), "look");
     }
 }

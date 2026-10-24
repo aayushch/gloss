@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Well-shaped composer that opens under the block holding a fresh highlight.
 	import { short } from '$lib/state/threads';
@@ -7,7 +10,12 @@
 		nested = false,
 		onsend,
 		oncancel
-	}: { quote: string; nested?: boolean; onsend: (text: string) => void; oncancel: () => void } = $props();
+	}: {
+		quote: string;
+		nested?: boolean;
+		onsend: (text: string) => void;
+		oncancel: () => void;
+	} = $props();
 
 	let value = $state('');
 	let ta: HTMLTextAreaElement | undefined = $state();
@@ -50,8 +58,7 @@
 				} else if (e.key === 'Escape') {
 					oncancel();
 				}
-			}}
-		></textarea>
+			}}></textarea>
 		<div class="actions">
 			<button type="button" class="ibtn primary" onclick={send}>Ask</button>
 			<button type="button" class="ibtn" onclick={oncancel}>Cancel</button>

@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// One-line note under the pending dots: what the agent is doing besides writing.
 	import type { Activity } from '$lib/state/app.svelte';

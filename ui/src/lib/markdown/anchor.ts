@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Splits a block's inline runs at mark boundaries so a highlighted quote can
 // be rendered without losing the bold / code / italic formatting underneath.
 
@@ -30,7 +33,9 @@ export function resolveMark(blockText: string, quote: string): number {
 
 export function segmentRuns(runs: Run[], marks: Mark[]): Segment[] {
 	const text = runs.map((r) => r.t).join('');
-	const valid = marks.filter((m) => m.start >= 0 && m.len > 0 && m.start < text.length).sort((a, b) => a.start - b.start);
+	const valid = marks
+		.filter((m) => m.start >= 0 && m.len > 0 && m.start < text.length)
+		.sort((a, b) => a.start - b.start);
 	const bounds = new Set<number>([0, text.length]);
 	const runAt: { s: number; e: number; r: Run }[] = [];
 	let off = 0;

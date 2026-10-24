@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Messages between the background and the extension's own pages: content
 // scripts, the toolbar popup and the ask window. All of them connect a
 // runtime port and speak the same request/response/event shape.
@@ -9,7 +12,8 @@ export const PORT_NAME = 'gloss';
 
 /** How the background reaches Gloss right now, as the UI shows it. */
 export interface ConnectionStatus {
-	state: 'connecting' | 'connected' | 'app_not_running' | 'host_missing' | 'protocol_mismatch' | 'error';
+	state:
+		'connecting' | 'connected' | 'app_not_running' | 'host_missing' | 'protocol_mismatch' | 'error';
 	appVersion?: string;
 	agent?: string;
 	/** For `protocol_mismatch`: which side is too old. */
@@ -30,7 +34,9 @@ export type ClientMessage =
 	  };
 
 /** Background → client. */
-export type BackgroundMessage = { type: 'response'; id: string; result?: unknown; error?: BridgeError } | { type: 'event'; event: string; data: unknown };
+export type BackgroundMessage =
+	| { type: 'response'; id: string; result?: unknown; error?: BridgeError }
+	| { type: 'event'; event: string; data: unknown };
 
 /** Sent to a tab's content script with `tabs.sendMessage`; answered with a promise. */
 export type TabMessage =
@@ -63,7 +69,7 @@ export interface PageTextReply {
 export const LOCAL_METHODS = {
 	status: '$status',
 	/** Opens the ask window with `AskWindowParams`, reusing the one already open. */
-	openAskWindow: '$openAskWindow',
+	openAskWindow: '$openAskWindow'
 } as const;
 
 /**

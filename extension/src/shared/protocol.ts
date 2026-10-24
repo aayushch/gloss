@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Wire types of the Gloss bridge protocol, mirrored by hand from
 // engine/src/bridge/protocol.rs, engine/src/bridge/handler.rs and
 // engine/src/types.rs. Every field is camelCase on the wire.
@@ -45,7 +48,10 @@ export class BridgeFailure extends Error {
 }
 
 export function isBridgeFailure(e: unknown): e is BridgeFailure {
-	return e instanceof BridgeFailure || (typeof e === 'object' && e !== null && 'code' in e && 'message' in e);
+	return (
+		e instanceof BridgeFailure ||
+		(typeof e === 'object' && e !== null && 'code' in e && 'message' in e)
+	);
 }
 
 export function failureOf(e: unknown): BridgeFailure {
@@ -162,7 +168,13 @@ export interface Question {
 }
 
 export type AgentRequest = { id: string } & (
-	| { kind: 'permission'; tool: string; title: string; detail: string | null; suggestions: ModeSuggestion[] }
+	| {
+			kind: 'permission';
+			tool: string;
+			title: string;
+			detail: string | null;
+			suggestions: ModeSuggestion[];
+	  }
 	| { kind: 'question'; questions: Question[] }
 );
 

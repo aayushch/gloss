@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Drives the built `gloss-bridge` binary the way a browser does.
 
 use std::io::{Read, Write};
@@ -29,7 +32,11 @@ fn reports_app_not_running_without_a_socket() {
         .unwrap();
     let mut stdin = child.stdin.take().unwrap();
     let mut stdout = child.stdout.take().unwrap();
-    stdin.write_all(&frame(r#"{"id":"1","method":"hello","params":{"protocol":1}}"#)).unwrap();
+    stdin
+        .write_all(&frame(
+            r#"{"id":"1","method":"hello","params":{"protocol":1}}"#,
+        ))
+        .unwrap();
     let reply = read_frame(&mut stdout);
     assert_eq!(reply["id"], "1");
     assert_eq!(reply["error"]["code"], "app_not_running");

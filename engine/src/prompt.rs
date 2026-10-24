@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Text Gloss adds around what the user types before it reaches an agent.
 
 use crate::types::{AgentId, AskContext};
@@ -105,7 +108,10 @@ Answer about the passage directly, in markdown, without summarising the whole pa
 
 /// A question about the page as a whole, with no highlighted passage.
 pub fn page_question_prompt(question: &str, page_text: Option<&str>, page_changed: bool) -> String {
-    let mut p = format!("The user is asking about the page as a whole.\n\n{}", question.trim());
+    let mut p = format!(
+        "The user is asking about the page as a whole.\n\n{}",
+        question.trim()
+    );
     append_page_text(&mut p, page_text, page_changed);
     p
 }
@@ -155,17 +161,28 @@ pub fn compose_prompt(agent: AgentId, is_first_turn: bool, body: &str, note: &st
 /// Conversation title derived from the first user message: the first line,
 /// cut to `max` characters on a word boundary.
 pub fn title_from_message(text: &str, max: usize) -> String {
-    let first_line = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
+    let first_line = text
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim();
     let cleaned: String = first_line.split_whitespace().collect::<Vec<_>>().join(" ");
     if cleaned.chars().count() <= max {
-        return if cleaned.is_empty() { "New conversation".to_string() } else { cleaned };
+        return if cleaned.is_empty() {
+            "New conversation".to_string()
+        } else {
+            cleaned
+        };
     }
     let cut: String = cleaned.chars().take(max).collect();
     let base = match cut.rfind(' ') {
         Some(i) if i > max / 2 => &cut[..i],
         _ => &cut,
     };
-    format!("{}…", base.trim_end_matches(|c: char| c.is_ascii_punctuation() || c == ' '))
+    format!(
+        "{}…",
+        base.trim_end_matches(|c: char| c.is_ascii_punctuation() || c == ' ')
+    )
 }
 
 /// Shorten with an ellipsis on a character boundary.
@@ -200,15 +217,28 @@ mod tests {
     #[test]
     fn system_note_only_on_first_turn_without_flag() {
         assert!(compose_prompt(AgentId::Codex, true, "hi", SYSTEM_NOTE).starts_with(SYSTEM_NOTE));
-        assert_eq!(compose_prompt(AgentId::Codex, false, "hi", SYSTEM_NOTE), "hi");
-        assert_eq!(compose_prompt(AgentId::Claude, true, "hi", SYSTEM_NOTE), "hi");
+        assert_eq!(
+            compose_prompt(AgentId::Codex, false, "hi", SYSTEM_NOTE),
+            "hi"
+        );
+        assert_eq!(
+            compose_prompt(AgentId::Claude, true, "hi", SYSTEM_NOTE),
+            "hi"
+        );
     }
 
     #[test]
     fn system_note_describes_artifacts() {
         assert!(SYSTEM_NOTE.contains(ARTIFACT_TAG));
         assert!(SYSTEM_NOTE.contains("</artifact>"));
-        for ty in ["text/html", "image/svg+xml", "text/mermaid", "text/markdown", "text/plain", "text/code"] {
+        for ty in [
+            "text/html",
+            "image/svg+xml",
+            "text/mermaid",
+            "text/markdown",
+            "text/plain",
+            "text/code",
+        ] {
             assert!(SYSTEM_NOTE.contains(ty), "{} missing", ty);
         }
     }
@@ -224,7 +254,10 @@ mod tests {
 
     #[test]
     fn page_ask_prompt_quotes_context_and_page_text() {
-        let ctx = AskContext { before: "the cache ".into(), after: " is flushed".into() };
+        let ctx = AskContext {
+            before: "the cache ".into(),
+            after: " is flushed".into(),
+        };
         let p = page_ask_prompt("store buffer", &ctx, "Why?", Some("Full page"), false);
         assert!(p.starts_with("The user highlighted this passage on the page"));
         assert!(p.contains("> \"store buffer\""));
@@ -250,8 +283,14 @@ mod tests {
 
     #[test]
     fn title_cuts_on_word_boundary() {
-        let t = title_from_message("How do CPUs actually implement atomic compare-and-swap, and how do locks build on it?", 60);
-        assert_eq!(t, "How do CPUs actually implement atomic compare-and-swap, and…");
+        let t = title_from_message(
+            "How do CPUs actually implement atomic compare-and-swap, and how do locks build on it?",
+            60,
+        );
+        assert_eq!(
+            t,
+            "How do CPUs actually implement atomic compare-and-swap, and…"
+        );
         assert_eq!(title_from_message("short", 60), "short");
         assert_eq!(title_from_message("  \n  ", 60), "New conversation");
     }

@@ -1,8 +1,27 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import type { Clarification, GetPageResult, Turn, TurnEventEnvelope } from '../src/shared/protocol';
-import { addAsk, applyTurnEvent, createPageState, isStreaming, loadPage, orderedAskIds, removeAsk, setOpen, type AskEntry } from '../src/content/state';
+import {
+	addAsk,
+	applyTurnEvent,
+	createPageState,
+	isStreaming,
+	loadPage,
+	orderedAskIds,
+	removeAsk,
+	setOpen,
+	type AskEntry
+} from '../src/content/state';
 
-function turn(id: string, role: 'user' | 'assistant', text: string, clarificationId: string | null, status: Turn['status'] = 'done'): Turn {
+function turn(
+	id: string,
+	role: 'user' | 'assistant',
+	text: string,
+	clarificationId: string | null,
+	status: Turn['status'] = 'done'
+): Turn {
 	return {
 		id,
 		conversationId: 'conv',
@@ -17,7 +36,7 @@ function turn(id: string, role: 'user' | 'assistant', text: string, clarificatio
 		usage: null,
 		createdAt: 0,
 		completedAt: null,
-		attachments: [],
+		attachments: []
 	};
 }
 
@@ -31,8 +50,12 @@ function clarification(id: string, open = true): Clarification {
 		parentId: null,
 		open,
 		createdAt: 0,
-		webAnchor: { quote: { exact: 'quote', prefix: '', suffix: '' }, position: null, container: null },
-		anchorState: null,
+		webAnchor: {
+			quote: { exact: 'quote', prefix: '', suffix: '' },
+			position: null,
+			container: null
+		},
+		anchorState: null
 	};
 }
 
@@ -40,7 +63,18 @@ function pageResult(): GetPageResult {
 	return {
 		urlKey: 'https://example.com/a',
 		page: {
-			page: { urlKey: 'https://example.com/a', url: 'https://example.com/a', title: 'A', faviconUrl: null, conversationId: 'conv', askCount: 1, orphanCount: 0, firstSeen: 0, lastSeen: 0, updatedAt: 0 },
+			page: {
+				urlKey: 'https://example.com/a',
+				url: 'https://example.com/a',
+				title: 'A',
+				faviconUrl: null,
+				conversationId: 'conv',
+				askCount: 1,
+				orphanCount: 0,
+				firstSeen: 0,
+				lastSeen: 0,
+				updatedAt: 0
+			},
 			conversation: {
 				id: 'conv',
 				title: 'A',
@@ -48,10 +82,14 @@ function pageResult(): GetPageResult {
 				model: '',
 				running: true,
 				pendingRequest: null,
-				turns: [turn('t1', 'user', 'why?', 'c1'), turn('t2', 'assistant', 'Because', 'c1', 'streaming'), turn('t3', 'user', 'page q', null)],
-				clarifications: [clarification('c1')],
-			},
-		},
+				turns: [
+					turn('t1', 'user', 'why?', 'c1'),
+					turn('t2', 'assistant', 'Because', 'c1', 'streaming'),
+					turn('t3', 'user', 'page q', null)
+				],
+				clarifications: [clarification('c1')]
+			}
+		}
 	};
 }
 
@@ -103,9 +141,22 @@ describe('page state', () => {
 	it('marks failed and cancelled turns and ignores other conversations', () => {
 		const s = createPageState();
 		loadPage(s, pageResult());
-		expect(applyTurnEvent(s, { conversationId: 'other', turnId: 't2', event: { type: 'delta', text: 'x' } })).toBeNull();
+		expect(
+			applyTurnEvent(s, {
+				conversationId: 'other',
+				turnId: 't2',
+				event: { type: 'delta', text: 'x' }
+			})
+		).toBeNull();
 		expect(s.asks.get('c1')!.turns[1].text).toBe('Because');
-		applyTurnEvent(s, env('t2', { type: 'failed', error: 'boom', turn: turn('t2', 'assistant', 'Because', 'c1', 'error') }));
+		applyTurnEvent(
+			s,
+			env('t2', {
+				type: 'failed',
+				error: 'boom',
+				turn: turn('t2', 'assistant', 'Because', 'c1', 'error')
+			})
+		);
 		expect(s.asks.get('c1')!.turns[1].status).toBe('error');
 		expect(s.running).toBe(false);
 	});
@@ -113,7 +164,12 @@ describe('page state', () => {
 	it('tracks running for turns that belong to no ask', () => {
 		const s = createPageState();
 		loadPage(s, pageResult());
-		expect(applyTurnEvent(s, env('t4', { type: 'done', turn: turn('t4', 'assistant', 'page reply', null) }))).toBeNull();
+		expect(
+			applyTurnEvent(
+				s,
+				env('t4', { type: 'done', turn: turn('t4', 'assistant', 'page reply', null) })
+			)
+		).toBeNull();
 		expect(s.running).toBe(false);
 		applyTurnEvent(s, env('t4', { type: 'started', sessionId: null, model: null }));
 		expect(s.running).toBe(true);
@@ -123,9 +179,15 @@ describe('page state', () => {
 		const s = createPageState();
 		const entry = addAsk(
 			s,
-			{ urlKey: 'k', conversationId: 'conv', clarification: clarification('c9'), userTurn: turn('t8', 'user', 'q', 'c9'), assistantTurn: turn('t9', 'assistant', '', 'c9', 'pending') },
+			{
+				urlKey: 'k',
+				conversationId: 'conv',
+				clarification: clarification('c9'),
+				userTurn: turn('t8', 'user', 'q', 'c9'),
+				assistantTurn: turn('t9', 'assistant', '', 'c9', 'pending')
+			},
 			null,
-			'anchored',
+			'anchored'
 		)!;
 		expect(s.running).toBe(true);
 		expect(entry.turns.length).toBe(2);
@@ -137,7 +199,12 @@ describe('page state', () => {
 });
 
 describe('orderedAskIds', () => {
-	function entry(id: string, number: number, range: Range | null, state: AskEntry['state']): AskEntry {
+	function entry(
+		id: string,
+		number: number,
+		range: Range | null,
+		state: AskEntry['state']
+	): AskEntry {
 		return { clarification: { ...clarification(id), number }, turns: [], range, state, spot: null };
 	}
 
@@ -157,7 +224,14 @@ describe('orderedAskIds', () => {
 		// Scrolled away: its text is gone, its last height is kept.
 		s.asks.set('away', entry('away', 5, null, 'detached'));
 		const heights: Record<string, number> = { early: 10, middle: 20, away: 25, late: 30 };
-		expect(orderedAskIds(s, (e) => heights[e.clarification.id] ?? null)).toEqual(['early', 'middle', 'away', 'late', 'pending', 'orphan']);
+		expect(orderedAskIds(s, (e) => heights[e.clarification.id] ?? null)).toEqual([
+			'early',
+			'middle',
+			'away',
+			'late',
+			'pending',
+			'orphan'
+		]);
 	});
 
 	it('orders asks on one line by where their passages start', () => {

@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// One ask made on a web page: the highlighted passage with the text
 	// around it dimmed, how well the extension still finds it on the page,
@@ -10,26 +13,44 @@
 	import Icon from './Icon.svelte';
 	import Well from './Well.svelte';
 
-	let { thread, conv, threads }: { thread: Thread; conv: Conversation; threads: Map<string, Thread> } = $props();
+	let {
+		thread,
+		conv,
+		threads
+	}: { thread: Thread; conv: Conversation; threads: Map<string, Thread> } = $props();
 
 	const cl = $derived(thread.clarification);
 	const anchor = $derived(cl.webAnchor);
 	const state = $derived(anchorLabel(cl.anchorState));
 
 	async function confirmRemove() {
-		const yes = await (await api()).confirm('Remove this ask?', 'The question, its answers and any follow-ups are removed from Gloss.', 'Remove');
+		const yes = await (
+			await api()
+		).confirm(
+			'Remove this ask?',
+			'The question, its answers and any follow-ups are removed from Gloss.',
+			'Remove'
+		);
 		if (yes) app.removeAsk(cl.id);
 	}
 </script>
 
 <section class="ask" class:orphan={cl.anchorState === 'orphan'}>
 	<blockquote class="passage">
-		{#if anchor?.quote.prefix}<span class="around">{anchor.quote.prefix}</span>{/if}<span class="exact">{anchor?.quote.exact ?? cl.quote}</span>{#if anchor?.quote.suffix}<span class="around">{anchor.quote.suffix}</span>{/if}
+		{#if anchor?.quote.prefix}<span class="around">{anchor.quote.prefix}</span>{/if}<span
+			class="exact">{anchor?.quote.exact ?? cl.quote}</span
+		>{#if anchor?.quote.suffix}<span class="around">{anchor.quote.suffix}</span>{/if}
 	</blockquote>
 	<div class="bar">
 		{#if state}<span class="state">{state}</span>{/if}
 		<span class="spacer"></span>
-		<button type="button" class="rm" title="Remove this ask" aria-label="Remove this ask" onclick={confirmRemove}><Icon name="trash" size={12} /></button>
+		<button
+			type="button"
+			class="rm"
+			title="Remove this ask"
+			aria-label="Remove this ask"
+			onclick={confirmRemove}><Icon name="trash" size={12} /></button
+		>
 	</div>
 	<Well {thread} {conv} {threads} depth={1} />
 </section>

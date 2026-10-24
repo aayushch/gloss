@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { TextIndex, normalise } from '../src/content/text';
 
@@ -21,7 +24,7 @@ describe('TextIndex', () => {
 
 	it('skips hidden, aria-hidden, script and style nodes', () => {
 		const idx = page(
-			'<p>shown</p><p hidden>hidden</p><p aria-hidden="true">aria</p><script>var x;</script><style>p{}</style><p style="display:none">styled</p><gloss-ask-host>ui</gloss-ask-host><p>end</p>',
+			'<p>shown</p><p hidden>hidden</p><p aria-hidden="true">aria</p><script>var x;</script><style>p{}</style><p style="display:none">styled</p><gloss-ask-host>ui</gloss-ask-host><p>end</p>'
 		);
 		expect(idx.text).toBe('shown end');
 	});

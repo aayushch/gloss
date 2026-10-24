@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Application state as Svelte 5 runes. One instance (`app`) is shared by every
 // component; it loads data through the API client and applies streamed turn
 // events to the active conversation.
@@ -34,7 +37,14 @@ import { copyText } from '$lib/clipboard';
 import { isOlder } from '$lib/version';
 import { find } from '$lib/state/find.svelte';
 import { wellsContaining } from '$lib/state/threads';
-import { artifactFileName, collectArtifacts, extractArtifacts, type Artifact, type ArtifactGroup, type ArtifactVersion } from '$lib/markdown/artifacts';
+import {
+	artifactFileName,
+	collectArtifacts,
+	extractArtifacts,
+	type Artifact,
+	type ArtifactGroup,
+	type ArtifactVersion
+} from '$lib/markdown/artifacts';
 import { DeltaBatcher } from './deltas';
 import { exportConversation, exportFileName, exportPage, exportTurn } from '$lib/markdown/export';
 
@@ -79,7 +89,12 @@ export interface ViewedSession {
 
 /** Last path segment of a folder path, for labels. */
 export function folderName(path: string): string {
-	return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+	return (
+		path
+			.replace(/[\\/]+$/, '')
+			.split(/[\\/]/)
+			.pop() || path
+	);
 }
 
 /** Where an outside session ran, as a phrase that follows "run". */
@@ -113,7 +128,8 @@ const RAIL_COLLAPSED_KEY = 'gloss.rail.collapsed';
 function readRailCollapsed(): Record<RailSection, boolean> {
 	const open = { projects: false, pages: false, chats: false };
 	try {
-		const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(RAIL_COLLAPSED_KEY) : null;
+		const raw =
+			typeof localStorage !== 'undefined' ? localStorage.getItem(RAIL_COLLAPSED_KEY) : null;
 		if (!raw) return open;
 		const saved = JSON.parse(raw) as Partial<Record<RailSection, boolean>>;
 		return { ...open, projects: !!saved.projects, pages: !!saved.pages, chats: !!saved.chats };
@@ -125,7 +141,17 @@ function readRailCollapsed(): Record<RailSection, boolean> {
 class AppState {
 	agents = $state<AgentInfo[]>([]);
 	models = $state<Partial<Record<AgentId, ModelInfo[]>>>({});
-	settings = $state<Settings>({ defaultAgent: 'claude', defaultModel: {}, theme: 'light', webSearch: true, sendPageText: true, pageDenyList: [], extensionBannerSeen: true, safariBridge: true, pageAgent: null });
+	settings = $state<Settings>({
+		defaultAgent: 'claude',
+		defaultModel: {},
+		theme: 'light',
+		webSearch: true,
+		sendPageText: true,
+		pageDenyList: [],
+		extensionBannerSeen: true,
+		safariBridge: true,
+		pageAgent: null
+	});
 	conversations = $state<ConversationSummary[]>([]);
 	/** Web pages asked about from the browser extension, most recently updated first. */
 	pages = $state<Page[]>([]);
@@ -212,7 +238,12 @@ class AppState {
 	}
 
 	get activeAgentId(): AgentId {
-		return this.active?.agent ?? this.draft?.agent ?? this.viewing?.session.agent ?? this.settings.defaultAgent;
+		return (
+			this.active?.agent ??
+			this.draft?.agent ??
+			this.viewing?.session.agent ??
+			this.settings.defaultAgent
+		);
 	}
 
 	get activeModelId(): string {
@@ -226,12 +257,15 @@ class AppState {
 	}
 
 	get running(): boolean {
-		return !!this.active?.turns.some((t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming'));
+		return !!this.active?.turns.some(
+			(t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming')
+		);
 	}
 
 	modelName(agent: AgentId, modelId: string): string {
 		const list = this.models[agent] ?? [];
-		const found = list.find((m) => m.id === modelId) ?? (modelId ? null : list.find((m) => m.isDefault));
+		const found =
+			list.find((m) => m.id === modelId) ?? (modelId ? null : list.find((m) => m.isDefault));
 		return found?.name ?? (modelId || 'Default model');
 	}
 
@@ -239,7 +273,12 @@ class AppState {
 		find.expand = (q) => this.openWellsContaining(q);
 		const a = await api();
 		try {
-			const [agents, settings, conversations, projects] = await Promise.all([a.listAgents(), a.getSettings(), a.listConversations(), a.listProjects()]);
+			const [agents, settings, conversations, projects] = await Promise.all([
+				a.listAgents(),
+				a.getSettings(),
+				a.listConversations(),
+				a.listProjects()
+			]);
 			this.agents = agents;
 			this.settings = settings;
 			this.conversations = conversations;
@@ -281,7 +320,10 @@ class AppState {
 	async refreshList(): Promise<void> {
 		const a = await api();
 		const q = this.search.trim();
-		const [list, hits] = await Promise.all([a.listConversations(q || undefined, this.tagFilter ?? undefined), q ? a.search(q) : Promise.resolve(null)]);
+		const [list, hits] = await Promise.all([
+			a.listConversations(q || undefined, this.tagFilter ?? undefined),
+			q ? a.search(q) : Promise.resolve(null)
+		]);
 		// A stale response must not overwrite the result of a newer query.
 		if (q !== this.search.trim()) return;
 		this.conversations = list;
@@ -330,7 +372,10 @@ class AppState {
 
 	/** Narrows a project's list to one agent; choosing the same agent again clears it. */
 	setAgentFilter(path: string, agent: AgentId | null): void {
-		this.agentFilter = { ...this.agentFilter, [path]: this.agentFilter[path] === agent ? null : agent };
+		this.agentFilter = {
+			...this.agentFilter,
+			[path]: this.agentFilter[path] === agent ? null : agent
+		};
 	}
 
 	showMore(path: string): void {
@@ -387,7 +432,11 @@ class AppState {
 	async loadPageAsks(urlKey: string): Promise<void> {
 		try {
 			const detail = await (await api()).getPage(urlKey);
-			if (detail) this.pageAsks = { ...this.pageAsks, [urlKey]: detail.conversation.clarifications.filter((c) => c.webAnchor && !c.parentId) };
+			if (detail)
+				this.pageAsks = {
+					...this.pageAsks,
+					[urlKey]: detail.conversation.clarifications.filter((c) => c.webAnchor && !c.parentId)
+				};
 		} catch {
 			// The rail keeps the asks it already shows.
 		}
@@ -415,7 +464,11 @@ class AppState {
 	async deletePage(urlKey: string): Promise<void> {
 		const a = await api();
 		const page = this.pages.find((p) => p.urlKey === urlKey);
-		const yes = await a.confirm(`Delete “${page?.title ?? urlKey}”?`, 'The page and every ask made on it are removed from Gloss. The page itself is untouched.', 'Delete');
+		const yes = await a.confirm(
+			`Delete “${page?.title ?? urlKey}”?`,
+			'The page and every ask made on it are removed from Gloss. The page itself is untouched.',
+			'Delete'
+		);
 		if (!yes) return;
 		try {
 			await a.deletePage(urlKey);
@@ -503,9 +556,11 @@ class AppState {
 	async refreshExtensionStatus(quiet = false): Promise<void> {
 		try {
 			this.extension = await (await api()).extensionStatus();
-			if (!this.outdatedExtensions.some((s) => s.browser === 'firefox')) this.firefoxUpdateStarted = false;
+			if (!this.outdatedExtensions.some((s) => s.browser === 'firefox'))
+				this.firefoxUpdateStarted = false;
 		} catch (e) {
-			if (!quiet) this.flash(`Could not read the extension status: ${String(e).replace(/^Error:\s*/, '')}`);
+			if (!quiet)
+				this.flash(`Could not read the extension status: ${String(e).replace(/^Error:\s*/, '')}`);
 		}
 	}
 
@@ -585,7 +640,12 @@ class AppState {
 		if (!cur || cur.id !== id) return;
 		for (const t of fresh.turns) {
 			const local = cur.turns.find((x) => x.id === t.id);
-			if (local && (t.status === 'pending' || t.status === 'streaming') && local.text.length > t.text.length) t.text = local.text;
+			if (
+				local &&
+				(t.status === 'pending' || t.status === 'streaming') &&
+				local.text.length > t.text.length
+			)
+				t.text = local.text;
 		}
 		this.active = fresh;
 		this.loadTurnState(fresh);
@@ -635,7 +695,9 @@ class AppState {
 		const s = await (await api()).setPinned(id, !cur.pinned);
 		this.patchSummary(s);
 		if (this.active?.id === id) this.active.pinned = s.pinned;
-		this.conversations = [...this.conversations].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+		this.conversations = [...this.conversations].sort(
+			(a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt
+		);
 	}
 
 	async setTags(tags: string[], id = this.active?.id): Promise<void> {
@@ -704,13 +766,16 @@ class AppState {
 
 	async saveTurnMarkdown(turn: Turn): Promise<void> {
 		if (!this.active) return;
-		const path = await (await api()).saveTextFile(exportFileName(this.active.title, '-reply'), exportTurn(this.active, turn));
+		const path = await (
+			await api()
+		).saveTextFile(exportFileName(this.active.title, '-reply'), exportTurn(this.active, turn));
 		if (path) this.flash(`Saved ${path}`);
 	}
 
 	async copyConversationMarkdown(): Promise<void> {
 		if (!this.active) return;
-		if (await copyText(exportConversation(this.active))) this.flash('Copied conversation as Markdown');
+		if (await copyText(exportConversation(this.active)))
+			this.flash('Copied conversation as Markdown');
 	}
 
 	/** Copies a page conversation as notes: the page, then each ask with its answers. */
@@ -723,7 +788,9 @@ class AppState {
 
 	async saveConversationMarkdown(): Promise<void> {
 		if (!this.active) return;
-		const path = await (await api()).saveTextFile(exportFileName(this.active.title), exportConversation(this.active));
+		const path = await (
+			await api()
+		).saveTextFile(exportFileName(this.active.title), exportConversation(this.active));
 		if (path) this.flash(`Saved ${path}`);
 	}
 
@@ -828,14 +895,21 @@ class AppState {
 		for (const t of conv.turns) t.attachments.forEach((att) => this.loadThumb(att));
 		this.requests = {};
 		const pending = conv.pendingRequest;
-		const waiting = pending && conv.turns.find((t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming'));
+		const waiting =
+			pending &&
+			conv.turns.find(
+				(t) => t.role === 'assistant' && (t.status === 'pending' || t.status === 'streaming')
+			);
 		if (pending && waiting) this.requests = { [waiting.id]: pending };
 	}
 
 	/** Opens a draft. `projectDir` is the project it starts in; null starts a
 	 * chat outside any project. */
 	newChat(projectDir: string | null = null): void {
-		const agent = this.agents.find((a) => a.id === this.settings.defaultAgent && a.available)?.id ?? this.agents.find((a) => a.available)?.id ?? this.settings.defaultAgent;
+		const agent =
+			this.agents.find((a) => a.id === this.settings.defaultAgent && a.available)?.id ??
+			this.agents.find((a) => a.available)?.id ??
+			this.settings.defaultAgent;
 		this.active = null;
 		this.viewing = null;
 		this.earlier = [];
@@ -843,7 +917,13 @@ class AppState {
 		this.composerFor = null;
 		this.modelMenuOpen = false;
 		this.artifactView = null;
-		this.draft = { agent, model: this.settings.defaultModel[agent] ?? '', webSearch: this.settings.webSearch, projectDir, mode: null };
+		this.draft = {
+			agent,
+			model: this.settings.defaultModel[agent] ?? '',
+			webSearch: this.settings.webSearch,
+			projectDir,
+			mode: null
+		};
 		if (projectDir) this.toggleProject(projectDir, true);
 	}
 
@@ -880,7 +960,8 @@ class AppState {
 		if (!conv || !request) return;
 		try {
 			await (await api()).answerRequest(conv.id, request.id, answer);
-			if (answer.kind === 'permission' && answer.allow && answer.setMode) conv.mode = answer.setMode;
+			if (answer.kind === 'permission' && answer.allow && answer.setMode)
+				conv.mode = answer.setMode;
 		} catch (e) {
 			this.flash(`Could not answer: ${String(e).replace(/^Error:\s*/, '')}`);
 		}
@@ -916,12 +997,19 @@ class AppState {
 		const v = this.viewing;
 		if (!v) return null;
 		try {
-			const conv = await (await api()).continueProjectSession(v.project, v.session.agent, v.session.id);
+			const conv = await (
+				await api()
+			).continueProjectSession(v.project, v.session.agent, v.session.id);
 			this.viewing = null;
 			this.active = conv;
 			this.earlier = v.turns ?? [];
 			this.conversations = [summaryOf(conv), ...this.conversations];
-			this.outside = { ...this.outside, [v.project]: (this.outside[v.project] ?? []).filter((s) => !(s.agent === v.session.agent && s.id === v.session.id)) };
+			this.outside = {
+				...this.outside,
+				[v.project]: (this.outside[v.project] ?? []).filter(
+					(s) => !(s.agent === v.session.agent && s.id === v.session.id)
+				)
+			};
 			this.refreshProjects();
 			return conv;
 		} catch (e) {
@@ -975,7 +1063,11 @@ class AppState {
 	}
 
 	async saveSettings(patch: Partial<Settings>): Promise<void> {
-		const next = { ...this.settings, ...patch, defaultModel: { ...this.settings.defaultModel, ...(patch.defaultModel ?? {}) } };
+		const next = {
+			...this.settings,
+			...patch,
+			defaultModel: { ...this.settings.defaultModel, ...(patch.defaultModel ?? {}) }
+		};
 		this.settings = await (await api()).updateSettings(next);
 		if (this.draft && patch.defaultAgent) {
 			this.draft.agent = this.settings.defaultAgent;
@@ -1030,7 +1122,12 @@ class AppState {
 		if (this.viewing && !(await this.continueSession())) return;
 		if (this.draft) {
 			const d = this.draft;
-			const conv = await a.createConversation(d.agent, d.model || undefined, d.webSearch, d.projectDir);
+			const conv = await a.createConversation(
+				d.agent,
+				d.model || undefined,
+				d.webSearch,
+				d.projectDir
+			);
 			if (d.projectDir && d.mode) {
 				try {
 					conv.mode = (await a.setConversationMode(conv.id, d.mode)).mode;
@@ -1063,7 +1160,12 @@ class AppState {
 			return;
 		}
 		this.composerFor = null;
-		await this.dispatch(body, { kind: 'new', anchorBlockId: target.blockId, quote: target.quote, parentId: target.parentId });
+		await this.dispatch(body, {
+			kind: 'new',
+			anchorBlockId: target.blockId,
+			quote: target.quote,
+			parentId: target.parentId
+		});
 	}
 
 	async followUp(clarificationId: string, question: string): Promise<void> {
@@ -1072,7 +1174,11 @@ class AppState {
 		await this.dispatch(body, { kind: 'existing', clarificationId });
 	}
 
-	private async dispatch(text: string, clarification: Parameters<typeof this.sendRaw>[1], attachments: string[] = []): Promise<void> {
+	private async dispatch(
+		text: string,
+		clarification: Parameters<typeof this.sendRaw>[1],
+		attachments: string[] = []
+	): Promise<void> {
 		try {
 			await this.sendRaw(text, clarification, attachments);
 		} catch (e) {
@@ -1082,12 +1188,17 @@ class AppState {
 
 	private async sendRaw(
 		text: string,
-		clarification: { kind: 'new'; anchorBlockId: string; quote: string; parentId: string | null } | { kind: 'existing'; clarificationId: string } | null,
+		clarification:
+			| { kind: 'new'; anchorBlockId: string; quote: string; parentId: string | null }
+			| { kind: 'existing'; clarificationId: string }
+			| null,
 		attachments: string[] = []
 	): Promise<void> {
 		if (!this.active) return;
 		const conv = this.active;
-		const res = await (await api()).sendTurn({ conversationId: conv.id, text, clarification, attachments });
+		const res = await (
+			await api()
+		).sendTurn({ conversationId: conv.id, text, clarification, attachments });
 		if (this.active?.id !== conv.id) return;
 		this.active.turns = [...this.active.turns, res.userTurn, res.assistantTurn];
 		if (res.clarification) {
@@ -1105,7 +1216,9 @@ class AppState {
 	/** Re-sends the text of a failed user turn. */
 	async retry(userTurn: Turn): Promise<void> {
 		if (!this.active) return;
-		const clarification = userTurn.clarificationId ? ({ kind: 'existing', clarificationId: userTurn.clarificationId } as const) : null;
+		const clarification = userTurn.clarificationId
+			? ({ kind: 'existing', clarificationId: userTurn.clarificationId } as const)
+			: null;
 		await this.sendRaw(userTurn.text, clarification);
 	}
 
@@ -1150,14 +1263,21 @@ class AppState {
 	private applyEvent(e: TurnEventEnvelope): void {
 		const conv = this.active;
 		if (!conv || conv.id !== e.conversationId) {
-			if (e.event.type === 'done' || e.event.type === 'failed' || e.event.type === 'cancelled') this.refreshList();
+			if (e.event.type === 'done' || e.event.type === 'failed' || e.event.type === 'cancelled')
+				this.refreshList();
 			return;
 		}
 		const idx = conv.turns.findIndex((t) => t.id === e.turnId);
 		if (idx < 0) {
 			// A turn this window has not loaded, such as an ask made in the
 			// browser on the open page: fetch the conversation again.
-			if (e.event.type === 'started' || e.event.type === 'done' || e.event.type === 'failed' || e.event.type === 'cancelled') this.reloadActive(conv.id);
+			if (
+				e.event.type === 'started' ||
+				e.event.type === 'done' ||
+				e.event.type === 'failed' ||
+				e.event.type === 'cancelled'
+			)
+				this.reloadActive(conv.id);
 			return;
 		}
 		const turn = conv.turns[idx];

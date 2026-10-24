@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! The bridge: how browser extensions talk to a running Gloss.
 //!
 //! Every transport carries the same protocol, one JSON object per line

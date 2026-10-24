@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Follows one assistant turn through pushed turn events, for the popup and
 // the ask window which show a single reply at a time.
 

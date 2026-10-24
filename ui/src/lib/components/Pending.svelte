@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <!-- Three accent dots pulsing while a reply is awaited. -->
 <div class="pending" aria-label="Waiting for reply">
 	<span></span><span></span><span></span>

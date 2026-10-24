@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Renders a reply's markdown to safe HTML for the popover.
 
 import DOMPurify from 'dompurify';
@@ -23,8 +26,21 @@ export function renderMarkdown(markdown: string): string {
 	installHooks();
 	const html = marked.parse(markdown ?? '', { async: false }) as string;
 	return DOMPurify.sanitize(html, {
-		FORBID_TAGS: ['iframe', 'form', 'script', 'style', 'object', 'embed', 'input', 'button', 'textarea', 'select', 'link', 'meta'],
+		FORBID_TAGS: [
+			'iframe',
+			'form',
+			'script',
+			'style',
+			'object',
+			'embed',
+			'input',
+			'button',
+			'textarea',
+			'select',
+			'link',
+			'meta'
+		],
 		FORBID_ATTR: ['onerror', 'onload', 'style'],
-		ADD_ATTR: ['target'],
+		ADD_ATTR: ['target']
 	});
 }

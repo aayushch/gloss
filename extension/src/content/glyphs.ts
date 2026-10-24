@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // The small quote marks that sit beside each asked passage. Glyphs
 // live inside the extension's shadow root in a layer positioned at the
 // document origin, so their coordinates are page coordinates. The layer
@@ -20,7 +23,8 @@ function firstRect(range: Range): DOMRect | null {
 /** The last laid-out rect of a range, or null when it has none. */
 function lastRect(range: Range): DOMRect | null {
 	const rects = range.getClientRects();
-	for (let i = rects.length - 1; i >= 0; i--) if (rects[i].width > 0 || rects[i].height > 0) return rects[i];
+	for (let i = rects.length - 1; i >= 0; i--)
+		if (rects[i].width > 0 || rects[i].height > 0) return rects[i];
 	return null;
 }
 
@@ -73,7 +77,7 @@ export class GlyphLayer {
 	constructor(
 		private readonly container: HTMLElement,
 		private readonly handlers: GlyphLayerHandlers,
-		private readonly win: Window = window,
+		private readonly win: Window = window
 	) {
 		this.schedule = this.schedule.bind(this);
 		win.addEventListener('scroll', this.schedule, { capture: true, passive: true });
@@ -90,7 +94,13 @@ export class GlyphLayer {
 						}, MUTATION_DEBOUNCE_MS);
 					})
 				: null;
-		this.mutations?.observe(win.document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+		this.mutations?.observe(win.document.body, {
+			childList: true,
+			subtree: true,
+			characterData: true,
+			attributes: true,
+			attributeFilter: ['hidden', 'style', 'class']
+		});
 	}
 
 	/** True once the DOM has been mutated since the last reposition; the index needs rebuilding. */
@@ -181,8 +191,12 @@ export class GlyphLayer {
 		const first = firstRect(g.range);
 		const last = lastRect(g.range);
 		const margin = 48;
-		if (first && last && first.top >= margin && last.bottom <= this.win.innerHeight - margin) return;
-		const el = g.range.startContainer.nodeType === Node.ELEMENT_NODE ? (g.range.startContainer as Element) : g.range.startContainer.parentElement;
+		if (first && last && first.top >= margin && last.bottom <= this.win.innerHeight - margin)
+			return;
+		const el =
+			g.range.startContainer.nodeType === Node.ELEMENT_NODE
+				? (g.range.startContainer as Element)
+				: g.range.startContainer.parentElement;
 		el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 	}
 
@@ -220,7 +234,11 @@ export class GlyphLayer {
 	private place(id: string, g: Glyph, taken: Map<number, number> = new Map()): void {
 		const range = g.range;
 		const doc = this.win.document;
-		if (range.collapsed || !doc.contains(range.startContainer) || !doc.contains(range.endContainer)) {
+		if (
+			range.collapsed ||
+			!doc.contains(range.startContainer) ||
+			!doc.contains(range.endContainer)
+		) {
 			g.el.hidden = true;
 			this.handlers.onDetached(id);
 			return;
@@ -248,7 +266,12 @@ export class GlyphLayer {
 	 * margin has room (text set edge to edge) the mark is raised a little
 	 * above the end of the passage instead, like a footnote number.
 	 */
-	private gutterSpot(range: Range, first: DOMRect, last: DOMRect, taken: Map<number, number>): { x: number; y: number; gutter: boolean } {
+	private gutterSpot(
+		range: Range,
+		first: DOMRect,
+		last: DOMRect,
+		taken: Map<number, number>
+	): { x: number; y: number; gutter: boolean } {
 		const block = blockOf(range);
 		const viewportWidth = this.win.innerWidth;
 		if (block) {

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // A normalised view of a page's text with a map back to the DOM.
 //
 // The index walks the text nodes under a root in document order, skips what
@@ -10,13 +13,62 @@
 /** Tag name of the element that hosts the extension's shadow DOM. */
 export const HOST_TAG = 'gloss-ask-host';
 
-const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'template', 'svg', 'math', 'iframe', 'object', 'canvas', 'head', HOST_TAG]);
+const SKIP_TAGS = new Set([
+	'script',
+	'style',
+	'noscript',
+	'template',
+	'svg',
+	'math',
+	'iframe',
+	'object',
+	'canvas',
+	'head',
+	HOST_TAG
+]);
 
 const BLOCK_TAGS = new Set([
-	'address', 'article', 'aside', 'blockquote', 'body', 'br', 'dd', 'details', 'dialog', 'div', 'dl', 'dt',
-	'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr',
-	'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead',
-	'tr', 'ul',
+	'address',
+	'article',
+	'aside',
+	'blockquote',
+	'body',
+	'br',
+	'dd',
+	'details',
+	'dialog',
+	'div',
+	'dl',
+	'dt',
+	'fieldset',
+	'figcaption',
+	'figure',
+	'footer',
+	'form',
+	'h1',
+	'h2',
+	'h3',
+	'h4',
+	'h5',
+	'h6',
+	'header',
+	'hr',
+	'li',
+	'main',
+	'nav',
+	'ol',
+	'p',
+	'pre',
+	'section',
+	'summary',
+	'table',
+	'tbody',
+	'td',
+	'tfoot',
+	'th',
+	'thead',
+	'tr',
+	'ul'
 ]);
 
 /** Elements whose text the index leaves out. */
@@ -96,7 +148,12 @@ export class TextIndex {
 				this.nodeLast.push(last);
 				return;
 			}
-			if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+			if (
+				node.nodeType !== Node.ELEMENT_NODE &&
+				node.nodeType !== Node.DOCUMENT_NODE &&
+				node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE
+			)
+				return;
 			if (node.nodeType === Node.ELEMENT_NODE) {
 				const el = node as Element;
 				if (isSkipped(el)) return;

@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import type { ConnectionStatus } from '../../shared/messages';
@@ -8,14 +11,15 @@
 		composer,
 		connection,
 		running,
-		actions,
-	}: { composer: ComposerState; connection: ConnectionStatus; running: boolean; actions: Actions } = $props();
+		actions
+	}: { composer: ComposerState; connection: ConnectionStatus; running: boolean; actions: Actions } =
+		$props();
 
 	const PRESETS: { label: string; text: string }[] = [
 		{ label: 'Explain', text: 'Explain this.' },
 		{ label: 'Why?', text: 'Why is this the case?' },
 		{ label: 'Example', text: 'Give me a concrete example of this.' },
-		{ label: 'Translate', text: 'Translate this into English.' },
+		{ label: 'Translate', text: 'Translate this into English.' }
 	];
 
 	let textarea: HTMLTextAreaElement | undefined = $state();
@@ -28,13 +32,16 @@
 		const width = Math.min(WIDTH, vw - 32);
 		const left = Math.min(Math.max(16, composer.rect.left), vw - width - 16);
 		let top = composer.rect.bottom + 10;
-		if (top + height > vh - 16 && composer.rect.top - 10 - height > 16) top = composer.rect.top - 10 - height;
+		if (top + height > vh - 16 && composer.rect.top - 10 - height > 16)
+			top = composer.rect.top - 10 - height;
 		return `left:${Math.round(left)}px; top:${Math.round(top)}px; width:${width}px`;
 	});
 
 	const busy = $derived(composer.phase === 'sending' || composer.phase === 'launching');
 	const mismatch = $derived(connection.state === 'protocol_mismatch' ? connection.mismatch : null);
-	const shortQuote = $derived(composer.quote.length > 140 ? composer.quote.slice(0, 140) + '…' : composer.quote);
+	const shortQuote = $derived(
+		composer.quote.length > 140 ? composer.quote.slice(0, 140) + '…' : composer.quote
+	);
 
 	// Focus the box when it appears, and again on the next frames when the
 	// page pulled focus away in the meantime (a dialog's focus trap does so
@@ -75,16 +82,29 @@
 	}
 </script>
 
-<div class="gloss-card gloss-composer" {style} bind:clientHeight={height} role="dialog" aria-label="Ask Gloss">
+<div
+	class="gloss-card gloss-composer"
+	{style}
+	bind:clientHeight={height}
+	role="dialog"
+	aria-label="Ask Gloss"
+>
 	<div class="gloss-quote" title={composer.quote}>{shortQuote}</div>
 	{#if mismatch}
 		<div class="gloss-notice">
-			{mismatch === 'update_app' ? 'Update Gloss to use the extension.' : 'Update the Gloss extension to talk to this version of Gloss.'}
+			{mismatch === 'update_app'
+				? 'Update Gloss to use the extension.'
+				: 'Update the Gloss extension to talk to this version of Gloss.'}
 		</div>
 	{:else if composer.phase === 'app_down' || composer.phase === 'launching'}
 		<div class="gloss-notice">
 			<span>Gloss isn't running.</span>
-			<button type="button" class="gloss-btn gloss-btn-accent" disabled={composer.phase === 'launching'} onclick={actions.launchApp}>
+			<button
+				type="button"
+				class="gloss-btn gloss-btn-accent"
+				disabled={composer.phase === 'launching'}
+				onclick={actions.launchApp}
+			>
 				{composer.phase === 'launching' ? 'Opening…' : 'Open Gloss'}
 			</button>
 		</div>
@@ -94,7 +114,9 @@
 	{/if}
 	<div class="gloss-chips">
 		{#each PRESETS as p (p.label)}
-			<button type="button" class="gloss-chip" disabled={busy} onclick={() => preset(p.text)}>{p.label}</button>
+			<button type="button" class="gloss-chip" disabled={busy} onclick={() => preset(p.text)}
+				>{p.label}</button
+			>
 		{/each}
 	</div>
 	<textarea
@@ -104,8 +126,7 @@
 		rows="2"
 		placeholder="Ask about this…"
 		disabled={busy}
-		{onkeydown}
-	></textarea>
+		{onkeydown}></textarea>
 	{#if composer.error && composer.phase === 'idle'}
 		<div class="gloss-error">{composer.error}</div>
 	{/if}
@@ -113,7 +134,12 @@
 		<span class="gloss-hint">Enter to send, Esc to cancel</span>
 		<span class="gloss-spacer"></span>
 		<button type="button" class="gloss-btn" onclick={actions.cancelComposer}>Cancel</button>
-		<button type="button" class="gloss-btn gloss-btn-accent" disabled={busy || running || !composer.text.trim()} onclick={submit}>
+		<button
+			type="button"
+			class="gloss-btn gloss-btn-accent"
+			disabled={busy || running || !composer.text.trim()}
+			onclick={submit}
+		>
 			{composer.phase === 'sending' ? 'Sending…' : 'Ask'}
 		</button>
 	</div>

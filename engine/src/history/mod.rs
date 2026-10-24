@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Reads the agents' own session history for a project folder, so a project
 //! can list sessions that were run outside Gloss (in a terminal, an editor or
 //! a script). Every agent files its sessions by the folder it ran in; each
@@ -47,7 +50,12 @@ pub struct AgentHomes {
 impl AgentHomes {
     pub fn from_env(env: &ShellEnv) -> AgentHomes {
         let home = dirs::home_dir().unwrap_or_default();
-        let var = |key: &str| env.vars.get(key).filter(|v| !v.is_empty()).map(PathBuf::from);
+        let var = |key: &str| {
+            env.vars
+                .get(key)
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+        };
         AgentHomes {
             claude: var("CLAUDE_CONFIG_DIR").unwrap_or_else(|| home.join(".claude")),
             codex: var("CODEX_HOME").unwrap_or_else(|| home.join(".codex")),
@@ -105,11 +113,18 @@ impl SessionIndex {
     /// Scans each file through the cache and keeps the sessions whose
     /// recorded folder (or folder hash) is `project`'s. A file that records
     /// neither is kept, since its location already ties it to the project.
-    fn collect(&self, files: Vec<PathBuf>, project: &str, scan: fn(&Path) -> Option<Scanned>) -> Vec<ExternalSession> {
+    fn collect(
+        &self,
+        files: Vec<PathBuf>,
+        project: &str,
+        scan: fn(&Path) -> Option<Scanned>,
+    ) -> Vec<ExternalSession> {
         let hash = gemini::project_hash(project);
         let mut out = Vec::new();
         for file in files {
-            let Ok(meta) = std::fs::metadata(&file) else { continue };
+            let Ok(meta) = std::fs::metadata(&file) else {
+                continue;
+            };
             let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
             let len = meta.len();
             let scanned = {
@@ -129,7 +144,10 @@ impl SessionIndex {
                         }
                         s
                     });
-                    self.cache.lock().unwrap().insert(file.clone(), (modified, len, s.clone()));
+                    self.cache
+                        .lock()
+                        .unwrap()
+                        .insert(file.clone(), (modified, len, s.clone()));
                     s
                 }
             };
@@ -170,13 +188,23 @@ impl Turns {
     fn prompt(&mut self, text: &str, at: i64) {
         let text = text.trim();
         if !text.is_empty() {
-            self.list.push(SessionTurn { role: Role::User, text: text.to_string(), tools: Vec::new(), at });
+            self.list.push(SessionTurn {
+                role: Role::User,
+                text: text.to_string(),
+                tools: Vec::new(),
+                at,
+            });
         }
     }
 
     fn reply(&mut self, at: i64) -> &mut SessionTurn {
         if self.list.last().is_none_or(|t| t.role != Role::Assistant) {
-            self.list.push(SessionTurn { role: Role::Assistant, text: String::new(), tools: Vec::new(), at });
+            self.list.push(SessionTurn {
+                role: Role::Assistant,
+                text: String::new(),
+                tools: Vec::new(),
+                at,
+            });
         }
         self.list.last_mut().expect("pushed above")
     }
@@ -215,28 +243,54 @@ fn tool_label(name: &str, args: &serde_json::Value) -> String {
         }
         _ => args,
     };
-    let main = ["file_path", "path", "absolute_path", "command", "cmd", "pattern", "query", "url", "description", "prompt"]
-        .iter()
-        .find_map(|k| match args.get(*k)? {
-            serde_json::Value::String(s) => Some((*k, s.clone())),
-            // Codex sends a shell command as an argv array; the script is last.
-            serde_json::Value::Array(a) => a.iter().rev().find_map(|x| x.as_str()).map(|s| (*k, s.to_string())),
-            _ => None,
-        });
-    let Some((key, value)) = main else { return name.to_string() };
+    let main = [
+        "file_path",
+        "path",
+        "absolute_path",
+        "command",
+        "cmd",
+        "pattern",
+        "query",
+        "url",
+        "description",
+        "prompt",
+    ]
+    .iter()
+    .find_map(|k| match args.get(*k)? {
+        serde_json::Value::String(s) => Some((*k, s.clone())),
+        // Codex sends a shell command as an argv array; the script is last.
+        serde_json::Value::Array(a) => a
+            .iter()
+            .rev()
+            .find_map(|x| x.as_str())
+            .map(|s| (*k, s.to_string())),
+        _ => None,
+    });
+    let Some((key, value)) = main else {
+        return name.to_string();
+    };
     let value = if key.contains("path") {
-        Path::new(&value).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(value)
+        Path::new(&value)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or(value)
     } else {
         value.split_whitespace().collect::<Vec<_>>().join(" ")
     };
     let short: String = value.chars().take(60).collect();
-    let more = if value.chars().count() > 60 { "…" } else { "" };
+    let more = if value.chars().count() > 60 {
+        "…"
+    } else {
+        ""
+    };
     format!("{} {}{}", name, short, more)
 }
 
 /// Every JSON line of a file. Lines that are not JSON are skipped.
 fn all_lines(path: &Path) -> Vec<serde_json::Value> {
-    let Ok(file) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
     BufReader::new(file)
         .lines()
         .map_while(Result::ok)
@@ -255,17 +309,23 @@ fn same_dir(a: &str, b: &str) -> bool {
 }
 
 fn millis(t: SystemTime) -> i64 {
-    t.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    t.duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 /// Unix milliseconds of an RFC 3339 timestamp such as `2026-05-07T01:29:31.413Z`.
 fn parse_time(s: &str) -> Option<i64> {
-    chrono::DateTime::parse_from_rfc3339(s).ok().map(|t| t.timestamp_millis())
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|t| t.timestamp_millis())
 }
 
 /// Files in `dir` (not below it) with extension `ext`.
 fn files_in(dir: &Path, ext: &str) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
     entries
         .flatten()
         .map(|e| e.path())
@@ -276,7 +336,9 @@ fn files_in(dir: &Path, ext: &str) -> Vec<PathBuf> {
 /// The JSON lines among the first `budget` bytes of a file. A line cut off
 /// by the budget is dropped, as is any line that is not JSON.
 fn head_lines(path: &Path, budget: u64) -> Vec<serde_json::Value> {
-    let Ok(file) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     let mut read = 0u64;
     for line in BufReader::new(file).lines() {
@@ -295,9 +357,14 @@ fn head_lines(path: &Path, budget: u64) -> Vec<serde_json::Value> {
 /// The JSON lines among the last `budget` bytes of a file. The first line
 /// is usually cut off by the budget, so it fails to parse and is dropped.
 fn tail_lines(path: &Path, budget: u64) -> Vec<serde_json::Value> {
-    let Ok(mut file) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
     let len = file.metadata().map(|m| m.len()).unwrap_or(0);
-    if file.seek(SeekFrom::Start(len.saturating_sub(budget))).is_err() {
+    if file
+        .seek(SeekFrom::Start(len.saturating_sub(budget)))
+        .is_err()
+    {
         return Vec::new();
     }
     let mut buf = Vec::new();
@@ -330,7 +397,10 @@ fn first_text(content: &serde_json::Value) -> Option<&str> {
     match content {
         serde_json::Value::String(s) => Some(s.as_str()),
         serde_json::Value::Array(parts) => parts.iter().find_map(|p| {
-            let typed_text = p.get("type").and_then(|t| t.as_str()).is_none_or(|t| t == "text" || t == "input_text");
+            let typed_text = p
+                .get("type")
+                .and_then(|t| t.as_str())
+                .is_none_or(|t| t == "text" || t == "input_text");
             if typed_text {
                 p.get("text").and_then(|t| t.as_str())
             } else {
@@ -346,7 +416,10 @@ fn first_text(content: &serde_json::Value) -> Option<&str> {
 /// not one: its first word has a second `/`.
 fn is_slash_command(text: &str) -> bool {
     let first = text.split_whitespace().next().unwrap_or("");
-    first.len() > 1 && first.starts_with('/') && !first[1..].contains('/') && first[1..].starts_with(|c: char| c.is_ascii_alphabetic())
+    first.len() > 1
+        && first.starts_with('/')
+        && !first[1..].contains('/')
+        && first[1..].starts_with(|c: char| c.is_ascii_alphabetic())
 }
 
 fn str_at<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a str> {

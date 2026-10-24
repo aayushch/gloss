@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Command line front end for the Gloss engine, for driving the real agents
 //! without the desktop app. Honours `GLOSS_HOME`.
 
@@ -70,7 +73,10 @@ enum Cmd {
         off: bool,
     },
     /// Replace a conversation's tags.
-    Tag { conversation: String, tags: Vec<String> },
+    Tag {
+        conversation: String,
+        tags: Vec<String>,
+    },
     /// Cancel a running turn.
     Cancel { conversation: String },
     /// List conversations.
@@ -85,9 +91,17 @@ enum Cmd {
     /// List the agent sessions recorded for a folder outside Gloss.
     Sessions { folder: String },
     /// Print the turns of one of those sessions.
-    Session { folder: String, agent: String, id: String },
+    Session {
+        folder: String,
+        agent: String,
+        id: String,
+    },
     /// Continue one of those sessions in a new conversation and print its id.
-    Continue { folder: String, agent: String, id: String },
+    Continue {
+        folder: String,
+        agent: String,
+        id: String,
+    },
     /// Serve the browser bridge on the Gloss home's Unix socket until Ctrl-C.
     Serve {
         /// Socket path; defaults to `<gloss home>/bridge.sock`.
@@ -175,10 +189,20 @@ async fn main() -> Result<()> {
             println!("PATH={}", engine.env.path());
             for id in AgentId::ALL {
                 let info = agents::adapter_for(id).info(&engine.env);
-                println!("{:<8} {}", id, info.path.unwrap_or_else(|| "(not found)".into()));
+                println!(
+                    "{:<8} {}",
+                    id,
+                    info.path.unwrap_or_else(|| "(not found)".into())
+                );
             }
         }
-        Cmd::New { agent, model, no_web, project, mode } => {
+        Cmd::New {
+            agent,
+            model,
+            no_web,
+            project,
+            mode,
+        } => {
             let id = AgentId::parse(&agent).ok_or_else(|| anyhow!("unknown agent {}", agent))?;
             let conv = engine.create_conversation(id, model, Some(!no_web), project)?;
             if mode.is_some() {
@@ -188,12 +212,26 @@ async fn main() -> Result<()> {
         }
         Cmd::Mode { conversation, mode } => {
             let s = engine.set_conversation_mode(&conversation, Some(mode))?;
-            println!("{} mode={}", s.id, s.mode.unwrap_or_else(|| "read-only".into()));
+            println!(
+                "{} mode={}",
+                s.id,
+                s.mode.unwrap_or_else(|| "read-only".into())
+            );
         }
         Cmd::Search { query } => {
             for h in engine.search(&query)? {
-                let snippet = h.snippet.replace('\u{1}', "[").replace('\u{2}', "]").replace('\n', " ");
-                println!("{}  {:<40} {:<12} {}", h.conversation_id, h.title, h.turn_id.unwrap_or_default(), snippet);
+                let snippet = h
+                    .snippet
+                    .replace('\u{1}', "[")
+                    .replace('\u{2}', "]")
+                    .replace('\n', " ");
+                println!(
+                    "{}  {:<40} {:<12} {}",
+                    h.conversation_id,
+                    h.title,
+                    h.turn_id.unwrap_or_default(),
+                    snippet
+                );
             }
         }
         Cmd::Pin { conversation, off } => {
@@ -205,7 +243,10 @@ async fn main() -> Result<()> {
             println!("{} tags={}", s.id, s.tags.join(","));
         }
         Cmd::Serve { socket, loopback } => {
-            let handler = Arc::new(bridge::BridgeHandler::new(engine.clone(), env!("CARGO_PKG_VERSION")));
+            let handler = Arc::new(bridge::BridgeHandler::new(
+                engine.clone(),
+                env!("CARGO_PKG_VERSION"),
+            ));
             let sock = socket.unwrap_or_else(|| paths.bridge_sock.clone());
             let mut tasks = Vec::new();
             #[cfg(unix)]
@@ -221,9 +262,17 @@ async fn main() -> Result<()> {
             if loopback {
                 let (listener, port) = bridge::loopback::bind().await?;
                 let token = bridge::loopback::new_token();
-                let info = bridge::loopback::BridgeInfo { port, token: token.clone(), protocol: bridge::PROTOCOL };
+                let info = bridge::loopback::BridgeInfo {
+                    port,
+                    token: token.clone(),
+                    protocol: bridge::PROTOCOL,
+                };
                 let _ = bridge::loopback::write_info(&info, &[&paths.bridge_json]);
-                eprintln!("loopback listener on 127.0.0.1:{} (token in {})", port, paths.bridge_json.display());
+                eprintln!(
+                    "loopback listener on 127.0.0.1:{} (token in {})",
+                    port,
+                    paths.bridge_json.display()
+                );
                 let h = handler.clone();
                 tasks.push(tokio::spawn(async move {
                     if let Err(e) = bridge::loopback::serve(h, listener, token).await {
@@ -249,27 +298,72 @@ async fn main() -> Result<()> {
         }
         Cmd::Pages => {
             for p in engine.list_pages(100)? {
-                println!("{:<50} {:>3} asks {:>2} orphans  {}", p.url_key, p.ask_count, p.orphan_count, p.title);
+                println!(
+                    "{:<50} {:>3} asks {:>2} orphans  {}",
+                    p.url_key, p.ask_count, p.orphan_count, p.title
+                );
             }
         }
         Cmd::Page { url_key } => {
-            let Some(d) = engine.get_page(&url_key)? else { return Err(anyhow!("no page {}", url_key)) };
-            println!("{} [{}] conversation={}", d.page.title, d.page.url, d.page.conversation_id);
+            let Some(d) = engine.get_page(&url_key)? else {
+                return Err(anyhow!("no page {}", url_key));
+            };
+            println!(
+                "{} [{}] conversation={}",
+                d.page.title, d.page.url, d.page.conversation_id
+            );
             for cl in &d.conversation.clarifications {
                 let state = cl.anchor_state.map(|s| s.as_str()).unwrap_or("unplaced");
-                println!("### ask {} #{} {:?} ({})", cl.id, cl.number, cl.quote, state);
-                for t in d.conversation.turns.iter().filter(|t| t.clarification_id.as_deref() == Some(cl.id.as_str())) {
+                println!(
+                    "### ask {} #{} {:?} ({})",
+                    cl.id, cl.number, cl.quote, state
+                );
+                for t in d
+                    .conversation
+                    .turns
+                    .iter()
+                    .filter(|t| t.clarification_id.as_deref() == Some(cl.id.as_str()))
+                {
                     println!("--- {} {:?}\n{}", t.role.as_str(), t.status, t.text);
                 }
             }
-            for t in d.conversation.turns.iter().filter(|t| t.clarification_id.is_none()) {
-                println!("--- page question {} {:?}\n{}", t.role.as_str(), t.status, t.text);
+            for t in d
+                .conversation
+                .turns
+                .iter()
+                .filter(|t| t.clarification_id.is_none())
+            {
+                println!(
+                    "--- page question {} {:?}\n{}",
+                    t.role.as_str(),
+                    t.status,
+                    t.text
+                );
             }
         }
-        Cmd::PageAsk { url, title, quote, before, after, text_file, question } => {
+        Cmd::PageAsk {
+            url,
+            title,
+            quote,
+            before,
+            after,
+            text_file,
+            question,
+        } => {
             let page_text = text_file.map(std::fs::read_to_string).transpose()?;
             let anchor = quote.map(|q| WebAnchor {
-                quote: TextQuoteSelector { exact: q, prefix: before.chars().rev().take(32).collect::<String>().chars().rev().collect(), suffix: after.chars().take(32).collect() },
+                quote: TextQuoteSelector {
+                    exact: q,
+                    prefix: before
+                        .chars()
+                        .rev()
+                        .take(32)
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect(),
+                    suffix: after.chars().take(32).collect(),
+                },
                 position: None,
                 container: None,
             });
@@ -280,7 +374,11 @@ async fn main() -> Result<()> {
             let res = engine
                 .page_ask(
                     PageAskRequest {
-                        page: PageMeta { url, title, favicon_url: None },
+                        page: PageMeta {
+                            url,
+                            title,
+                            favicon_url: None,
+                        },
                         anchor,
                         context: AskContext { before, after },
                         question,
@@ -290,13 +388,21 @@ async fn main() -> Result<()> {
                     sink,
                 )
                 .await?;
-            eprintln!("page {}  conversation {}  user turn {}  assistant turn {}", res.url_key, res.conversation_id, res.user_turn.id, res.assistant_turn.id);
+            eprintln!(
+                "page {}  conversation {}  user turn {}  assistant turn {}",
+                res.url_key, res.conversation_id, res.user_turn.id, res.assistant_turn.id
+            );
             if let Some(cl) = &res.clarification {
                 eprintln!("ask {} #{}", cl.id, cl.number);
             }
             stream_reply(&engine, &mut rx, false).await?;
         }
-        Cmd::BridgeCall { method, params, socket, follow } => {
+        Cmd::BridgeCall {
+            method,
+            params,
+            socket,
+            follow,
+        } => {
             #[cfg(unix)]
             {
                 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -339,30 +445,58 @@ async fn main() -> Result<()> {
         Cmd::Cancel { conversation } => engine.cancel_turn(&conversation),
         Cmd::List { query, tag } => {
             for c in engine.list_conversations(query.as_deref(), tag.as_deref())? {
-                println!("{}  {:<8} {:<20} {:>2} clarifications  {}", c.id, c.agent, c.model, c.clarification_count, c.title);
+                println!(
+                    "{}  {:<8} {:<20} {:>2} clarifications  {}",
+                    c.id, c.agent, c.model, c.clarification_count, c.title
+                );
             }
         }
         Cmd::Sessions { folder } => {
             for s in engine.list_project_sessions(&folder)? {
-                let when = chrono::DateTime::from_timestamp_millis(s.updated_at).map(|t| t.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default();
-                println!("{}  {:<7} {:<9} {:<38} {}", when, s.agent, format!("{:?}", s.origin), s.id, s.title);
+                let when = chrono::DateTime::from_timestamp_millis(s.updated_at)
+                    .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_default();
+                println!(
+                    "{}  {:<7} {:<9} {:<38} {}",
+                    when,
+                    s.agent,
+                    format!("{:?}", s.origin),
+                    s.id,
+                    s.title
+                );
             }
         }
         Cmd::Session { folder, agent, id } => {
-            let agent = AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
+            let agent =
+                AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
             for t in engine.read_project_session(&folder, agent, &id)? {
-                println!("--- {:?}{}", t.role, if t.tools.is_empty() { String::new() } else { format!("  [{}]", t.tools.join(" · ")) });
+                println!(
+                    "--- {:?}{}",
+                    t.role,
+                    if t.tools.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  [{}]", t.tools.join(" · "))
+                    }
+                );
                 println!("{}", t.text);
             }
         }
         Cmd::Continue { folder, agent, id } => {
-            let agent = AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
+            let agent =
+                AgentId::parse(&agent).ok_or_else(|| anyhow::anyhow!("unknown agent {}", agent))?;
             let c = engine.continue_project_session(&folder, agent, &id)?;
             println!("{}", c.summary.id);
         }
         Cmd::Show { conversation } => {
             let c = engine.get_conversation(&conversation)?;
-            println!("{} [{} {}] session={}", c.summary.title, c.summary.agent, c.summary.model, c.agent_session_id.unwrap_or_default());
+            println!(
+                "{} [{} {}] session={}",
+                c.summary.title,
+                c.summary.agent,
+                c.summary.model,
+                c.agent_session_id.unwrap_or_default()
+            );
             for t in &c.turns {
                 println!(
                     "--- {} {} seq={} status={:?} clar={}",
@@ -378,21 +512,48 @@ async fn main() -> Result<()> {
                 }
             }
             for cl in &c.clarifications {
-                println!("### clarification {} #{} anchor={} quote={:?} parent={}", cl.id, cl.number, cl.anchor_block_id, cl.quote, cl.parent_id.clone().unwrap_or_default());
+                println!(
+                    "### clarification {} #{} anchor={} quote={:?} parent={}",
+                    cl.id,
+                    cl.number,
+                    cl.anchor_block_id,
+                    cl.quote,
+                    cl.parent_id.clone().unwrap_or_default()
+                );
             }
         }
-        Cmd::Send { conversation, text, quote, block, clarification, attach, auto_answer } => {
+        Cmd::Send {
+            conversation,
+            text,
+            quote,
+            block,
+            clarification,
+            attach,
+            auto_answer,
+        } => {
             let mut attachments = Vec::new();
             for path in attach {
                 let bytes = std::fs::read(&path)?;
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
                 let att = engine.add_attachment(&name, "", &bytes)?;
-                eprintln!("attached {} ({:?}, {} bytes) as {}", att.name, att.kind, att.size, att.id);
+                eprintln!(
+                    "attached {} ({:?}, {} bytes) as {}",
+                    att.name, att.kind, att.size, att.id
+                );
                 attachments.push(att.id);
             }
             let target = match (quote, block, clarification) {
-                (Some(q), Some(b), _) => Some(ClarificationTarget::New { anchor_block_id: b, quote: q, parent_id: None }),
-                (_, _, Some(c)) => Some(ClarificationTarget::Existing { clarification_id: c }),
+                (Some(q), Some(b), _) => Some(ClarificationTarget::New {
+                    anchor_block_id: b,
+                    quote: q,
+                    parent_id: None,
+                }),
+                (_, _, Some(c)) => Some(ClarificationTarget::Existing {
+                    clarification_id: c,
+                }),
                 (Some(_), None, _) => return Err(anyhow!("--quote needs --block")),
                 _ => None,
             };
@@ -401,9 +562,20 @@ async fn main() -> Result<()> {
                 let _ = tx.send(e);
             });
             let res = engine
-                .send_turn(SendTurnRequest { conversation_id: conversation, text, clarification: target, attachments }, sink)
+                .send_turn(
+                    SendTurnRequest {
+                        conversation_id: conversation,
+                        text,
+                        clarification: target,
+                        attachments,
+                    },
+                    sink,
+                )
                 .await?;
-            eprintln!("user turn {}  assistant turn {}", res.user_turn.id, res.assistant_turn.id);
+            eprintln!(
+                "user turn {}  assistant turn {}",
+                res.user_turn.id, res.assistant_turn.id
+            );
             if let Some(cl) = res.clarification {
                 eprintln!("clarification {} #{}", cl.id, cl.number);
             }
@@ -424,7 +596,11 @@ async fn stream_reply(
     while let Some(env) = rx.recv().await {
         match env.event {
             TurnEvent::Started { session_id, model } => {
-                eprintln!("[started] session={} model={}", session_id.unwrap_or_default(), model.unwrap_or_default())
+                eprintln!(
+                    "[started] session={} model={}",
+                    session_id.unwrap_or_default(),
+                    model.unwrap_or_default()
+                )
             }
             TurnEvent::Delta { text } => {
                 out.write_all(text.as_bytes())?;
@@ -437,23 +613,40 @@ async fn stream_reply(
             }
             TurnEvent::Activity { kind, label } => eprintln!("[{:?}] {}", kind, label),
             TurnEvent::Request { request } => {
-                eprintln!("[request] {}", serde_json::to_string(&request).unwrap_or_default());
+                eprintln!(
+                    "[request] {}",
+                    serde_json::to_string(&request).unwrap_or_default()
+                );
                 if !auto_answer {
                     eprintln!("[request] waiting; rerun with --auto-answer or answer from the app");
                     continue;
                 }
                 let answer = match &request.kind {
-                    RequestKind::Permission { .. } => RequestAnswer::Permission { allow: true, message: None, set_mode: None },
+                    RequestKind::Permission { .. } => RequestAnswer::Permission {
+                        allow: true,
+                        message: None,
+                        set_mode: None,
+                    },
                     RequestKind::Question { questions } => RequestAnswer::Question {
                         answers: questions
                             .iter()
-                            .map(|q| (q.question.clone(), q.options.first().map(|o| o.label.clone()).unwrap_or_else(|| "yes".into())))
+                            .map(|q| {
+                                (
+                                    q.question.clone(),
+                                    q.options
+                                        .first()
+                                        .map(|o| o.label.clone())
+                                        .unwrap_or_else(|| "yes".into()),
+                                )
+                            })
                             .collect(),
                     },
                 };
                 engine.answer_request(&env.conversation_id, &request.id, answer)?;
             }
-            TurnEvent::RequestResolved { request_id } => eprintln!("[request] {} answered", request_id),
+            TurnEvent::RequestResolved { request_id } => {
+                eprintln!("[request] {} answered", request_id)
+            }
             TurnEvent::Done { turn } => {
                 println!();
                 eprintln!(

@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Renders an artifact's preview. HTML, SVG and diagrams load in a sandboxed
 	// iframe with an opaque origin, so nothing in them can reach the app or its
@@ -6,7 +9,11 @@
 	import { previewDocument, type Artifact } from '$lib/markdown/artifacts';
 	import MarkdownView from './MarkdownView.svelte';
 
-	let { artifact, scripts = false, network = false }: { artifact: Artifact; scripts?: boolean; network?: boolean } = $props();
+	let {
+		artifact,
+		scripts = false,
+		network = false
+	}: { artifact: Artifact; scripts?: boolean; network?: boolean } = $props();
 
 	let rendered = $state<string | null>(null);
 	let error = $state<string | null>(null);
@@ -27,7 +34,12 @@
 		import('mermaid')
 			.then(async (m) => {
 				const mermaid = m.default;
-				mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', fontFamily: 'IBM Plex Sans, system-ui, sans-serif' });
+				mermaid.initialize({
+					startOnLoad: false,
+					securityLevel: 'strict',
+					theme: 'neutral',
+					fontFamily: 'IBM Plex Sans, system-ui, sans-serif'
+				});
 				const { svg } = await mermaid.render(`mmd-${mine}`, code);
 				if (mine === seq) rendered = svg;
 			})
@@ -44,7 +56,9 @@
 
 	// `allow-same-origin` must never be added: with it the frame would share
 	// the app's origin and could call Tauri commands.
-	const sandbox = $derived(artifact.type === 'html' && scripts ? 'allow-scripts allow-forms allow-modals' : 'allow-forms');
+	const sandbox = $derived(
+		artifact.type === 'html' && scripts ? 'allow-scripts allow-forms allow-modals' : 'allow-forms'
+	);
 </script>
 
 {#if artifact.type === 'markdown'}

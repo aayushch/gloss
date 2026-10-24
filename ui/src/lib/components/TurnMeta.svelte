@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Model, token usage, cost and duration of a finished assistant turn, as a
 	// quiet line under the reply. Only the values the agent reported are shown.
@@ -10,7 +13,9 @@
 		const u = turn.usage;
 		if (turn.model) out.push(turn.model);
 		if (u && (u.inputTokens != null || u.outputTokens != null)) {
-			out.push(`${(u.inputTokens ?? 0).toLocaleString()} in · ${(u.outputTokens ?? 0).toLocaleString()} out`);
+			out.push(
+				`${(u.inputTokens ?? 0).toLocaleString()} in · ${(u.outputTokens ?? 0).toLocaleString()} out`
+			);
 		}
 		if (u?.costUsd != null) out.push(`$${u.costUsd.toFixed(4)}`);
 		if (u?.durationMs != null) out.push(`${(u.durationMs / 1000).toFixed(1)}s`);

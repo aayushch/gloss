@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Claude Code adapter (`claude -p --input-format stream-json --output-format stream-json`).
 //!
 //! The prompt goes in as one stream-json user message on stdin and stdin
@@ -32,7 +35,8 @@ fn stream_json_message(req: &SpawnRequest) -> Result<Vec<u8>> {
     use base64::Engine as _;
     let mut content = vec![serde_json::json!({ "type": "text", "text": req.prompt })];
     for img in &req.images {
-        let bytes = std::fs::read(&img.path).with_context(|| format!("read attachment {}", img.path.display()))?;
+        let bytes = std::fs::read(&img.path)
+            .with_context(|| format!("read attachment {}", img.path.display()))?;
         content.push(serde_json::json!({
             "type": "image",
             "source": {
@@ -42,7 +46,8 @@ fn stream_json_message(req: &SpawnRequest) -> Result<Vec<u8>> {
             }
         }));
     }
-    let msg = serde_json::json!({ "type": "user", "message": { "role": "user", "content": content } });
+    let msg =
+        serde_json::json!({ "type": "user", "message": { "role": "user", "content": content } });
     let mut out = serde_json::to_vec(&msg)?;
     out.push(b'\n');
     Ok(out)
@@ -59,12 +64,37 @@ const WEB_TOOLS: &[&str] = &["WebSearch", "WebFetch"];
 /// picker. The list of modes itself comes from `claude --help`; a mode the
 /// table does not know is shown by its id.
 const MODE_NOTES: &[(&str, &str, &str, bool)] = &[
-    ("manual", "Manual", "Asks before every edit and command", true),
-    ("default", "Manual", "Asks before every edit and command", true),
-    ("acceptEdits", "Accept edits", "Edits files without asking; asks before commands", true),
-    ("auto", "Auto", "A safety classifier approves actions instead of you", true),
+    (
+        "manual",
+        "Manual",
+        "Asks before every edit and command",
+        true,
+    ),
+    (
+        "default",
+        "Manual",
+        "Asks before every edit and command",
+        true,
+    ),
+    (
+        "acceptEdits",
+        "Accept edits",
+        "Edits files without asking; asks before commands",
+        true,
+    ),
+    (
+        "auto",
+        "Auto",
+        "A safety classifier approves actions instead of you",
+        true,
+    ),
     ("plan", "Plan", "Reads and plans only; no edits", false),
-    ("dontAsk", "Don't ask", "Refuses anything that would need approval", false),
+    (
+        "dontAsk",
+        "Don't ask",
+        "Refuses anything that would need approval",
+        false,
+    ),
 ];
 
 /// Aliases Claude Code accepts for `--model`. The settings file's `model`
@@ -83,10 +113,13 @@ impl AgentAdapter for Claude {
 
     fn info(&self, env: &ShellEnv) -> AgentInfo {
         let path = resolve(env);
-        let version = path.as_ref().and_then(|p| probe_version(env, p, &["--version"])).map(|v| {
-            // "2.1.296 (Claude Code)" → "2.1.296"
-            v.split_whitespace().next().unwrap_or(&v).to_string()
-        });
+        let version = path
+            .as_ref()
+            .and_then(|p| probe_version(env, p, &["--version"]))
+            .map(|v| {
+                // "2.1.296 (Claude Code)" → "2.1.296"
+                v.split_whitespace().next().unwrap_or(&v).to_string()
+            });
         AgentInfo {
             id: AgentId::Claude,
             name: display_name(AgentId::Claude).into(),
@@ -125,8 +158,12 @@ impl AgentAdapter for Claude {
     }
 
     fn modes(&self, env: &ShellEnv) -> Vec<AgentMode> {
-        let Some(path) = resolve(env) else { return Vec::new() };
-        let Some(help) = help_text(env, &path, &["--help"]) else { return Vec::new() };
+        let Some(path) = resolve(env) else {
+            return Vec::new();
+        };
+        let Some(help) = help_text(env, &path, &["--help"]) else {
+            return Vec::new();
+        };
         flag_choices(&help, "--permission-mode")
             .into_iter()
             // Every run is `--restricted`, which refuses bypassPermissions.
@@ -148,16 +185,28 @@ impl AgentAdapter for Claude {
     }
 
     fn encode_answer(&self, request: &AgentRequest, answer: &RequestAnswer) -> Option<Vec<u8>> {
-        let input = request.raw.get("input").cloned().unwrap_or_else(|| serde_json::json!({}));
+        let input = request
+            .raw
+            .get("input")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
         let response = match answer {
-            RequestAnswer::Permission { allow: true, set_mode, .. } => {
+            RequestAnswer::Permission {
+                allow: true,
+                set_mode,
+                ..
+            } => {
                 let mut r = serde_json::json!({ "behavior": "allow", "updatedInput": input });
                 if let Some(mode) = set_mode {
                     r["updatedPermissions"] = serde_json::json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
                 }
                 r
             }
-            RequestAnswer::Permission { allow: false, message, .. } => serde_json::json!({
+            RequestAnswer::Permission {
+                allow: false,
+                message,
+                ..
+            } => serde_json::json!({
                 "behavior": "deny",
                 "message": message.clone().filter(|m| !m.trim().is_empty()).unwrap_or_else(|| "The user declined this action.".into()),
             }),
@@ -196,7 +245,11 @@ impl AgentAdapter for Claude {
         // Read-only (no mode) runs as manual: nothing but reads is
         // pre-approved and no edit tool exists, so the only prompt that can
         // reach the user is a question.
-        let mode = req.mode.as_deref().filter(|_| req.project).unwrap_or("default");
+        let mode = req
+            .mode
+            .as_deref()
+            .filter(|_| req.project)
+            .unwrap_or("default");
         args.extend(["--permission-mode".into(), mode.into()]);
         match &req.agent_session_id {
             Some(sid) => args.extend(["--resume".into(), sid.clone()]),
@@ -266,7 +319,10 @@ impl AgentAdapter for Claude {
             }
             "stream_event" => self.stream_event(v.get("event").unwrap_or(&Value::Null)),
             "assistant" => self.assistant_message(&v),
-            "control_request" => control_request(&v).into_iter().map(AgentEvent::Request).collect(),
+            "control_request" => control_request(&v)
+                .into_iter()
+                .map(AgentEvent::Request)
+                .collect(),
             "result" => self.result(&v),
             _ => vec![],
         }
@@ -280,7 +336,8 @@ fn control_request(v: &Value) -> Option<AgentRequest> {
     let id = str_of(v, "request_id")?.to_string();
     let request = v.get("request")?;
     let input = request.get("input").cloned().unwrap_or(Value::Null);
-    let tool = str_of(request, "tool_name").unwrap_or_else(|| str_of(request, "subtype").unwrap_or("request"));
+    let tool = str_of(request, "tool_name")
+        .unwrap_or_else(|| str_of(request, "subtype").unwrap_or("request"));
     let kind = if tool == "AskUserQuestion" {
         let questions = input
             .get("questions")
@@ -290,7 +347,10 @@ fn control_request(v: &Value) -> Option<AgentRequest> {
                     .map(|q| Question {
                         question: str_of(q, "question").unwrap_or("").to_string(),
                         header: str_of(q, "header").unwrap_or("").to_string(),
-                        multi_select: q.get("multiSelect").and_then(Value::as_bool).unwrap_or(false),
+                        multi_select: q
+                            .get("multiSelect")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
                         options: q
                             .get("options")
                             .and_then(Value::as_array)
@@ -298,7 +358,9 @@ fn control_request(v: &Value) -> Option<AgentRequest> {
                                 os.iter()
                                     .map(|o| QuestionOption {
                                         label: str_of(o, "label").unwrap_or("").to_string(),
-                                        description: str_of(o, "description").unwrap_or("").to_string(),
+                                        description: str_of(o, "description")
+                                            .unwrap_or("")
+                                            .to_string(),
                                     })
                                     .collect()
                             })
@@ -318,7 +380,11 @@ fn control_request(v: &Value) -> Option<AgentRequest> {
                     .filter_map(|s| str_of(s, "mode"))
                     .map(|m| ModeSuggestion {
                         mode: m.to_string(),
-                        label: MODE_NOTES.iter().find(|(id, ..)| *id == m).map(|n| n.1.to_string()).unwrap_or_else(|| m.to_string()),
+                        label: MODE_NOTES
+                            .iter()
+                            .find(|(id, ..)| *id == m)
+                            .map(|n| n.1.to_string())
+                            .unwrap_or_else(|| m.to_string()),
                     })
                     .collect()
             })
@@ -330,7 +396,11 @@ fn control_request(v: &Value) -> Option<AgentRequest> {
             suggestions,
         }
     };
-    Some(AgentRequest { id, kind, raw: request.clone() })
+    Some(AgentRequest {
+        id,
+        kind,
+        raw: request.clone(),
+    })
 }
 
 /// The part of a tool call worth showing before approving it: the content
@@ -351,7 +421,11 @@ fn permission_detail(tool: &str, input: &Value) -> Option<String> {
         "Bash" => {
             let cmd = str_of(input, "command").unwrap_or("");
             let desc = str_of(input, "description").unwrap_or("");
-            Some(cut(&if desc.is_empty() { cmd.to_string() } else { format!("{}\n{}", cmd, desc) }))
+            Some(cut(&if desc.is_empty() {
+                cmd.to_string()
+            } else {
+                format!("{}\n{}", cmd, desc)
+            }))
         }
         _ => serde_json::to_string_pretty(input).ok().map(|s| cut(&s)),
     };
@@ -444,12 +518,20 @@ impl Claude {
             let msg = str_of(v, "result")
                 .map(str::to_string)
                 .or_else(|| {
-                    v.get("errors")
-                        .and_then(Value::as_array)
-                        .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("; "))
+                    v.get("errors").and_then(Value::as_array).map(|a| {
+                        a.iter()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    })
                 })
                 .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| format!("Claude Code reported {}", str_of(v, "subtype").unwrap_or("an error")));
+                .unwrap_or_else(|| {
+                    format!(
+                        "Claude Code reported {}",
+                        str_of(v, "subtype").unwrap_or("an error")
+                    )
+                });
             out.push(AgentEvent::Error(msg));
         } else if let Some(text) = str_of(v, "result") {
             if !self.produced_text && !text.is_empty() {
@@ -470,13 +552,23 @@ mod tests {
     fn streams_deltas_and_reads_result() {
         let mut a = Claude::default();
         let events = run(&mut a, &fixture("claude_pong.jsonl"));
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Session { id, model: Some(m) }
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::Session { id, model: Some(m) }
             if id == "32bead75-3df0-42d1-a069-faae5a2370fe" && m == "claude-haiku-5-5")));
         assert_eq!(text_of(&events), "pong");
-        let usage = events.iter().find_map(|e| match e { AgentEvent::Usage(u) => Some(u.clone()), _ => None }).unwrap();
+        let usage = events
+            .iter()
+            .find_map(|e| match e {
+                AgentEvent::Usage(u) => Some(u.clone()),
+                _ => None,
+            })
+            .unwrap();
         assert_eq!(usage.output_tokens, Some(4));
         assert!(usage.cost_usd.unwrap() > 0.0);
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Model(m) if m == "claude-haiku-5-5")));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::Model(m) if m == "claude-haiku-5-5")));
         assert_eq!(events.last(), Some(&AgentEvent::Done));
         // No SetFull: the deltas already carried the text.
         assert!(!events.iter().any(|e| matches!(e, AgentEvent::SetFull(_))));
@@ -504,14 +596,25 @@ mod tests {
         let events = run(&mut a, &lines.join("\n"));
         assert_eq!(text_of(&events), "Looking.\n\nNode 24.");
         assert!(events.iter().any(|e| matches!(e, AgentEvent::Activity { kind: ActivityKind::Tool, label } if label == "WebSearch: node lts")));
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Activity { kind: ActivityKind::Thinking, .. })));
+        assert!(events.iter().any(|e| matches!(
+            e,
+            AgentEvent::Activity {
+                kind: ActivityKind::Thinking,
+                ..
+            }
+        )));
     }
 
     #[test]
     fn error_result_is_surfaced() {
         let mut a = Claude::default();
-        let events = run(&mut a, r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Not logged in","usage":{}}"#);
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::Error(m) if m == "Not logged in")));
+        let events = run(
+            &mut a,
+            r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Not logged in","usage":{}}"#,
+        );
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::Error(m) if m == "Not logged in")));
     }
 
     #[test]
@@ -524,8 +627,12 @@ mod tests {
         let spec = a.build_command(&req("hi"), &env).unwrap();
         let args = spec.args.join(" ");
         assert!(args.contains("--session-id 11111111-2222-3333-4444-555555555555"));
-        assert!(args.contains("--tools AskUserQuestion,WebSearch,WebFetch --allowedTools WebSearch WebFetch"));
-        assert!(args.contains("--permission-prompt-tool stdio --permission-prompts host --permission-mode default"));
+        assert!(args.contains(
+            "--tools AskUserQuestion,WebSearch,WebFetch --allowedTools WebSearch WebFetch"
+        ));
+        assert!(args.contains(
+            "--permission-prompt-tool stdio --permission-prompts host --permission-mode default"
+        ));
         assert!(args.contains("--input-format stream-json"));
         assert!(args.contains("-n Title"));
         assert!(spec.interactive);
@@ -538,7 +645,10 @@ mod tests {
         r.model = Some("haiku".into());
         let spec = a.build_command(&r, &env).unwrap();
         assert!(spec.args.windows(2).any(|w| w == ["--resume", "abc"]));
-        assert!(spec.args.windows(2).any(|w| w == ["--tools", "AskUserQuestion"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w == ["--tools", "AskUserQuestion"]));
         assert!(!spec.args.contains(&"--allowedTools".to_string()));
         assert!(spec.args.windows(2).any(|w| w == ["--model", "haiku"]));
         assert!(spec.args.windows(2).any(|w| w == ["-n", "Title"]));
@@ -549,36 +659,77 @@ mod tests {
         let line = r#"{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"/p/a.txt","content":"hi"},"permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]}}"#;
         let mut a = Claude::default();
         let ev = a.parse_line(line);
-        let AgentEvent::Request(req) = &ev[0] else { panic!("expected a request") };
+        let AgentEvent::Request(req) = &ev[0] else {
+            panic!("expected a request")
+        };
         assert_eq!(req.id, "r1");
-        let RequestKind::Permission { tool, detail, suggestions, .. } = &req.kind else { panic!() };
+        let RequestKind::Permission {
+            tool,
+            detail,
+            suggestions,
+            ..
+        } = &req.kind
+        else {
+            panic!()
+        };
         assert_eq!(tool, "Write");
         assert_eq!(detail.as_deref(), Some("hi"));
         assert_eq!(suggestions[0].mode, "acceptEdits");
         let bytes = a
-            .encode_answer(req, &RequestAnswer::Permission { allow: true, message: None, set_mode: Some("acceptEdits".into()) })
+            .encode_answer(
+                req,
+                &RequestAnswer::Permission {
+                    allow: true,
+                    message: None,
+                    set_mode: Some("acceptEdits".into()),
+                },
+            )
             .unwrap();
         let v: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(v["type"], "control_response");
         assert_eq!(v["response"]["request_id"], "r1");
         assert_eq!(v["response"]["response"]["behavior"], "allow");
         assert_eq!(v["response"]["response"]["updatedInput"]["content"], "hi");
-        assert_eq!(v["response"]["response"]["updatedPermissions"][0]["mode"], "acceptEdits");
-        let bytes = a.encode_answer(req, &RequestAnswer::Permission { allow: false, message: Some("no".into()), set_mode: None }).unwrap();
+        assert_eq!(
+            v["response"]["response"]["updatedPermissions"][0]["mode"],
+            "acceptEdits"
+        );
+        let bytes = a
+            .encode_answer(
+                req,
+                &RequestAnswer::Permission {
+                    allow: false,
+                    message: Some("no".into()),
+                    set_mode: None,
+                },
+            )
+            .unwrap();
         let v: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(v["response"]["response"]["behavior"], "deny");
         assert_eq!(v["response"]["response"]["message"], "no");
 
         let line = r#"{"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[{"question":"Which?","header":"Pick","options":[{"label":"A","description":"a"},{"label":"B","description":"b"}],"multiSelect":false}]}}}"#;
         let ev = a.parse_line(line);
-        let AgentEvent::Request(req) = &ev[0] else { panic!() };
-        let RequestKind::Question { questions } = &req.kind else { panic!() };
+        let AgentEvent::Request(req) = &ev[0] else {
+            panic!()
+        };
+        let RequestKind::Question { questions } = &req.kind else {
+            panic!()
+        };
         assert_eq!(questions[0].options.len(), 2);
         let answers = std::collections::HashMap::from([("Which?".to_string(), "B".to_string())]);
-        let bytes = a.encode_answer(req, &RequestAnswer::Question { answers }).unwrap();
+        let bytes = a
+            .encode_answer(req, &RequestAnswer::Question { answers })
+            .unwrap();
         let v: Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(v["response"]["response"]["updatedInput"]["answers"]["Which?"], "B");
-        assert_eq!(v["response"]["response"]["updatedInput"]["questions"][0]["question"], "Which?");
+        assert_eq!(
+            v["response"]["response"]["updatedInput"]["answers"]["Which?"],
+            "B"
+        );
+        assert_eq!(
+            v["response"]["response"]["updatedInput"]["questions"][0]["question"],
+            "Which?"
+        );
     }
 
     #[test]
@@ -630,13 +781,19 @@ mod tests {
         std::fs::write(&img, b"\x89PNG").unwrap();
         r.images[0].path = img;
         let spec = Claude::default().build_command(&r, &env).unwrap();
-        assert!(spec.args.windows(2).any(|w| w == ["--input-format", "stream-json"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|w| w == ["--input-format", "stream-json"]));
         assert!(!spec.args.contains(&"what colour?".to_string()));
         let stdin = String::from_utf8(spec.stdin.unwrap()).unwrap();
         let v: serde_json::Value = serde_json::from_str(stdin.trim()).unwrap();
         assert_eq!(v["type"], "user");
         assert_eq!(v["message"]["content"][0]["text"], "what colour?");
-        assert_eq!(v["message"]["content"][1]["source"]["media_type"], "image/png");
+        assert_eq!(
+            v["message"]["content"][1]["source"]["media_type"],
+            "image/png"
+        );
         assert_eq!(v["message"]["content"][1]["source"]["data"], "iVBORw==");
     }
 }

@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// A clarification thread rendered under the block it is anchored to. The
 	// header toggles collapse; each row pairs the question with its reply, and
@@ -13,7 +16,17 @@
 	import RequestCard from './RequestCard.svelte';
 	import TurnMeta from './TurnMeta.svelte';
 
-	let { thread, conv, threads, depth = 1 }: { thread: Thread; conv: Conversation; threads: Map<string, Thread>; depth?: number } = $props();
+	let {
+		thread,
+		conv,
+		threads,
+		depth = 1
+	}: {
+		thread: Thread;
+		conv: Conversation;
+		threads: Map<string, Thread>;
+		depth?: number;
+	} = $props();
 
 	const cl = $derived(thread.clarification);
 	const number = $derived(conv.clarifications.findIndex((c) => c.id === cl.id) + 1);
@@ -32,7 +45,12 @@
 </script>
 
 <section class="well" class:deep={depth > 1} id="well-{cl.id}">
-	<button type="button" class="head" onclick={() => app.toggleClarification(cl.id)} aria-expanded={cl.open}>
+	<button
+		type="button"
+		class="head"
+		onclick={() => app.toggleClarification(cl.id)}
+		aria-expanded={cl.open}
+	>
 		<span class="dot"></span>
 		<span class="label">Clarification {pad(number)}</span>
 		<span class="re">re “{short(cl.quote)}”</span>
@@ -51,7 +69,9 @@
 						{#if row.reply.status === 'error'}
 							<div class="err">
 								<span>{row.reply.error ?? 'The agent failed to answer.'}</span>
-								<button type="button" class="ibtn ghost" onclick={() => app.retry(row.question)}>Retry</button>
+								<button type="button" class="ibtn ghost" onclick={() => app.retry(row.question)}
+									>Retry</button
+								>
 							</div>
 						{:else if row.reply.status === 'cancelled' && !row.reply.text}
 							<div class="muted">Stopped before a reply arrived.</div>
@@ -61,10 +81,15 @@
 						{/each}
 						{#if isRunning(row.reply)}
 							{#if app.requests[row.reply.id]}
-								<RequestCard request={app.requests[row.reply.id]} onanswer={(a) => app.answer(row.reply!.id, a)} />
+								<RequestCard
+									request={app.requests[row.reply.id]}
+									onanswer={(a) => app.answer(row.reply!.id, a)}
+								/>
 							{:else}
 								{#if !row.reply.text}<Pending />{/if}
-								{#if app.activity[row.reply.id]}<ActivityLine activity={app.activity[row.reply.id]} />{/if}
+								{#if app.activity[row.reply.id]}<ActivityLine
+										activity={app.activity[row.reply.id]}
+									/>{/if}
 							{/if}
 						{:else}
 							<TurnMeta turn={row.reply} />
@@ -88,7 +113,12 @@
 					}
 				}}
 			/>
-			<button type="button" class="ibtn ghost" onclick={sendFollow} disabled={app.running || !follow.trim()}>Ask</button>
+			<button
+				type="button"
+				class="ibtn ghost"
+				onclick={sendFollow}
+				disabled={app.running || !follow.trim()}>Ask</button
+			>
 		</div>
 	{/if}
 </section>

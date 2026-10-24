@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Read-only markdown rendering for the artifact pane. It uses the same
 	// block parser as the transcript but attaches nothing to the blocks: no
@@ -11,19 +14,24 @@
 
 {#snippet runs(list: Run[])}
 	{#each list as r, i (i)}
-		{#if r.code}<code>{r.t}</code>{:else if r.href}<a href={r.href} target="_blank" rel="noreferrer">{r.t}</a>{:else}<span class:b={r.b} class:i={r.i} class:del={r.del}>{r.t}</span>{/if}
+		{#if r.code}<code>{r.t}</code>{:else if r.href}<a href={r.href} target="_blank" rel="noreferrer"
+				>{r.t}</a
+			>{:else}<span class:b={r.b} class:i={r.i} class:del={r.del}>{r.t}</span>{/if}
 	{/each}
 {/snippet}
 
 <div class="md">
 	{#each blocks as block (block.id)}
 		{#if block.kind === 'h'}
-			<svelte:element this={`h${Math.min(6, block.level ?? 1)}`}>{@render runs(block.runs)}</svelte:element>
+			<svelte:element this={`h${Math.min(6, block.level ?? 1)}`}
+				>{@render runs(block.runs)}</svelte:element
+			>
 		{:else if block.kind === 'code'}
 			<CodeBlock code={block.code ?? ''} lang={block.lang ?? ''} />
 		{:else if block.kind === 'li'}
 			<div class="li" style="margin-left:{(block.depth ?? 0) * 22}px">
-				{#if block.ordered}<span class="num">{block.num}.</span>{:else}<span class="bullet"></span>{/if}
+				{#if block.ordered}<span class="num">{block.num}.</span>{:else}<span class="bullet"
+					></span>{/if}
 				<span class="litext">{@render runs(block.runs)}</span>
 			</div>
 		{:else if block.kind === 'quote'}
@@ -33,16 +41,25 @@
 		{:else if block.kind === 'table'}
 			<div class="tablewrap">
 				<table>
-					<thead><tr>{#each block.rows?.[0] ?? [] as cell, ci (ci)}<th>{@render runs(cell)}</th>{/each}</tr></thead>
+					<thead
+						><tr
+							>{#each block.rows?.[0] ?? [] as cell, ci (ci)}<th>{@render runs(cell)}</th
+								>{/each}</tr
+						></thead
+					>
 					<tbody>
-						{#each (block.rows ?? []).slice(1) as row, ri (ri)}<tr>{#each row as cell, ci (ci)}<td>{@render runs(cell)}</td>{/each}</tr>{/each}
+						{#each (block.rows ?? []).slice(1) as row, ri (ri)}<tr
+								>{#each row as cell, ci (ci)}<td>{@render runs(cell)}</td>{/each}</tr
+							>{/each}
 					</tbody>
 				</table>
 			</div>
 		{:else if block.kind === 'artifact'}
 			<pre class="raw">{block.artifact?.content}</pre>
 		{:else}
-			<p style={block.depth ? `margin-left:${block.depth * 22}px` : ''}>{@render runs(block.runs)}</p>
+			<p style={block.depth ? `margin-left:${block.depth * 22}px` : ''}>
+				{@render runs(block.runs)}
+			</p>
 		{/if}
 	{/each}
 </div>

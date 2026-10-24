@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Transport over a native messaging port to the `gloss-bridge` host.
 // Each request is one port message; replies and pushed events arrive as
 // port messages. The port is kept open (Chrome keeps the service worker
@@ -45,7 +48,9 @@ export class NativePortTransport implements Transport {
 		this.port = port;
 		port.onMessage.addListener((msg: BridgeIncoming) => this.onMessage(msg));
 		port.onDisconnect.addListener(() => {
-			const detail = browser.runtime.lastError?.message ?? (port as { error?: { message?: string } }).error?.message;
+			const detail =
+				browser.runtime.lastError?.message ??
+				(port as { error?: { message?: string } }).error?.message;
 			this.onDisconnect(detail);
 		});
 		// The host is considered up until it disconnects: the port API gives

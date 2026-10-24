@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Card at the bottom of the rail shown while a connected browser runs an
 	// older extension than the one this Gloss ships. Firefox is updated from
@@ -11,7 +14,9 @@
 
 	const ext = $derived(app.extension);
 	const outdated = $derived(app.outdatedExtensions);
-	const shown = $derived(!!ext && outdated.length > 0 && app.extensionUpdateDismissed !== ext.bundledVersion);
+	const shown = $derived(
+		!!ext && outdated.length > 0 && app.extensionUpdateDismissed !== ext.bundledVersion
+	);
 
 	function browserName(s: SessionInfo): string {
 		if (s.browser === 'chrome') return 'Chrome';
@@ -24,7 +29,13 @@
 		<div class="line">
 			<span class="mark"><Icon name="globe" size={13} /></span>
 			<span class="text">Extension update {ext.bundledVersion}</span>
-			<button type="button" class="close" title="Dismiss until Gloss restarts" aria-label="Dismiss extension update notice" onclick={() => app.dismissExtensionUpdate()}><Icon name="x" size={12} /></button>
+			<button
+				type="button"
+				class="close"
+				title="Dismiss until Gloss restarts"
+				aria-label="Dismiss extension update notice"
+				onclick={() => app.dismissExtensionUpdate()}><Icon name="x" size={12} /></button
+			>
 		</div>
 		{#each outdated as s (s.browser)}
 			<div class="item">
@@ -33,14 +44,21 @@
 					{#if !ext.xpiBundled}
 						<span class="how">This build of Gloss does not carry the Firefox add-on.</span>
 					{:else if app.firefoxUpdateStarted}
-						<span class="how">Confirm the update in Firefox. This card goes away once Firefox reconnects with {ext.bundledVersion}.</span>
+						<span class="how"
+							>Confirm the update in Firefox. This card goes away once Firefox reconnects with {ext.bundledVersion}.</span
+						>
 					{:else}
-						<button type="button" class="act" onclick={() => app.updateFirefoxExtension()}>Update Firefox extension</button>
+						<button type="button" class="act" onclick={() => app.updateFirefoxExtension()}
+							>Update Firefox extension</button
+						>
 					{/if}
 				{:else if s.browser === 'safari'}
 					<span class="how">Quit and reopen Safari to load {ext.bundledVersion} from Gloss.</span>
 				{:else}
-					<span class="how">Chromium browsers take extensions from the Chrome Web Store only; {browserName(s)} installs {ext.bundledVersion} from there by itself, usually within a few hours.</span>
+					<span class="how"
+						>Chromium browsers take extensions from the Chrome Web Store only; {browserName(s)} installs
+						{ext.bundledVersion} from there by itself, usually within a few hours.</span
+					>
 				{/if}
 			</div>
 		{/each}

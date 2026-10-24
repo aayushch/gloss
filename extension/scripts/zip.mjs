@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Zips each built target into dist/<target>.zip: chrome.zip goes to the
 // Chrome Web Store, firefox.zip to Mozilla for signing, safari.zip to the
 // macOS release build that wraps it with Xcode. Run `npm run build` first.

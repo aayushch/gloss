@@ -1,8 +1,12 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
 // Tauri sets TAURI_DEV_HOST when the dev server must listen on the network.
-const host = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.TAURI_DEV_HOST;
+const host = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+	?.TAURI_DEV_HOST;
 
 export default defineConfig({
 	plugins: [sveltekit()],

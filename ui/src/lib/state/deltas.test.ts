@@ -1,8 +1,15 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnEventEnvelope } from '$lib/api/types';
 import { DeltaBatcher } from './deltas';
 
-const delta = (text: string, turnId = 't1'): TurnEventEnvelope => ({ conversationId: 'c', turnId, event: { type: 'delta', text } });
+const delta = (text: string, turnId = 't1'): TurnEventEnvelope => ({
+	conversationId: 'c',
+	turnId,
+	event: { type: 'delta', text }
+});
 
 describe('DeltaBatcher', () => {
 	beforeEach(() => vi.useFakeTimers());
@@ -35,7 +42,11 @@ describe('DeltaBatcher', () => {
 	it('flushes gathered deltas before any other event so order holds', () => {
 		const out: TurnEventEnvelope[] = [];
 		const b = new DeltaBatcher((e) => out.push(e), { maxChunks: 10, maxWaitMs: 50 });
-		const done: TurnEventEnvelope = { conversationId: 'c', turnId: 't1', event: { type: 'activity', kind: 'thinking', label: 'x' } as never };
+		const done: TurnEventEnvelope = {
+			conversationId: 'c',
+			turnId: 't1',
+			event: { type: 'activity', kind: 'thinking', label: 'x' } as never
+		};
 		b.push(delta('a'));
 		b.push(done);
 		expect(out).toEqual([delta('a'), done]);

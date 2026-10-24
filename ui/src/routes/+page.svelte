@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { app } from '$lib/state/app.svelte';
@@ -26,7 +29,13 @@
 			if (!app.active) return;
 			e.preventDefault();
 			const sel = window.getSelection();
-			const selected = sel && !sel.isCollapsed && sel.anchorNode && document.querySelector('.transcript')?.contains(sel.anchorNode) ? sel.toString().trim() : '';
+			const selected =
+				sel &&
+				!sel.isCollapsed &&
+				sel.anchorNode &&
+				document.querySelector('.transcript')?.contains(sel.anchorNode)
+					? sel.toString().trim()
+					: '';
 			find.show(selected && !selected.includes('\n') ? selected : undefined);
 		} else if ((e.key === 'g' || e.key === 'G') && find.open) {
 			e.preventDefault();
@@ -52,7 +61,12 @@
 			<FindBar />
 			<Transcript />
 		</div>
-		<Composer disabled={composerDisabled} running={app.running} onsend={(t) => app.send(t)} onstop={() => app.cancel()} />
+		<Composer
+			disabled={composerDisabled}
+			running={app.running}
+			onsend={(t) => app.send(t)}
+			onstop={() => app.cancel()}
+		/>
 	</main>
 	{#if app.viewedArtifact}
 		<ArtifactPane artifact={app.viewedArtifact} group={app.viewedGroup} />

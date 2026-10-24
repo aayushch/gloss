@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The note navigator: a small bar docked on the right edge that steps
 	// through the page's notes in reading order. The middle button shows
@@ -13,7 +16,11 @@
 	import type { Actions } from './actions';
 	import type { UiStore } from './store.svelte';
 
-	let { store, actions, dock }: { store: UiStore; actions: Actions; dock: { left: number; top: number } } = $props();
+	let {
+		store,
+		actions,
+		dock
+	}: { store: UiStore; actions: Actions; dock: { left: number; top: number } } = $props();
 
 	/** A press moves the bar only after the pointer travels this far, so plain clicks still click. */
 	const DRAG_THRESHOLD = 4;
@@ -91,11 +98,38 @@
 	{onpointerup}
 	{onclickcapture}
 >
-	<button type="button" class="gloss-nav-step" title="Previous note" aria-label="Previous note" disabled={ids.length < 2 && index >= 0} onclick={() => actions.stepNote(-1)}>‹</button>
-	<button type="button" class="gloss-nav-current" title="{title}. Drag to move up or down." aria-label={title} aria-pressed={!!store.popover} onclick={() => actions.toggleNote()}>
+	<button
+		type="button"
+		class="gloss-nav-step"
+		title="Previous note"
+		aria-label="Previous note"
+		disabled={ids.length < 2 && index >= 0}
+		onclick={() => actions.stepNote(-1)}>‹</button
+	>
+	<button
+		type="button"
+		class="gloss-nav-current"
+		title="{title}. Drag to move up or down."
+		aria-label={title}
+		aria-pressed={!!store.popover}
+		onclick={() => actions.toggleNote()}
+	>
 		<span class="gloss-nav-mark">{@html MARK_SVG}</span>
 		<span class="gloss-nav-count">{label}</span>
 	</button>
-	<button type="button" class="gloss-nav-step" title="Next note" aria-label="Next note" disabled={ids.length < 2 && index >= 0} onclick={() => actions.stepNote(1)}>›</button>
-	<button type="button" class="gloss-nav-hide" title="Hide on this page. The Gloss toolbar button can show it again." aria-label="Hide the note navigator" onclick={() => actions.hideNavigator()}>×</button>
+	<button
+		type="button"
+		class="gloss-nav-step"
+		title="Next note"
+		aria-label="Next note"
+		disabled={ids.length < 2 && index >= 0}
+		onclick={() => actions.stepNote(1)}>›</button
+	>
+	<button
+		type="button"
+		class="gloss-nav-hide"
+		title="Hide on this page. The Gloss toolbar button can show it again."
+		aria-label="Hide the note navigator"
+		onclick={() => actions.hideNavigator()}>×</button
+	>
 </div>

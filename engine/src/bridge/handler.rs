@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Dispatches bridge requests to the engine. Transport-agnostic: the Unix
 //! socket and loopback listeners both hand their lines here.
 
@@ -36,7 +39,11 @@ pub struct SessionState {
 
 impl SessionState {
     pub fn new(id: u64, transport: &str) -> SessionState {
-        SessionState { id, transport: transport.to_string(), greeted: false }
+        SessionState {
+            id,
+            transport: transport.to_string(),
+            greeted: false,
+        }
     }
 }
 
@@ -90,7 +97,12 @@ const TRUNCATED_TURN_CHARS: usize = 4000;
 
 impl BridgeHandler {
     pub fn new(engine: Arc<Engine>, app_version: &str) -> BridgeHandler {
-        BridgeHandler { engine, app_version: app_version.to_string(), sessions: Mutex::new(Vec::new()), next_id: AtomicU64::new(1) }
+        BridgeHandler {
+            engine,
+            app_version: app_version.to_string(),
+            sessions: Mutex::new(Vec::new()),
+            next_id: AtomicU64::new(1),
+        }
     }
 
     pub fn next_session_id(&self) -> u64 {
@@ -142,7 +154,10 @@ impl BridgeHandler {
                 if p.protocol < MIN_PROTOCOL {
                     return Err(Failure::Code(
                         ErrorCode::Protocol,
-                        format!("the extension speaks protocol {} but Gloss {} needs at least {}", p.protocol, self.app_version, MIN_PROTOCOL),
+                        format!(
+                            "the extension speaks protocol {} but Gloss {} needs at least {}",
+                            p.protocol, self.app_version, MIN_PROTOCOL
+                        ),
                     ));
                 }
                 if p.protocol > PROTOCOL {
@@ -190,7 +205,9 @@ impl BridgeHandler {
                 let p: P = params(&req.params)?;
                 let turn = engine.store.get_turn(&p.turn_id)?;
                 let request = engine.pending_request(&turn.conversation_id);
-                Ok(json!({ "turn": turn, "running": engine.is_running(&turn.conversation_id), "request": request }))
+                Ok(
+                    json!({ "turn": turn, "running": engine.is_running(&turn.conversation_id), "request": request }),
+                )
             }
             "ask" => {
                 let p: PageAskRequest = params(&req.params)?;
@@ -205,7 +222,9 @@ impl BridgeHandler {
                         SendTurnRequest {
                             conversation_id: cl.conversation_id,
                             text: p.question,
-                            clarification: Some(ClarificationTarget::Existing { clarification_id: cl.id }),
+                            clarification: Some(ClarificationTarget::Existing {
+                                clarification_id: cl.id,
+                            }),
                             attachments: vec![],
                         },
                         quiet_sink(),
@@ -262,10 +281,16 @@ impl BridgeHandler {
             }
             "openInGloss" => {
                 let p: FocusParams = params(&req.params)?;
-                engine.publish(AppEvent::Focus { url_key: p.url_key, clarification_id: p.clarification_id });
+                engine.publish(AppEvent::Focus {
+                    url_key: p.url_key,
+                    clarification_id: p.clarification_id,
+                });
                 Ok(json!({}))
             }
-            other => Err(Failure::Code(ErrorCode::Invalid, format!("unknown method {}", other))),
+            other => Err(Failure::Code(
+                ErrorCode::Invalid,
+                format!("unknown method {}", other),
+            )),
         }
     }
 }
@@ -282,8 +307,13 @@ impl From<anyhow::Error> for Failure {
 }
 
 fn params<T: serde::de::DeserializeOwned>(v: &Value) -> Result<T, Failure> {
-    let v = if v.is_null() { Value::Object(Default::default()) } else { v.clone() };
-    serde_json::from_value(v).map_err(|e| Failure::Code(ErrorCode::Invalid, format!("bad parameters: {}", e)))
+    let v = if v.is_null() {
+        Value::Object(Default::default())
+    } else {
+        v.clone()
+    };
+    serde_json::from_value(v)
+        .map_err(|e| Failure::Code(ErrorCode::Invalid, format!("bad parameters: {}", e)))
 }
 
 /// Events reach the browser through the engine's broadcast, so requests
@@ -297,7 +327,10 @@ fn quiet_sink() -> EventSink {
 /// them); if the reply is still too large, long turn texts are cut and
 /// marked `truncated` so the extension can point to Gloss for the rest.
 fn fit(v: &mut Value) {
-    if let Some(turns) = v.pointer_mut("/page/conversation/turns").and_then(|t| t.as_array_mut()) {
+    if let Some(turns) = v
+        .pointer_mut("/page/conversation/turns")
+        .and_then(|t| t.as_array_mut())
+    {
         for turn in turns {
             turn["promptText"] = Value::Null;
         }
@@ -305,11 +338,22 @@ fn fit(v: &mut Value) {
     if serde_json::to_string(v).map(|s| s.len()).unwrap_or(0) <= MAX_LINE_BYTES {
         return;
     }
-    if let Some(turns) = v.pointer_mut("/page/conversation/turns").and_then(|t| t.as_array_mut()) {
+    if let Some(turns) = v
+        .pointer_mut("/page/conversation/turns")
+        .and_then(|t| t.as_array_mut())
+    {
         for turn in turns {
-            let cut = turn["text"].as_str().map(|t| t.chars().count() > TRUNCATED_TURN_CHARS).unwrap_or(false);
+            let cut = turn["text"]
+                .as_str()
+                .map(|t| t.chars().count() > TRUNCATED_TURN_CHARS)
+                .unwrap_or(false);
             if cut {
-                let short: String = turn["text"].as_str().unwrap_or("").chars().take(TRUNCATED_TURN_CHARS).collect();
+                let short: String = turn["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .chars()
+                    .take(TRUNCATED_TURN_CHARS)
+                    .collect();
                 turn["text"] = Value::String(short);
                 turn["truncated"] = Value::Bool(true);
             }
@@ -331,7 +375,11 @@ mod tests {
     }
 
     fn req(id: &str, method: &str, params: Value) -> Request {
-        Request { id: id.into(), method: method.into(), params }
+        Request {
+            id: id.into(),
+            method: method.into(),
+            params,
+        }
     }
 
     fn result(out: Outgoing) -> Value {
@@ -354,15 +402,52 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let h = handler(dir.path());
         let mut s = SessionState::new(1, "native");
-        assert_eq!(error(h.handle(&mut s, req("0", "getPage", json!({"url": "https://x.com"}))).await), ErrorCode::Protocol);
-        assert_eq!(error(h.handle(&mut s, req("1", "hello", json!({"protocol": 99}))).await), ErrorCode::Protocol);
-        assert_eq!(error(h.handle(&mut s, req("1", "hello", json!({"protocol": 0}))).await), ErrorCode::Protocol);
-        let r = result(h.handle(&mut s, req("2", "hello", json!({"protocol": 1, "browser": "firefox", "extensionVersion": "0.1"}))).await);
+        assert_eq!(
+            error(
+                h.handle(&mut s, req("0", "getPage", json!({"url": "https://x.com"})))
+                    .await
+            ),
+            ErrorCode::Protocol
+        );
+        assert_eq!(
+            error(
+                h.handle(&mut s, req("1", "hello", json!({"protocol": 99})))
+                    .await
+            ),
+            ErrorCode::Protocol
+        );
+        assert_eq!(
+            error(
+                h.handle(&mut s, req("1", "hello", json!({"protocol": 0})))
+                    .await
+            ),
+            ErrorCode::Protocol
+        );
+        let r = result(
+            h.handle(
+                &mut s,
+                req(
+                    "2",
+                    "hello",
+                    json!({"protocol": 1, "browser": "firefox", "extensionVersion": "0.1"}),
+                ),
+            )
+            .await,
+        );
         assert_eq!(r["appVersion"], "1.2.3");
         assert_eq!(r["settings"]["sendPageText"], true);
         assert_eq!(h.sessions()[0].browser, "firefox");
-        assert_eq!(error(h.handle(&mut s, req("3", "nope", Value::Null)).await), ErrorCode::Invalid);
-        assert_eq!(error(h.handle(&mut s, req("4", "getPage", json!({"url": "chrome://x"}))).await), ErrorCode::Internal);
+        assert_eq!(
+            error(h.handle(&mut s, req("3", "nope", Value::Null)).await),
+            ErrorCode::Invalid
+        );
+        assert_eq!(
+            error(
+                h.handle(&mut s, req("4", "getPage", json!({"url": "chrome://x"})))
+                    .await
+            ),
+            ErrorCode::Internal
+        );
         h.forget_session(1);
         assert!(h.sessions().is_empty());
     }
@@ -372,7 +457,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let h = handler(dir.path());
         let mut s = SessionState::new(1, "loopback");
-        result(h.handle(&mut s, req("1", "hello", json!({"protocol": 1}))).await);
+        result(
+            h.handle(&mut s, req("1", "hello", json!({"protocol": 1})))
+                .await,
+        );
         let ask = json!({
             "page": {"url": "https://example.com/post?utm_source=mail", "title": "A post"},
             "anchor": {"quote": {"exact": "store buffer", "prefix": "the ", "suffix": " holds"}, "position": {"start": 4, "end": 16}},
@@ -383,29 +471,91 @@ mod tests {
         let r = result(h.handle(&mut s, req("2", "ask", ask.clone())).await);
         assert_eq!(r["urlKey"], "https://example.com/post");
         let cl_id = r["clarification"]["id"].as_str().unwrap().to_string();
-        assert_eq!(r["clarification"]["webAnchor"]["quote"]["exact"], "store buffer");
+        assert_eq!(
+            r["clarification"]["webAnchor"]["quote"]["exact"],
+            "store buffer"
+        );
         let turn_id = r["assistantTurn"]["id"].as_str().unwrap().to_string();
 
-        let page = result(h.handle(&mut s, req("3", "getPage", json!({"url": "https://example.com/post"}))).await);
+        let page = result(
+            h.handle(
+                &mut s,
+                req("3", "getPage", json!({"url": "https://example.com/post"})),
+            )
+            .await,
+        );
         assert_eq!(page["page"]["page"]["title"], "A post");
         assert_eq!(page["page"]["page"]["askCount"], 1);
-        assert_eq!(page["page"]["conversation"]["clarifications"][0]["id"], cl_id);
+        assert_eq!(
+            page["page"]["conversation"]["clarifications"][0]["id"],
+            cl_id
+        );
 
-        let turn = result(h.handle(&mut s, req("4", "getTurn", json!({"turnId": turn_id}))).await);
+        let turn = result(
+            h.handle(&mut s, req("4", "getTurn", json!({"turnId": turn_id})))
+                .await,
+        );
         assert_eq!(turn["turn"]["id"], turn_id);
 
-        result(h.handle(&mut s, req("5", "reportAnchors", json!({"states": {cl_id.clone(): "orphan"}}))).await);
-        result(h.handle(&mut s, req("6", "setOpen", json!({"clarificationId": cl_id, "open": false}))).await);
-        let page = result(h.handle(&mut s, req("7", "getPage", json!({"url": "https://example.com/post"}))).await);
+        result(
+            h.handle(
+                &mut s,
+                req(
+                    "5",
+                    "reportAnchors",
+                    json!({"states": {cl_id.clone(): "orphan"}}),
+                ),
+            )
+            .await,
+        );
+        result(
+            h.handle(
+                &mut s,
+                req(
+                    "6",
+                    "setOpen",
+                    json!({"clarificationId": cl_id, "open": false}),
+                ),
+            )
+            .await,
+        );
+        let page = result(
+            h.handle(
+                &mut s,
+                req("7", "getPage", json!({"url": "https://example.com/post"})),
+            )
+            .await,
+        );
         assert_eq!(page["page"]["page"]["orphanCount"], 1);
-        assert_eq!(page["page"]["conversation"]["clarifications"][0]["open"], false);
-        assert_eq!(page["page"]["conversation"]["clarifications"][0]["anchorState"], "orphan");
+        assert_eq!(
+            page["page"]["conversation"]["clarifications"][0]["open"],
+            false
+        );
+        assert_eq!(
+            page["page"]["conversation"]["clarifications"][0]["anchorState"],
+            "orphan"
+        );
 
-        let list = result(h.handle(&mut s, req("8", "listRecentPages", Value::Null)).await);
+        let list = result(
+            h.handle(&mut s, req("8", "listRecentPages", Value::Null))
+                .await,
+        );
         assert_eq!(list["pages"].as_array().unwrap().len(), 1);
 
-        result(h.handle(&mut s, req("9", "deleteAsk", json!({"clarificationId": cl_id}))).await);
-        let page = result(h.handle(&mut s, req("10", "getPage", json!({"url": "https://example.com/post"}))).await);
+        result(
+            h.handle(
+                &mut s,
+                req("9", "deleteAsk", json!({"clarificationId": cl_id})),
+            )
+            .await,
+        );
+        let page = result(
+            h.handle(
+                &mut s,
+                req("10", "getPage", json!({"url": "https://example.com/post"})),
+            )
+            .await,
+        );
         assert_eq!(page["page"]["page"]["askCount"], 0);
         assert_eq!(error(h.handle(&mut s, req("11", "ask", json!({"page": {"url": "https://example.com"}, "question": "q", "private": true}))).await), ErrorCode::Denied);
     }
@@ -413,16 +563,28 @@ mod tests {
     #[test]
     fn long_replies_are_cut_to_fit_a_frame() {
         let prompt = "p".repeat(MAX_LINE_BYTES + 10);
-        let mut v = json!({"page": {"conversation": {"turns": [{"text": "a", "promptText": prompt}]}}});
+        let mut v =
+            json!({"page": {"conversation": {"turns": [{"text": "a", "promptText": prompt}]}}});
         fit(&mut v);
         assert!(v["page"]["conversation"]["turns"][0]["promptText"].is_null());
-        assert!(v["page"]["conversation"]["turns"][0].get("truncated").is_none());
+        assert!(v["page"]["conversation"]["turns"][0]
+            .get("truncated")
+            .is_none());
 
         let big = "x".repeat(MAX_LINE_BYTES + 10);
-        let mut v = json!({"page": {"conversation": {"turns": [{"text": big}, {"text": "short"}]}}});
+        let mut v =
+            json!({"page": {"conversation": {"turns": [{"text": big}, {"text": "short"}]}}});
         fit(&mut v);
         assert_eq!(v["page"]["conversation"]["turns"][0]["truncated"], true);
-        assert_eq!(v["page"]["conversation"]["turns"][0]["text"].as_str().unwrap().len(), TRUNCATED_TURN_CHARS);
-        assert!(v["page"]["conversation"]["turns"][1].get("truncated").is_none());
+        assert_eq!(
+            v["page"]["conversation"]["turns"][0]["text"]
+                .as_str()
+                .unwrap()
+                .len(),
+            TRUNCATED_TURN_CHARS
+        );
+        assert!(v["page"]["conversation"]["turns"][1]
+            .get("truncated")
+            .is_none());
     }
 }

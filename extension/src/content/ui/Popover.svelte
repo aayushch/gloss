@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import { renderMarkdown } from '../markdown';
@@ -22,7 +25,9 @@
 		store.version;
 		return store.page.running;
 	});
-	const appDown = $derived(store.connection.state === 'app_not_running' || store.connection.state === 'host_missing');
+	const appDown = $derived(
+		store.connection.state === 'app_not_running' || store.connection.state === 'host_missing'
+	);
 
 	let height = $state(0);
 	let thread: HTMLDivElement | undefined = $state();
@@ -85,15 +90,43 @@
 </script>
 
 {#if entry}
-	<div class="gloss-card gloss-popover" {style} bind:clientHeight={height} role="dialog" aria-label="Gloss note">
+	<div
+		class="gloss-card gloss-popover"
+		{style}
+		bind:clientHeight={height}
+		role="dialog"
+		aria-label="Gloss note"
+	>
 		<div class="gloss-popover-head">
 			<span class="gloss-mark">{@html MARK_SVG}</span>
 			<span class="gloss-popover-quote" title={entry.clarification.quote}>{quote}</span>
-			{#if entry.state === 'fuzzy'}<span class="gloss-badge" title="The passage changed since you asked; this is the closest match">approximate</span>{/if}
-			{#if entry.state === 'orphan'}<span class="gloss-badge" title="The passage is no longer on this page">not on page</span>{/if}
-			{#if entry.state === 'detached'}<span class="gloss-badge" title="The page took the passage's text out while it was off screen; it comes back when you scroll to it">off screen</span>{/if}
-			<button type="button" class="gloss-icon-btn" title="Collapse: the note stays, its mark dims" aria-label="Collapse" onclick={() => actions.collapse(askId)}>–</button>
-			<button type="button" class="gloss-icon-btn" title="Close" aria-label="Close" onclick={() => actions.closePopover()}>×</button>
+			{#if entry.state === 'fuzzy'}<span
+					class="gloss-badge"
+					title="The passage changed since you asked; this is the closest match">approximate</span
+				>{/if}
+			{#if entry.state === 'orphan'}<span
+					class="gloss-badge"
+					title="The passage is no longer on this page">not on page</span
+				>{/if}
+			{#if entry.state === 'detached'}<span
+					class="gloss-badge"
+					title="The page took the passage's text out while it was off screen; it comes back when you scroll to it"
+					>off screen</span
+				>{/if}
+			<button
+				type="button"
+				class="gloss-icon-btn"
+				title="Collapse: the note stays, its mark dims"
+				aria-label="Collapse"
+				onclick={() => actions.collapse(askId)}>–</button
+			>
+			<button
+				type="button"
+				class="gloss-icon-btn"
+				title="Close"
+				aria-label="Close"
+				onclick={() => actions.closePopover()}>×</button
+			>
 		</div>
 		<div class="gloss-thread" bind:this={thread}>
 			{#each entry.turns as turn (turn.id)}
@@ -103,11 +136,19 @@
 						<div class="gloss-turn-text">{turn.text}</div>
 					{:else}
 						<div class="gloss-turn-text gloss-md">
-							{@html renderMarkdown(turn.text)}{#if turn.status === 'pending' || turn.status === 'streaming'}<span class="gloss-cursor"></span>{/if}
+							{@html renderMarkdown(
+								turn.text
+							)}{#if turn.status === 'pending' || turn.status === 'streaming'}<span
+									class="gloss-cursor"
+								></span>{/if}
 						</div>
-						{#if turn.status === 'error'}<div class="gloss-error">{turn.error ?? 'The reply failed.'}</div>{/if}
+						{#if turn.status === 'error'}<div class="gloss-error">
+								{turn.error ?? 'The reply failed.'}
+							</div>{/if}
 						{#if turn.status === 'cancelled'}<div class="gloss-hint">Cancelled.</div>{/if}
-						{#if turn.truncated}<div class="gloss-hint">Shortened here; the full reply is in Gloss.</div>{/if}
+						{#if turn.truncated}<div class="gloss-hint">
+								Shortened here; the full reply is in Gloss.
+							</div>{/if}
 					{/if}
 				</div>
 			{/each}
@@ -119,18 +160,26 @@
 				placeholder={running ? 'Waiting for the reply…' : 'Follow up…'}
 				bind:value={text}
 				disabled={running}
-				{onkeydown}
-			></textarea>
+				{onkeydown}></textarea>
 		</div>
 		<div class="gloss-row gloss-popover-actions">
 			{#if streaming || running}
 				<button type="button" class="gloss-btn" onclick={() => actions.cancel(askId)}>Stop</button>
 			{:else if confirmRemove}
 				<span class="gloss-hint">Remove this note from the page and from Gloss?</span>
-				<button type="button" class="gloss-btn gloss-btn-danger" onclick={() => actions.remove(askId)}>Remove</button>
-				<button type="button" class="gloss-btn" onclick={() => (confirmRemove = false)}>Keep</button>
+				<button
+					type="button"
+					class="gloss-btn gloss-btn-danger"
+					onclick={() => actions.remove(askId)}>Remove</button
+				>
+				<button type="button" class="gloss-btn" onclick={() => (confirmRemove = false)}>Keep</button
+				>
 			{:else}
-				<button type="button" class="gloss-btn gloss-btn-quiet" onclick={() => (confirmRemove = true)}>Remove…</button>
+				<button
+					type="button"
+					class="gloss-btn gloss-btn-quiet"
+					onclick={() => (confirmRemove = true)}>Remove…</button
+				>
 			{/if}
 			<span class="gloss-spacer"></span>
 			<button type="button" class="gloss-btn" onclick={() => actions.openInGloss(askId)}>

@@ -1,10 +1,19 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // A client of the background: opens the runtime port, sends requests and
 // receives pushed events. Used by the content script, the popup and the
 // ask window. The port reconnects when the background goes away (Chrome
 // stops idle service workers), replaying the last subscription.
 
 import { browser } from './browser';
-import { LOCAL_METHODS, PORT_NAME, type BackgroundMessage, type ClientMessage, type ConnectionStatus } from './messages';
+import {
+	LOCAL_METHODS,
+	PORT_NAME,
+	type BackgroundMessage,
+	type ClientMessage,
+	type ConnectionStatus
+} from './messages';
 import { BridgeFailure, DEFAULT_SETTINGS } from './protocol';
 
 export type EventHandler = (event: string, data: unknown) => void;
@@ -13,7 +22,11 @@ export interface Client {
 	request<T = unknown>(method: string, params?: unknown): Promise<T>;
 	/** Pushed events (`turn`, `page`, `settings`, `app_state`, `shutdown`, `connection`). */
 	onEvent(handler: EventHandler): () => void;
-	subscribe(keys: { urlKey: string | null; conversationId: string | null; askCount?: number }): void;
+	subscribe(keys: {
+		urlKey: string | null;
+		conversationId: string | null;
+		askCount?: number;
+	}): void;
 	status(): Promise<ConnectionStatus>;
 	/** Drops the port without reconnecting, until `resume`. */
 	suspend(): void;
@@ -51,7 +64,8 @@ export function connectClient(): Client {
 
 	function onDisconnect() {
 		port = null;
-		for (const p of pending.values()) p.reject(new BridgeFailure('internal', 'the background went away'));
+		for (const p of pending.values())
+			p.reject(new BridgeFailure('internal', 'the background went away'));
 		pending.clear();
 		if (closed || suspended) return;
 		setTimeout(connect, reconnectDelay);
@@ -106,7 +120,11 @@ export function connectClient(): Client {
 			try {
 				return await this.request<ConnectionStatus>(LOCAL_METHODS.status);
 			} catch (e) {
-				return { state: 'error', message: e instanceof Error ? e.message : String(e), settings: DEFAULT_SETTINGS };
+				return {
+					state: 'error',
+					message: e instanceof Error ? e.message : String(e),
+					settings: DEFAULT_SETTINGS
+				};
 			}
 		},
 		suspend() {
@@ -123,6 +141,6 @@ export function connectClient(): Client {
 			closed = true;
 			port?.disconnect();
 			port = null;
-		},
+		}
 	};
 }

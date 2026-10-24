@@ -1,5 +1,16 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
-import { fractionOf, NAV_HEIGHT, NAV_WIDTH, obstruction, placeOnEdge, topOf, type HitTest } from '../src/content/dock';
+import {
+	fractionOf,
+	NAV_HEIGHT,
+	NAV_WIDTH,
+	obstruction,
+	placeOnEdge,
+	topOf,
+	type HitTest
+} from '../src/content/dock';
 
 const W = 1200;
 const H = 800;
@@ -46,13 +57,20 @@ describe('placeOnEdge', () => {
 		const clear = p.top + NAV_HEIGHT < widget.top || p.top > widget.bottom;
 		expect(clear).toBe(true);
 		// Nearest: within one navigator height plus clearance of the widget's edge.
-		expect(Math.min(Math.abs(widget.top - (p.top + NAV_HEIGHT)), Math.abs(p.top - widget.bottom))).toBeLessThanOrEqual(12);
+		expect(
+			Math.min(Math.abs(widget.top - (p.top + NAV_HEIGHT)), Math.abs(p.top - widget.bottom))
+		).toBeLessThanOrEqual(12);
 		expect(p.left).toBe(placeOnEdge(W, H, 0.5, hitsIn([])).left);
 	});
 
 	it('stays put when the only thing underneath scrolls with the page', () => {
 		document.body.innerHTML = '<a id="l" href="#">link</a>';
-		const p = placeOnEdge(W, H, 0.5, hitsIn([{ top: 0, bottom: H, el: document.getElementById('l')! }]));
+		const p = placeOnEdge(
+			W,
+			H,
+			0.5,
+			hitsIn([{ top: 0, bottom: H, el: document.getElementById('l')! }])
+		);
 		expect(p.top).toBe(topOf(0.5, H));
 	});
 });

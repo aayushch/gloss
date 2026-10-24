@@ -1,9 +1,46 @@
-import { describe, expect, it } from 'vitest';
-import type { Conversation, ConversationSummary, ExternalSession, Project, Turn } from '$lib/api/types';
-import { agentsIn, anchorLabel, hostOf, pageQuestions, pageThreads, projectItems, splitByProject, splitForRail, wellsContaining } from './threads';
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
 
-function turn(id: string, text: string, clarificationId: string | null, role: Turn['role'] = 'assistant'): Turn {
-	return { id, conversationId: 'c', seq: 0, role, text, promptText: null, status: 'done', clarificationId, model: null, error: null, usage: null, createdAt: 0 } as Turn;
+import { describe, expect, it } from 'vitest';
+import type {
+	Conversation,
+	ConversationSummary,
+	ExternalSession,
+	Project,
+	Turn
+} from '$lib/api/types';
+import {
+	agentsIn,
+	anchorLabel,
+	hostOf,
+	pageQuestions,
+	pageThreads,
+	projectItems,
+	splitByProject,
+	splitForRail,
+	wellsContaining
+} from './threads';
+
+function turn(
+	id: string,
+	text: string,
+	clarificationId: string | null,
+	role: Turn['role'] = 'assistant'
+): Turn {
+	return {
+		id,
+		conversationId: 'c',
+		seq: 0,
+		role,
+		text,
+		promptText: null,
+		status: 'done',
+		clarificationId,
+		model: null,
+		error: null,
+		usage: null,
+		createdAt: 0
+	} as Turn;
 }
 
 const conv = {
@@ -14,8 +51,26 @@ const conv = {
 		turn('t3', 'Nested: a fence\nforbids it', 'cl2')
 	],
 	clarifications: [
-		{ id: 'cl1', conversationId: 'c', number: 1, anchorBlockId: 't1:0', quote: 'spinlocks', parentId: null, open: false, createdAt: 0 },
-		{ id: 'cl2', conversationId: 'c', number: 2, anchorBlockId: 't2:0', quote: 'reorder', parentId: 'cl1', open: false, createdAt: 0 }
+		{
+			id: 'cl1',
+			conversationId: 'c',
+			number: 1,
+			anchorBlockId: 't1:0',
+			quote: 'spinlocks',
+			parentId: null,
+			open: false,
+			createdAt: 0
+		},
+		{
+			id: 'cl2',
+			conversationId: 'c',
+			number: 2,
+			anchorBlockId: 't2:0',
+			quote: 'reorder',
+			parentId: 'cl1',
+			open: false,
+			createdAt: 0
+		}
 	]
 } as unknown as Conversation;
 
@@ -34,8 +89,10 @@ describe('wellsContaining', () => {
 });
 
 describe('splitByProject', () => {
-	const conv = (id: string, projectDir: string | null) => ({ id, projectDir }) as ConversationSummary;
-	const project = (path: string) => ({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
+	const conv = (id: string, projectDir: string | null) =>
+		({ id, projectDir }) as ConversationSummary;
+	const project = (path: string) =>
+		({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
 
 	it('groups by project and keeps chats of removed projects with the rest', () => {
 		const { byProject, rest } = splitByProject(
@@ -49,18 +106,29 @@ describe('splitByProject', () => {
 });
 
 describe('splitForRail', () => {
-	const conv = (id: string, projectDir: string | null, pageKey: string | null = null) => ({ id, projectDir, pageKey }) as ConversationSummary;
-	const project = (path: string) => ({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
+	const conv = (id: string, projectDir: string | null, pageKey: string | null = null) =>
+		({ id, projectDir, pageKey }) as ConversationSummary;
+	const project = (path: string) =>
+		({ path, name: path, createdAt: 0, lastActiveAt: 0 }) as Project;
 
 	it('keeps page conversations out of the project and date lists', () => {
 		const { byProject, pages, rest } = splitForRail(
-			[conv('a', '/p/one'), conv('w', null, 'https://example.com/x'), conv('b', null), conv('w2', '/p/one', 'https://example.com/y')],
+			[
+				conv('a', '/p/one'),
+				conv('w', null, 'https://example.com/x'),
+				conv('b', null),
+				conv('w2', '/p/one', 'https://example.com/y')
+			],
 			[project('/p/one')]
 		);
 		expect(byProject.get('/p/one')!.map((c) => c.id)).toEqual(['a']);
 		expect(pages.map((c) => c.id)).toEqual(['w', 'w2']);
 		expect(rest.map((c) => c.id)).toEqual(['b']);
-		expect(splitByProject([conv('w', null, 'https://example.com/x'), conv('b', null)], []).rest.map((c) => c.id)).toEqual(['b']);
+		expect(
+			splitByProject([conv('w', null, 'https://example.com/x'), conv('b', null)], []).rest.map(
+				(c) => c.id
+			)
+		).toEqual(['b']);
 	});
 });
 
@@ -77,9 +145,30 @@ describe('page threads', () => {
 			turn('u4', 'Old style?', 'cl9', 'user')
 		],
 		clarifications: [
-			{ id: 'w1', anchorBlockId: '', quote: 'first passage', parentId: null, webAnchor: web, anchorState: 'anchored' },
-			{ id: 'w2', anchorBlockId: '', quote: 'inside the reply', parentId: 'w1', webAnchor: web, anchorState: 'orphan' },
-			{ id: 'cl9', anchorBlockId: 'a1:0', quote: 'buffers', parentId: null, webAnchor: null, anchorState: null }
+			{
+				id: 'w1',
+				anchorBlockId: '',
+				quote: 'first passage',
+				parentId: null,
+				webAnchor: web,
+				anchorState: 'anchored'
+			},
+			{
+				id: 'w2',
+				anchorBlockId: '',
+				quote: 'inside the reply',
+				parentId: 'w1',
+				webAnchor: web,
+				anchorState: 'orphan'
+			},
+			{
+				id: 'cl9',
+				anchorBlockId: 'a1:0',
+				quote: 'buffers',
+				parentId: null,
+				webAnchor: null,
+				anchorState: null
+			}
 		]
 	} as unknown as Conversation;
 
@@ -104,9 +193,12 @@ describe('page threads', () => {
 });
 
 describe('projectItems', () => {
-	const chat = (id: string, agent: string, updatedAt: number, pinned = false) => ({ id, agent, updatedAt, pinned }) as ConversationSummary;
-	const session = (id: string, agent: string, updatedAt: number) => ({ id, agent, updatedAt }) as ExternalSession;
-	const key = (i: ReturnType<typeof projectItems>[number]) => (i.kind === 'chat' ? i.chat.id : i.session.id);
+	const chat = (id: string, agent: string, updatedAt: number, pinned = false) =>
+		({ id, agent, updatedAt, pinned }) as ConversationSummary;
+	const session = (id: string, agent: string, updatedAt: number) =>
+		({ id, agent, updatedAt }) as ExternalSession;
+	const key = (i: ReturnType<typeof projectItems>[number]) =>
+		i.kind === 'chat' ? i.chat.id : i.session.id;
 	const chats = [chat('a', 'claude', 10), chat('b', 'pi', 50, true), chat('c', 'claude', 30)];
 	const sessions = [session('s1', 'codex', 40), session('s2', 'claude', 20)];
 

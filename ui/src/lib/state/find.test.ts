@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { findRanges } from './find.svelte';
 
@@ -23,7 +26,9 @@ describe('findRanges', () => {
 	});
 
 	it('skips button labels and opted-out elements', () => {
-		const el = root('<div><button>Copy</button><span data-nofind>copy</span><pre>copy this</pre></div>');
+		const el = root(
+			'<div><button>Copy</button><span data-nofind>copy</span><pre>copy this</pre></div>'
+		);
 		const r = findRanges(el, 'copy');
 		expect(r).toHaveLength(1);
 		expect(r[0].startContainer.parentElement?.tagName).toBe('PRE');

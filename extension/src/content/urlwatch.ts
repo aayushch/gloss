@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Reports URL changes that happen without a page load: pushState and
 // replaceState calls, back/forward navigation and hash changes. Changes
 // are coalesced over 100 ms and reported once per new href.

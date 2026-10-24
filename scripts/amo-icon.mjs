@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Uploads the extension's icon to its add-on record on addons.mozilla.org.
 //
 //   AMO_JWT_ISSUER=… AMO_JWT_SECRET=… node scripts/amo-icon.mjs
@@ -17,11 +20,15 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const issuer = process.env.AMO_JWT_ISSUER;
 const secret = process.env.AMO_JWT_SECRET;
 if (!issuer || !secret) {
-	console.error('set AMO_JWT_ISSUER and AMO_JWT_SECRET (addons.mozilla.org › Tools › Manage API Keys)');
+	console.error(
+		'set AMO_JWT_ISSUER and AMO_JWT_SECRET (addons.mozilla.org › Tools › Manage API Keys)'
+	);
 	process.exit(2);
 }
 
-const manifest = JSON.parse(await readFile(path.join(root, 'extension/manifests/firefox.json'), 'utf8'));
+const manifest = JSON.parse(
+	await readFile(path.join(root, 'extension/manifests/firefox.json'), 'utf8')
+);
 const addonId = manifest.browser_specific_settings.gecko.id;
 const iconPath = path.join(root, 'extension/icons/icon128.png');
 
@@ -37,7 +44,11 @@ function jwt() {
 const form = new FormData();
 form.append('icon', new Blob([await readFile(iconPath)], { type: 'image/png' }), 'icon128.png');
 const url = `https://addons.mozilla.org/api/v5/addons/addon/${encodeURIComponent(addonId)}/`;
-const res = await fetch(url, { method: 'PATCH', headers: { Authorization: `JWT ${jwt()}` }, body: form });
+const res = await fetch(url, {
+	method: 'PATCH',
+	headers: { Authorization: `JWT ${jwt()}` },
+	body: form
+});
 if (!res.ok) {
 	console.error(`icon upload for ${addonId} failed: ${res.status} ${await res.text()}`);
 	process.exit(1);

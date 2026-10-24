@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Dropdown under the header's model pill. Picks the model for new turns in
 	// the current conversation.
@@ -10,13 +13,24 @@
 		selected,
 		onselect,
 		onclose
-	}: { agentName: string; models: ModelInfo[]; selected: string; onselect: (id: string) => void; onclose: () => void } = $props();
+	}: {
+		agentName: string;
+		models: ModelInfo[];
+		selected: string;
+		onselect: (id: string) => void;
+		onclose: () => void;
+	} = $props();
 
 	let el: HTMLDivElement | undefined = $state();
 
 	$effect(() => {
 		const onDown = (e: MouseEvent) => {
-			if (el && !el.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-model-pill]')) onclose();
+			if (
+				el &&
+				!el.contains(e.target as Node) &&
+				!(e.target as HTMLElement).closest('[data-model-pill]')
+			)
+				onclose();
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') onclose();
@@ -38,7 +52,14 @@
 		<div class="empty">No models reported. The agent's own default is used.</div>
 	{/if}
 	{#each models as m (m.id)}
-		<button type="button" class="row" class:on={isSelected(m)} role="menuitemradio" aria-checked={isSelected(m)} onclick={() => onselect(m.id)}>
+		<button
+			type="button"
+			class="row"
+			class:on={isSelected(m)}
+			role="menuitemradio"
+			aria-checked={isSelected(m)}
+			onclick={() => onselect(m.id)}
+		>
 			<span class="text">
 				<span class="name">{m.name}</span>
 				{#if m.note}<span class="note">{m.note}</span>{/if}

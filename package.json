@@ -1,0 +1,15 @@
+{
+  "name": "gloss-workspace",
+  "private": true,
+  "type": "module",
+  "description": "Repo-wide developer tooling. The app lives in ui/ and the browser extension in extension/; each has its own package.json.",
+  "scripts": {
+    "format": "prettier --write \"**/*.{ts,js,mjs,svelte}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,mjs,svelte}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.57.2"
+  }
+}

@@ -1,0 +1,11 @@
+# Prettier also skips everything in .gitignore (build output, node_modules,
+# target/, generated Tauri files).
+
+# Xcode-generated Safari wrapper project.
+safari/
+
+# Lockfiles and vendored assets are never hand-edited.
+package-lock.json
+
+# Build output listed in nested .gitignore files, which Prettier does not read.
+extension/dist/

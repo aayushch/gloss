@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// The card a reply shows where an artifact was written. Clicking it opens
 	// that version in the artifact pane.
@@ -7,12 +10,23 @@
 
 	let { artifact, turnId }: { artifact: Artifact; turnId: string } = $props();
 
-	const version = $derived(app.artifacts.find((g) => g.identifier === artifact.identifier)?.versions.find((v) => v.turnId === turnId));
-	const total = $derived(app.artifacts.find((g) => g.identifier === artifact.identifier)?.versions.length ?? 1);
+	const version = $derived(
+		app.artifacts
+			.find((g) => g.identifier === artifact.identifier)
+			?.versions.find((v) => v.turnId === turnId)
+	);
+	const total = $derived(
+		app.artifacts.find((g) => g.identifier === artifact.identifier)?.versions.length ?? 1
+	);
 	const active = $derived(app.isViewing(artifact.identifier, turnId));
 </script>
 
-<button type="button" class="card" class:active onclick={() => app.openArtifact(artifact.identifier, turnId)}>
+<button
+	type="button"
+	class="card"
+	class:active
+	onclick={() => app.openArtifact(artifact.identifier, turnId)}
+>
 	<span class="glyph"><Icon name="artifact" size={18} /></span>
 	<span class="body">
 		<span class="title">{artifact.title}</span>
@@ -41,7 +55,9 @@
 		color: var(--text);
 		font: inherit;
 		cursor: pointer;
-		transition: border-color 120ms ease, background 120ms ease;
+		transition:
+			border-color 120ms ease,
+			background 120ms ease;
 	}
 	.card:hover {
 		background: var(--surface-2);

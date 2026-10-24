@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Adapters that turn each CLI agent into the same two operations: build the
 //! command line for one turn, and translate its output lines into events.
 
@@ -74,12 +77,18 @@ impl SpawnRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AgentEvent {
     /// The agent reported its own session id (and possibly the model).
-    Session { id: String, model: Option<String> },
+    Session {
+        id: String,
+        model: Option<String>,
+    },
     /// More assistant text.
     Append(String),
     /// The complete assistant text so far, as the agent sees it.
     SetFull(String),
-    Activity { kind: ActivityKind, label: String },
+    Activity {
+        kind: ActivityKind,
+        label: String,
+    },
     Usage(Usage),
     Model(String),
     /// The agent reported a failure; the turn ends as an error with this message.
@@ -136,7 +145,11 @@ pub fn all_adapters() -> Vec<Box<dyn AgentAdapter>> {
 // ── shared helpers ──────────────────────────────────────────────────────
 
 /// Resolve the agent binary or fail with a message the UI can show.
-pub(crate) fn require_binary(env: &ShellEnv, id: AgentId, resolver: fn(&ShellEnv) -> Option<PathBuf>) -> Result<PathBuf> {
+pub(crate) fn require_binary(
+    env: &ShellEnv,
+    id: AgentId,
+    resolver: fn(&ShellEnv) -> Option<PathBuf>,
+) -> Result<PathBuf> {
     resolver(env).ok_or_else(|| {
         anyhow!(
             "{} is not installed or not on PATH (looked for `{}`)",
@@ -205,7 +218,12 @@ pub(crate) fn probe_version(env: &ShellEnv, path: &Path, args: &[&str]) -> Optio
 }
 
 /// Run a CLI and return its stdout as text, with a short timeout.
-pub(crate) fn capture_text(env: &ShellEnv, path: &Path, args: &[&str], timeout: Duration) -> Option<String> {
+pub(crate) fn capture_text(
+    env: &ShellEnv,
+    path: &Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Option<String> {
     run_capture(&path.to_string_lossy(), args, Some(&env.vars), timeout)
         .map(|b| String::from_utf8_lossy(&b).to_string())
 }
@@ -218,14 +236,23 @@ pub(crate) fn help_text(env: &ShellEnv, path: &Path, args: &[&str]) -> Option<St
     type HelpKey = (PathBuf, Option<SystemTime>, Vec<String>);
     static HELP_CACHE: Mutex<Option<HashMap<HelpKey, Option<String>>>> = Mutex::new(None);
     let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
-    let key = (path.to_path_buf(), mtime, args.iter().map(|a| a.to_string()).collect::<Vec<_>>());
+    let key = (
+        path.to_path_buf(),
+        mtime,
+        args.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+    );
     if let Some(cache) = HELP_CACHE.lock().unwrap().as_ref() {
         if let Some(v) = cache.get(&key) {
             return v.clone();
         }
     }
-    let out = capture_text(env, path, args, Duration::from_secs(5)).filter(|s| !s.trim().is_empty());
-    HELP_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, out.clone());
+    let out =
+        capture_text(env, path, args, Duration::from_secs(5)).filter(|s| !s.trim().is_empty());
+    HELP_CACHE
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(key, out.clone());
     out
 }
 
@@ -233,7 +260,9 @@ pub(crate) fn help_text(env: &ShellEnv, path: &Path, args: &[&str]) -> Option<St
 /// common layouts: `(choices: "a", "b")` after the flag's description, or
 /// `[possible values: a, b]`. Empty when the flag is not documented.
 pub(crate) fn flag_choices(help: &str, flag: &str) -> Vec<String> {
-    let Some(start) = help.find(flag) else { return Vec::new() };
+    let Some(start) = help.find(flag) else {
+        return Vec::new();
+    };
     let rest = &help[start..];
     // The description of one flag ends where the next flag starts.
     let end = rest[flag.len()..]
@@ -243,12 +272,19 @@ pub(crate) fn flag_choices(help: &str, flag: &str) -> Vec<String> {
     let section = &rest[..end];
     let list = if let Some(i) = section.find("choices:") {
         let tail = &section[i + "choices:".len()..];
-        let tail = &tail[..tail.find(']').or_else(|| tail.find(')')).unwrap_or(tail.len())];
-        tail.split(',').map(|p| p.trim().trim_matches('"').to_string()).collect::<Vec<_>>()
+        let tail = &tail[..tail
+            .find(']')
+            .or_else(|| tail.find(')'))
+            .unwrap_or(tail.len())];
+        tail.split(',')
+            .map(|p| p.trim().trim_matches('"').to_string())
+            .collect::<Vec<_>>()
     } else if let Some(i) = section.find("possible values:") {
         let tail = &section[i + "possible values:".len()..];
         let tail = &tail[..tail.find(']').unwrap_or(tail.len())];
-        tail.split(',').map(|p| p.trim().to_string()).collect::<Vec<_>>()
+        tail.split(',')
+            .map(|p| p.trim().to_string())
+            .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
@@ -272,7 +308,8 @@ pub(crate) fn str_of<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 pub(crate) fn u64_of(v: &Value, key: &str) -> Option<u64> {
-    v.get(key).and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)))
+    v.get(key)
+        .and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)))
 }
 
 pub(crate) fn activity(kind: ActivityKind, label: impl Into<String>) -> AgentEvent {
@@ -286,10 +323,19 @@ pub(crate) fn activity(kind: ActivityKind, label: impl Into<String>) -> AgentEve
 /// name and whichever of the usual argument keys is present.
 pub(crate) fn tool_label(name: &str, input: Option<&Value>) -> String {
     let detail = input.and_then(|i| {
-        ["query", "url", "command", "file_path", "path", "pattern", "prompt", "description"]
-            .iter()
-            .find_map(|k| i.get(k).and_then(Value::as_str))
-            .map(str::to_string)
+        [
+            "query",
+            "url",
+            "command",
+            "file_path",
+            "path",
+            "pattern",
+            "prompt",
+            "description",
+        ]
+        .iter()
+        .find_map(|k| i.get(k).and_then(Value::as_str))
+        .map(str::to_string)
     });
     match detail {
         Some(d) => format!("{}: {}", name, crate::prompt::truncate(d.trim(), 80)),
@@ -359,11 +405,20 @@ pub(crate) mod testutil {
     #[test]
     fn flag_choices_reads_both_help_layouts() {
         let commander = "  --permission-mode <mode>  Permission mode to use\n                            (choices: \"acceptEdits\", \"auto\", \"plan\")\n  --other  x";
-        assert_eq!(flag_choices(commander, "--permission-mode"), vec!["acceptEdits", "auto", "plan"]);
+        assert_eq!(
+            flag_choices(commander, "--permission-mode"),
+            vec!["acceptEdits", "auto", "plan"]
+        );
         let yargs = "      --approval-mode  Set the approval mode: default (prompt), plan (read-only)  [string] [choices: \"default\", \"plan\"]\n";
-        assert_eq!(flag_choices(yargs, "--approval-mode"), vec!["default", "plan"]);
+        assert_eq!(
+            flag_choices(yargs, "--approval-mode"),
+            vec!["default", "plan"]
+        );
         let clap = "  -s, --sandbox <MODE>  [possible values: read-only, workspace-write, danger-full-access]\n  -h, --help";
-        assert_eq!(flag_choices(clap, "--sandbox"), vec!["read-only", "workspace-write", "danger-full-access"]);
+        assert_eq!(
+            flag_choices(clap, "--sandbox"),
+            vec!["read-only", "workspace-write", "danger-full-access"]
+        );
         assert!(flag_choices("nothing here", "--mode").is_empty());
     }
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Wire types of the bridge protocol. One JSON object per line in both
 //! directions: the extension sends `Request`s, Gloss answers each with a
 //! `Response` or `Error` carrying the same id, and pushes `Event`s at any
@@ -50,13 +53,25 @@ pub enum ErrorCode {
 
 impl Outgoing {
     pub fn ok(id: &str, result: Value) -> Outgoing {
-        Outgoing::Response { id: id.to_string(), result }
+        Outgoing::Response {
+            id: id.to_string(),
+            result,
+        }
     }
     pub fn err(id: &str, code: ErrorCode, message: impl Into<String>) -> Outgoing {
-        Outgoing::Error { id: id.to_string(), error: BridgeError { code, message: message.into() } }
+        Outgoing::Error {
+            id: id.to_string(),
+            error: BridgeError {
+                code,
+                message: message.into(),
+            },
+        }
     }
     pub fn event(name: &str, data: Value) -> Outgoing {
-        Outgoing::Event { event: name.to_string(), data }
+        Outgoing::Event {
+            event: name.to_string(),
+            data,
+        }
     }
 }
 
@@ -84,7 +99,9 @@ mod tests {
         assert_eq!(r, r#"{"id":"1","result":{"a":1}}"#);
         let e = serde_json::to_string(&Outgoing::err("2", ErrorCode::Busy, "wait")).unwrap();
         assert_eq!(e, r#"{"id":"2","error":{"code":"busy","message":"wait"}}"#);
-        let ev = serde_json::to_string(&Outgoing::event("page", serde_json::json!({"urlKey": "k"}))).unwrap();
+        let ev =
+            serde_json::to_string(&Outgoing::event("page", serde_json::json!({"urlKey": "k"})))
+                .unwrap();
         assert_eq!(ev, r#"{"event":"page","data":{"urlKey":"k"}}"#);
         let req: Request = serde_json::from_str(r#"{"id":"x","method":"hello"}"#).unwrap();
         assert!(req.params.is_null());
@@ -92,9 +109,15 @@ mod tests {
 
     #[test]
     fn error_codes_follow_engine_messages() {
-        assert_eq!(code_for("a turn is already running in this conversation"), ErrorCode::Busy);
+        assert_eq!(
+            code_for("a turn is already running in this conversation"),
+            ErrorCode::Busy
+        );
         assert_eq!(code_for("no clarification cl_1"), ErrorCode::NotFound);
-        assert_eq!(code_for("example.com is on the deny list"), ErrorCode::Denied);
+        assert_eq!(
+            code_for("example.com is on the deny list"),
+            ErrorCode::Denied
+        );
         assert_eq!(code_for("boom"), ErrorCode::Internal);
     }
 }

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! The environment agent processes run in.
 //!
 //! A desktop app launched from Finder or a launcher inherits a minimal
@@ -314,14 +317,19 @@ mod tests {
         let dirs = env.path_dirs();
         // The user's own PATH may repeat entries; the appended extra dirs
         // must not add a second copy of anything already present.
-        let original: Vec<PathBuf> = std::env::split_paths(&std::env::var("PATH").unwrap_or_default())
-            .filter(|p| !p.as_os_str().is_empty())
-            .collect();
+        let original: Vec<PathBuf> =
+            std::env::split_paths(&std::env::var("PATH").unwrap_or_default())
+                .filter(|p| !p.as_os_str().is_empty())
+                .collect();
         for extra in EXTRA_PATH_DIRS {
             let dir = expand_home(extra);
             let appended = dirs[original.len()..].iter().filter(|d| **d == dir).count();
             assert!(appended <= 1, "{} appended more than once", dir.display());
-            assert!(!(appended == 1 && original.contains(&dir)), "{} appended although on PATH", dir.display());
+            assert!(
+                !(appended == 1 && original.contains(&dir)),
+                "{} appended although on PATH",
+                dir.display()
+            );
         }
         // Original entries come first, so the user's own PATH order wins.
         assert!(dirs.starts_with(&original));

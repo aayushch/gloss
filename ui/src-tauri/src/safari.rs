@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Safari's own API for the extension that ships inside Gloss.app: whether
 //! the user has turned it on, and opening Safari's Extensions settings at
 //! it. Both calls go through the SafariServices framework and only work
@@ -62,15 +65,17 @@ fn describe(err: *mut AnyObject) -> String {
 /// from the call becomes an error rather than ending the process.
 pub fn extension_enabled() -> Result<bool, String> {
     let (tx, rx) = mpsc::channel::<Result<bool, String>>();
-    let block = RcBlock::with_encoding::<_, _, _, StateAndError>(move |state: *mut AnyObject, err: *mut AnyObject| {
-        let result = if state.is_null() {
-            Err(describe(err))
-        } else {
-            let enabled: Bool = unsafe { msg_send![state, isEnabled] };
-            Ok(enabled.as_bool())
-        };
-        let _ = tx.send(result);
-    });
+    let block = RcBlock::with_encoding::<_, _, _, StateAndError>(
+        move |state: *mut AnyObject, err: *mut AnyObject| {
+            let result = if state.is_null() {
+                Err(describe(err))
+            } else {
+                let enabled: Bool = unsafe { msg_send![state, isEnabled] };
+                Ok(enabled.as_bool())
+            };
+            let _ = tx.send(result);
+        },
+    );
     let ident = NSString::from_str(EXTENSION_ID);
     let ident_ref: &NSString = &ident;
     let block_ref: &block2::Block<_> = &block;
@@ -84,7 +89,8 @@ pub fn extension_enabled() -> Result<bool, String> {
     if let Err(e) = called {
         return Err(format!("Safari refused the request: {e:?}"));
     }
-    rx.recv_timeout(WAIT).unwrap_or_else(|_| Err("Safari did not answer".into()))
+    rx.recv_timeout(WAIT)
+        .unwrap_or_else(|_| Err("Safari did not answer".into()))
 }
 
 /// Opens Safari's Settings › Extensions pane at the Gloss extension, where
@@ -92,7 +98,11 @@ pub fn extension_enabled() -> Result<bool, String> {
 pub fn show_preferences() -> Result<(), String> {
     let (tx, rx) = mpsc::channel::<Result<(), String>>();
     let block = RcBlock::with_encoding::<_, _, _, ErrorOnly>(move |err: *mut AnyObject| {
-        let _ = tx.send(if err.is_null() { Ok(()) } else { Err(describe(err)) });
+        let _ = tx.send(if err.is_null() {
+            Ok(())
+        } else {
+            Err(describe(err))
+        });
     });
     let ident = NSString::from_str(EXTENSION_ID);
     let ident_ref: &NSString = &ident;
@@ -107,7 +117,8 @@ pub fn show_preferences() -> Result<(), String> {
     if let Err(e) = called {
         return Err(format!("Safari refused the request: {e:?}"));
     }
-    rx.recv_timeout(WAIT).unwrap_or_else(|_| Err("Safari did not answer".into()))
+    rx.recv_timeout(WAIT)
+        .unwrap_or_else(|_| Err("Safari did not answer".into()))
 }
 
 #[cfg(test)]

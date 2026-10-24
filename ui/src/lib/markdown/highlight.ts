@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Syntax highlighting through Shiki, mapped onto the six colour roles the
 // design defines (keyword, type, function, number, string, comment). The
 // theme paints each role with a sentinel colour; tokens are then given the
@@ -26,11 +29,53 @@ const THEME: ThemeRegistrationRaw = {
 	colors: { 'editor.foreground': '#000000', 'editor.background': '#ffffff' },
 	settings: [
 		{ settings: { foreground: '#000000' } },
-		{ scope: ['keyword', 'storage', 'keyword.operator.new', 'keyword.control', 'variable.language', 'constant.language', 'storage.type', 'storage.modifier', 'keyword.other'], settings: { foreground: '#000001' } },
-		{ scope: ['entity.name.type', 'support.type', 'support.class', 'entity.name.class', 'entity.other.inherited-class', 'entity.name.tag', 'entity.name.namespace', 'storage.type.primitive', 'support.type.primitive', 'entity.other.attribute-name'], settings: { foreground: '#000002' } },
-		{ scope: ['entity.name.function', 'support.function', 'meta.function-call entity.name.function', 'variable.function', 'entity.name.function.macro'], settings: { foreground: '#000003' } },
-		{ scope: ['constant.numeric', 'constant.language.boolean', 'constant.character'], settings: { foreground: '#000004' } },
-		{ scope: ['string', 'string.quoted', 'punctuation.definition.string', 'constant.other.symbol'], settings: { foreground: '#000005' } },
+		{
+			scope: [
+				'keyword',
+				'storage',
+				'keyword.operator.new',
+				'keyword.control',
+				'variable.language',
+				'constant.language',
+				'storage.type',
+				'storage.modifier',
+				'keyword.other'
+			],
+			settings: { foreground: '#000001' }
+		},
+		{
+			scope: [
+				'entity.name.type',
+				'support.type',
+				'support.class',
+				'entity.name.class',
+				'entity.other.inherited-class',
+				'entity.name.tag',
+				'entity.name.namespace',
+				'storage.type.primitive',
+				'support.type.primitive',
+				'entity.other.attribute-name'
+			],
+			settings: { foreground: '#000002' }
+		},
+		{
+			scope: [
+				'entity.name.function',
+				'support.function',
+				'meta.function-call entity.name.function',
+				'variable.function',
+				'entity.name.function.macro'
+			],
+			settings: { foreground: '#000003' }
+		},
+		{
+			scope: ['constant.numeric', 'constant.language.boolean', 'constant.character'],
+			settings: { foreground: '#000004' }
+		},
+		{
+			scope: ['string', 'string.quoted', 'punctuation.definition.string', 'constant.other.symbol'],
+			settings: { foreground: '#000005' }
+		},
 		{ scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: '#000006' } }
 	]
 };

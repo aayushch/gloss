@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { parseBlocks } from './blocks';
 
@@ -8,7 +11,13 @@ describe('parseBlocks', () => {
 		expect(b[0]).toMatchObject({ id: 't1:0', kind: 'h', level: 1, text: 'Title' });
 		expect(b[1].id).toBe('t1:1');
 		expect(b[1].text).toBe('Some bold and code text.');
-		expect(b[1].runs).toEqual([{ t: 'Some ' }, { t: 'bold', b: true }, { t: ' and ' }, { t: 'code', code: true }, { t: ' text.' }]);
+		expect(b[1].runs).toEqual([
+			{ t: 'Some ' },
+			{ t: 'bold', b: true },
+			{ t: ' and ' },
+			{ t: 'code', code: true },
+			{ t: ' text.' }
+		]);
 	});
 
 	it('flattens nested lists into li blocks with depth and numbers', () => {

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Data types shared between the engine, the Tauri shell and (mirrored by
 //! hand) the Svelte frontend in `ui/src/lib/api/types.ts`. Every type here is
 //! serialised with serde using camelCase field names so the JSON matches the
@@ -160,7 +163,9 @@ pub enum RequestAnswer {
         set_mode: Option<String>,
     },
     /// Chosen labels (or typed text) per question, keyed by the question text.
-    Question { answers: std::collections::HashMap<String, String> },
+    Question {
+        answers: std::collections::HashMap<String, String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -291,7 +296,10 @@ impl TurnStatus {
         }
     }
     pub fn is_terminal(self) -> bool {
-        matches!(self, TurnStatus::Done | TurnStatus::Error | TurnStatus::Cancelled)
+        matches!(
+            self,
+            TurnStatus::Done | TurnStatus::Error | TurnStatus::Cancelled
+        )
     }
 }
 

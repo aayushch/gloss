@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// A top-level assistant reply: its blocks (with wells under anchored
 	// blocks), the pending indicator while streaming, an error banner on
@@ -13,18 +16,36 @@
 	import RequestCard from './RequestCard.svelte';
 	import TurnMeta from './TurnMeta.svelte';
 
-	let { turn, userTurn, conv, threads }: { turn: Turn; userTurn: Turn | undefined; conv: Conversation; threads: Map<string, Thread> } = $props();
+	let {
+		turn,
+		userTurn,
+		conv,
+		threads
+	}: { turn: Turn; userTurn: Turn | undefined; conv: Conversation; threads: Map<string, Thread> } =
+		$props();
 
 	const blocks = $derived(parseBlocks(turn.text, turn.id));
 	const running = $derived(turn.status === 'pending' || turn.status === 'streaming');
-	const stubs = $derived(conv.clarifications.filter((c) => rootTurnOf(c, conv.clarifications) === turn.id));
+	const stubs = $derived(
+		conv.clarifications.filter((c) => rootTurnOf(c, conv.clarifications) === turn.id)
+	);
 </script>
 
 <article class="turn" id="turn-{turn.id}">
 	{#if !running && turn.text}
 		<div class="tools">
-			<button type="button" title="Copy as Markdown, clarifications included" aria-label="Copy as Markdown" onclick={() => app.copyTurnMarkdown(turn)}><Icon name="copy" size={13} /></button>
-			<button type="button" title="Save as Markdown, clarifications included" aria-label="Save as Markdown" onclick={() => app.saveTurnMarkdown(turn)}><Icon name="download" size={13} /></button>
+			<button
+				type="button"
+				title="Copy as Markdown, clarifications included"
+				aria-label="Copy as Markdown"
+				onclick={() => app.copyTurnMarkdown(turn)}><Icon name="copy" size={13} /></button
+			>
+			<button
+				type="button"
+				title="Save as Markdown, clarifications included"
+				aria-label="Save as Markdown"
+				onclick={() => app.saveTurnMarkdown(turn)}><Icon name="download" size={13} /></button
+			>
 		</div>
 	{/if}
 	{#each blocks as block (block.id)}
@@ -40,8 +61,13 @@
 		{/if}
 	{:else if turn.status === 'error'}
 		<div class="banner">
-			<div class="msg"><strong>The agent failed.</strong> {turn.error ?? 'No details were reported.'}</div>
-			{#if userTurn}<button type="button" class="ibtn" onclick={() => app.retry(userTurn)}>Retry</button>{/if}
+			<div class="msg">
+				<strong>The agent failed.</strong>
+				{turn.error ?? 'No details were reported.'}
+			</div>
+			{#if userTurn}<button type="button" class="ibtn" onclick={() => app.retry(userTurn)}
+					>Retry</button
+				>{/if}
 		</div>
 	{:else if turn.status === 'cancelled' && !turn.text}
 		<div class="muted">Stopped before a reply arrived.</div>
@@ -56,7 +82,9 @@
 				<button type="button" class="stub" onclick={() => app.jumpTo(cl.id)}>
 					<span class="dot"></span>
 					<span class="asked">{cl.parentId ? '↳ ' : ''}Asked about “{short(cl.quote, 36)}”</span>
-					<span class="meta">{turnsLabel(th?.turns.length ?? 0)} · {relativeTime(cl.createdAt)}</span>
+					<span class="meta"
+						>{turnsLabel(th?.turns.length ?? 0)} · {relativeTime(cl.createdAt)}</span
+					>
 					<span class="view">View inline →</span>
 				</button>
 			{/each}

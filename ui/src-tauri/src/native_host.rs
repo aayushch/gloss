@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Native-messaging host manifests: the small JSON files each browser reads
 //! to find the `gloss-bridge` program the Gloss extension connects to. Gloss
 //! writes them on every launch, so the path stays right after the app is
@@ -55,36 +58,116 @@ pub fn targets() -> Vec<BrowserTarget> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let mut out = Vec::new();
     let mut add = |id: &'static str, name: &'static str, family: Family, dir: PathBuf| {
-        out.push(BrowserTarget { id, name, family, dir });
+        out.push(BrowserTarget {
+            id,
+            name,
+            family,
+            dir,
+        });
     };
     #[cfg(target_os = "macos")]
     {
         let support = home.join("Library/Application Support");
-        add("chrome", "Google Chrome", Family::Chromium, support.join("Google/Chrome/NativeMessagingHosts"));
-        add("chromium", "Chromium", Family::Chromium, support.join("Chromium/NativeMessagingHosts"));
-        add("brave", "Brave", Family::Chromium, support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"));
-        add("edge", "Microsoft Edge", Family::Chromium, support.join("Microsoft Edge/NativeMessagingHosts"));
-        add("arc", "Arc", Family::Chromium, support.join("Arc/User Data/NativeMessagingHosts"));
-        add("vivaldi", "Vivaldi", Family::Chromium, support.join("Vivaldi/NativeMessagingHosts"));
-        add("firefox", "Firefox", Family::Firefox, support.join("Mozilla/NativeMessagingHosts"));
+        add(
+            "chrome",
+            "Google Chrome",
+            Family::Chromium,
+            support.join("Google/Chrome/NativeMessagingHosts"),
+        );
+        add(
+            "chromium",
+            "Chromium",
+            Family::Chromium,
+            support.join("Chromium/NativeMessagingHosts"),
+        );
+        add(
+            "brave",
+            "Brave",
+            Family::Chromium,
+            support.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+        );
+        add(
+            "edge",
+            "Microsoft Edge",
+            Family::Chromium,
+            support.join("Microsoft Edge/NativeMessagingHosts"),
+        );
+        add(
+            "arc",
+            "Arc",
+            Family::Chromium,
+            support.join("Arc/User Data/NativeMessagingHosts"),
+        );
+        add(
+            "vivaldi",
+            "Vivaldi",
+            Family::Chromium,
+            support.join("Vivaldi/NativeMessagingHosts"),
+        );
+        add(
+            "firefox",
+            "Firefox",
+            Family::Firefox,
+            support.join("Mozilla/NativeMessagingHosts"),
+        );
     }
     #[cfg(target_os = "linux")]
     {
         let config = home.join(".config");
-        add("chrome", "Google Chrome", Family::Chromium, config.join("google-chrome/NativeMessagingHosts"));
-        add("chromium", "Chromium", Family::Chromium, config.join("chromium/NativeMessagingHosts"));
-        add("brave", "Brave", Family::Chromium, config.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"));
-        add("edge", "Microsoft Edge", Family::Chromium, config.join("microsoft-edge/NativeMessagingHosts"));
-        add("vivaldi", "Vivaldi", Family::Chromium, config.join("vivaldi/NativeMessagingHosts"));
-        add("firefox", "Firefox", Family::Firefox, home.join(".mozilla/native-messaging-hosts"));
+        add(
+            "chrome",
+            "Google Chrome",
+            Family::Chromium,
+            config.join("google-chrome/NativeMessagingHosts"),
+        );
+        add(
+            "chromium",
+            "Chromium",
+            Family::Chromium,
+            config.join("chromium/NativeMessagingHosts"),
+        );
+        add(
+            "brave",
+            "Brave",
+            Family::Chromium,
+            config.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+        );
+        add(
+            "edge",
+            "Microsoft Edge",
+            Family::Chromium,
+            config.join("microsoft-edge/NativeMessagingHosts"),
+        );
+        add(
+            "vivaldi",
+            "Vivaldi",
+            Family::Chromium,
+            config.join("vivaldi/NativeMessagingHosts"),
+        );
+        add(
+            "firefox",
+            "Firefox",
+            Family::Firefox,
+            home.join(".mozilla/native-messaging-hosts"),
+        );
     }
     #[cfg(target_os = "windows")]
     {
         // Windows browsers find the manifest through the registry; the files
         // live in the Gloss home folder and the registry keys point at them.
         let base = home.join(".gloss").join("native-hosts");
-        add("chrome", "Google Chrome", Family::Chromium, base.join("chrome"));
-        add("edge", "Microsoft Edge", Family::Chromium, base.join("edge"));
+        add(
+            "chrome",
+            "Google Chrome",
+            Family::Chromium,
+            base.join("chrome"),
+        );
+        add(
+            "edge",
+            "Microsoft Edge",
+            Family::Chromium,
+            base.join("edge"),
+        );
         add("firefox", "Firefox", Family::Firefox, base.join("firefox"));
     }
     out
@@ -100,7 +183,10 @@ pub fn manifest_json(family: Family, bridge_path: &Path) -> String {
     });
     match family {
         Family::Chromium => {
-            m["allowed_origins"] = serde_json::json!([format!("chrome-extension://{}/", CHROME_EXTENSION_ID.trim())]);
+            m["allowed_origins"] = serde_json::json!([format!(
+                "chrome-extension://{}/",
+                CHROME_EXTENSION_ID.trim()
+            )]);
         }
         Family::Firefox => {
             m["allowed_extensions"] = serde_json::json!([FIREFOX_EXTENSION_ID]);
@@ -213,12 +299,24 @@ pub fn translocated(exe: &Path) -> bool {
 #[cfg(target_os = "windows")]
 fn registry_register(t: &BrowserTarget, manifest: &Path) -> std::io::Result<()> {
     let key = match t.family {
-        Family::Chromium if t.id == "edge" => format!(r"Software\Microsoft\Edge\NativeMessagingHosts\{}", HOST_NAME),
+        Family::Chromium if t.id == "edge" => format!(
+            r"Software\Microsoft\Edge\NativeMessagingHosts\{}",
+            HOST_NAME
+        ),
         Family::Chromium => format!(r"Software\Google\Chrome\NativeMessagingHosts\{}", HOST_NAME),
         Family::Firefox => format!(r"Software\Mozilla\NativeMessagingHosts\{}", HOST_NAME),
     };
     let status = std::process::Command::new("reg")
-        .args(["add", &format!(r"HKCU\{}", key), "/ve", "/t", "REG_SZ", "/d", &manifest.to_string_lossy(), "/f"])
+        .args([
+            "add",
+            &format!(r"HKCU\{}", key),
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &manifest.to_string_lossy(),
+            "/f",
+        ])
         .status()?;
     if status.success() {
         Ok(())
@@ -235,11 +333,16 @@ fn registry_register(_t: &BrowserTarget, _manifest: &Path) -> std::io::Result<()
 #[cfg(target_os = "windows")]
 fn registry_unregister(t: &BrowserTarget) -> std::io::Result<()> {
     let key = match t.family {
-        Family::Chromium if t.id == "edge" => format!(r"Software\Microsoft\Edge\NativeMessagingHosts\{}", HOST_NAME),
+        Family::Chromium if t.id == "edge" => format!(
+            r"Software\Microsoft\Edge\NativeMessagingHosts\{}",
+            HOST_NAME
+        ),
         Family::Chromium => format!(r"Software\Google\Chrome\NativeMessagingHosts\{}", HOST_NAME),
         Family::Firefox => format!(r"Software\Mozilla\NativeMessagingHosts\{}", HOST_NAME),
     };
-    let _ = std::process::Command::new("reg").args(["delete", &format!(r"HKCU\{}", key), "/f"]).status()?;
+    let _ = std::process::Command::new("reg")
+        .args(["delete", &format!(r"HKCU\{}", key), "/f"])
+        .status()?;
     Ok(())
 }
 
@@ -254,27 +357,49 @@ mod tests {
 
     #[test]
     fn manifests_name_the_host_and_allow_the_extension() {
-        let chrome: serde_json::Value = serde_json::from_str(&manifest_json(Family::Chromium, Path::new("/Applications/Gloss.app/Contents/MacOS/gloss-bridge"))).unwrap();
+        let chrome: serde_json::Value = serde_json::from_str(&manifest_json(
+            Family::Chromium,
+            Path::new("/Applications/Gloss.app/Contents/MacOS/gloss-bridge"),
+        ))
+        .unwrap();
         assert_eq!(chrome["name"], HOST_NAME);
         assert_eq!(chrome["type"], "stdio");
-        assert_eq!(chrome["path"], "/Applications/Gloss.app/Contents/MacOS/gloss-bridge");
+        assert_eq!(
+            chrome["path"],
+            "/Applications/Gloss.app/Contents/MacOS/gloss-bridge"
+        );
         let origin = chrome["allowed_origins"][0].as_str().unwrap();
         assert!(origin.starts_with("chrome-extension://") && origin.ends_with('/'));
         assert_eq!(origin.len(), "chrome-extension://".len() + 32 + 1);
-        let firefox: serde_json::Value = serde_json::from_str(&manifest_json(Family::Firefox, Path::new("/x"))).unwrap();
+        let firefox: serde_json::Value =
+            serde_json::from_str(&manifest_json(Family::Firefox, Path::new("/x"))).unwrap();
         assert_eq!(firefox["allowed_extensions"][0], FIREFOX_EXTENSION_ID);
         assert!(firefox.get("allowed_origins").is_none());
-        assert!(translocated(Path::new("/private/var/folders/x/AppTranslocation/abc/d/Gloss.app/Contents/MacOS/gloss-bridge")));
-        assert!(!translocated(Path::new("/Applications/Gloss.app/Contents/MacOS/gloss-bridge")));
+        assert!(translocated(Path::new(
+            "/private/var/folders/x/AppTranslocation/abc/d/Gloss.app/Contents/MacOS/gloss-bridge"
+        )));
+        assert!(!translocated(Path::new(
+            "/Applications/Gloss.app/Contents/MacOS/gloss-bridge"
+        )));
     }
 
     #[test]
     fn registration_writes_only_for_installed_browsers() {
         let dir = tempfile::tempdir().unwrap();
-        let present = BrowserTarget { id: "t", name: "Test", family: Family::Chromium, dir: dir.path().join("Test/NativeMessagingHosts") };
+        let present = BrowserTarget {
+            id: "t",
+            name: "Test",
+            family: Family::Chromium,
+            dir: dir.path().join("Test/NativeMessagingHosts"),
+        };
         std::fs::create_dir_all(dir.path().join("Test")).unwrap();
         assert!(installed(&present));
-        let absent = BrowserTarget { id: "a", name: "Absent", family: Family::Firefox, dir: dir.path().join("Absent/NativeMessagingHosts") };
+        let absent = BrowserTarget {
+            id: "a",
+            name: "Absent",
+            family: Family::Firefox,
+            dir: dir.path().join("Absent/NativeMessagingHosts"),
+        };
         // Windows browsers find the host through the registry, so every
         // browser there counts as installed and gets its registration.
         assert_eq!(installed(&absent), cfg!(target_os = "windows"));

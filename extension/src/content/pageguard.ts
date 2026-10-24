@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Runs in the page's own JavaScript world (manifest `"world": "MAIN"`) at
 // document_start, before any page script. It changes how the page's
 // listeners are added so that a page key, focus or mouse listener does not
@@ -18,7 +21,10 @@
 import { GUARDED_EVENTS } from './events';
 import { HOST_TAG } from './text';
 
-type RuntimeHolder = { chrome?: { runtime?: { id?: string } }; browser?: { runtime?: { id?: string } } };
+type RuntimeHolder = {
+	chrome?: { runtime?: { id?: string } };
+	browser?: { runtime?: { id?: string } };
+};
 const g = globalThis as unknown as RuntimeHolder;
 
 if (!g.chrome?.runtime?.id && !g.browser?.runtime?.id) {
@@ -48,11 +54,19 @@ if (!g.chrome?.runtime?.id && !g.browser?.runtime?.id) {
 		return wrapper;
 	};
 
-	proto.addEventListener = function (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) {
+	proto.addEventListener = function (
+		type: string,
+		listener: EventListenerOrEventListenerObject | null,
+		options?: boolean | AddEventListenerOptions
+	) {
 		if (!listener || !guarded.has(type)) return add.call(this, type, listener, options);
 		return add.call(this, type, wrapperOf(listener), options);
 	};
-	proto.removeEventListener = function (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) {
+	proto.removeEventListener = function (
+		type: string,
+		listener: EventListenerOrEventListenerObject | null,
+		options?: boolean | EventListenerOptions
+	) {
 		const wrapper = listener && guarded.has(type) ? wrappers.get(listener) : undefined;
 		return remove.call(this, type, wrapper ?? listener, options);
 	};

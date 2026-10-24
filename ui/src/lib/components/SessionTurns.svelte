@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Read-only turns of a session read from an agent's own history file:
 	// prompts as bubbles, replies as markdown, and each reply's tool calls

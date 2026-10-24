@@ -1,10 +1,18 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Floating pill shown above a text selection. Handled on mousedown with
 	// preventDefault so the browser keeps the selection until the composer
 	// opens. While a reply is running the pill is inert and says so: the
 	// engine takes one turn per conversation at a time, so a clarification
 	// sent now would be refused.
-	let { x, y, disabled = false, onask }: { x: number; y: number; disabled?: boolean; onask: () => void } = $props();
+	let {
+		x,
+		y,
+		disabled = false,
+		onask
+	}: { x: number; y: number; disabled?: boolean; onask: () => void } = $props();
 </script>
 
 <button

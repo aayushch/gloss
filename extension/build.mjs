@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Builds the extension for one or every browser target with esbuild.
 //
 //   node build.mjs --target chrome|firefox|safari|all [--watch]
@@ -41,10 +44,10 @@ function common(target) {
 		logLevel: 'info',
 		define: {
 			__BROWSER__: JSON.stringify(target),
-			'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production'),
+			'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production')
 		},
 		conditions: ['svelte', 'browser', watch ? 'development' : 'production'],
-		plugins: [sveltePlugin({ compilerOptions: { runes: true, css: 'external', dev: watch } })],
+		plugins: [sveltePlugin({ compilerOptions: { runes: true, css: 'external', dev: watch } })]
 	};
 }
 
@@ -52,7 +55,9 @@ function common(target) {
 async function copyStatic(target) {
 	const out = path.join(root, 'dist', target);
 	await mkdir(path.join(out, 'icons'), { recursive: true });
-	const manifest = JSON.parse(await readFile(path.join(root, 'manifests', `${target}.json`), 'utf8'));
+	const manifest = JSON.parse(
+		await readFile(path.join(root, 'manifests', `${target}.json`), 'utf8')
+	);
 	manifest.version = pkg.version;
 	await writeFile(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 	for (const page of ['popup', 'options', 'ask']) {
@@ -74,10 +79,10 @@ async function buildTarget(target) {
 		entryPoints: {
 			content: path.join(root, 'src/content/index.ts'),
 			guard: path.join(root, 'src/content/guard.ts'),
-			pageguard: path.join(root, 'src/content/pageguard.ts'),
+			pageguard: path.join(root, 'src/content/pageguard.ts')
 		},
 		outdir: out,
-		loader: { '.css': 'text' },
+		loader: { '.css': 'text' }
 	});
 	const rest = await esbuild.context({
 		...common(target),
@@ -85,9 +90,9 @@ async function buildTarget(target) {
 			background: path.join(root, 'src/background/index.ts'),
 			popup: path.join(root, 'src/popup/main.ts'),
 			options: path.join(root, 'src/options/main.ts'),
-			ask: path.join(root, 'src/ask/main.ts'),
+			ask: path.join(root, 'src/ask/main.ts')
 		},
-		outdir: out,
+		outdir: out
 	});
 
 	if (watch) {

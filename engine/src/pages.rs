@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Identity and text handling for web pages the browser extension asks about.
 //!
 //! A page is keyed by a canonical form of its URL, so the same article
@@ -15,8 +18,28 @@ pub const PAGE_TEXT_MAX_CHARS: usize = 60_000;
 
 /// Query parameters that only track the visit and never change the page.
 const TRACKING_PARAMS: &[&str] = &[
-    "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "yclid", "twclid", "ttclid", "igshid", "mc_cid", "mc_eid", "_ga",
-    "_gl", "_hsenc", "_hsmi", "mkt_tok", "oly_anon_id", "oly_enc_id", "vero_id", "wickedid", "s_kwcid", "ref_src",
+    "fbclid",
+    "gclid",
+    "gclsrc",
+    "dclid",
+    "msclkid",
+    "yclid",
+    "twclid",
+    "ttclid",
+    "igshid",
+    "mc_cid",
+    "mc_eid",
+    "_ga",
+    "_gl",
+    "_hsenc",
+    "_hsmi",
+    "mkt_tok",
+    "oly_anon_id",
+    "oly_enc_id",
+    "vero_id",
+    "wickedid",
+    "s_kwcid",
+    "ref_src",
     "spm",
 ];
 
@@ -61,7 +84,9 @@ pub fn url_key(raw: &str) -> Result<String> {
         }
         drop(q);
     }
-    let keep_fragment = url.fragment().is_some_and(|f| f.starts_with('/') || f.starts_with("!/"));
+    let keep_fragment = url
+        .fragment()
+        .is_some_and(|f| f.starts_with('/') || f.starts_with("!/"));
     if !keep_fragment {
         url.set_fragment(None);
     }
@@ -75,7 +100,10 @@ fn is_tracking_param(key: &str) -> bool {
 
 /// The host of a URL, lower-cased, or an empty string when it has none.
 pub fn host_of(raw: &str) -> String {
-    Url::parse(raw.trim()).ok().and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase())).unwrap_or_default()
+    Url::parse(raw.trim())
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()))
+        .unwrap_or_default()
 }
 
 /// Whether `host` is covered by one of the deny-list patterns. A pattern is
@@ -116,7 +144,12 @@ pub fn truncate_page_text(text: &str) -> String {
     let tail_len = PAGE_TEXT_MAX_CHARS - head_len;
     let head: String = text.chars().take(head_len).collect();
     let tail: String = text.chars().skip(total - tail_len).collect();
-    format!("{}\n\n[… {} characters omitted …]\n\n{}", head.trim_end(), total - head_len - tail_len, tail.trim_start())
+    format!(
+        "{}\n\n[… {} characters omitted …]\n\n{}",
+        head.trim_end(),
+        total - head_len - tail_len,
+        tail.trim_start()
+    )
 }
 
 #[cfg(test)]
@@ -128,12 +161,27 @@ mod tests {
         let cases = [
             ("HTTPS://Example.com:443/Docs/", "https://example.com/Docs"),
             ("https://example.com/", "https://example.com/"),
-            ("https://user:pw@example.com/a?b=2&a=1", "https://example.com/a?a=1&b=2"),
-            ("https://example.com/a?utm_source=x&fbclid=y&q=rust", "https://example.com/a?q=rust"),
-            ("https://example.com/a?utm_source=x", "https://example.com/a"),
+            (
+                "https://user:pw@example.com/a?b=2&a=1",
+                "https://example.com/a?a=1&b=2",
+            ),
+            (
+                "https://example.com/a?utm_source=x&fbclid=y&q=rust",
+                "https://example.com/a?q=rust",
+            ),
+            (
+                "https://example.com/a?utm_source=x",
+                "https://example.com/a",
+            ),
             ("https://example.com/a#section", "https://example.com/a"),
-            ("https://app.example.com/#/inbox/3", "https://app.example.com/#/inbox/3"),
-            ("https://app.example.com/#!/old", "https://app.example.com/#!/old"),
+            (
+                "https://app.example.com/#/inbox/3",
+                "https://app.example.com/#/inbox/3",
+            ),
+            (
+                "https://app.example.com/#!/old",
+                "https://app.example.com/#!/old",
+            ),
             ("http://localhost:8080/x", "http://localhost:8080/x"),
             ("file:///Users/me/doc.html", "file:///Users/me/doc.html"),
         ];
@@ -146,7 +194,11 @@ mod tests {
 
     #[test]
     fn host_matching_handles_wildcards() {
-        let deny = vec!["*.bank.com".to_string(), "Mail.Example.org".to_string(), "".to_string()];
+        let deny = vec![
+            "*.bank.com".to_string(),
+            "Mail.Example.org".to_string(),
+            "".to_string(),
+        ];
         assert!(host_matches(&deny, "bank.com"));
         assert!(host_matches(&deny, "online.bank.com"));
         assert!(!host_matches(&deny, "notbank.com"));
@@ -160,7 +212,9 @@ mod tests {
     fn page_text_is_capped_keeping_head_and_tail() {
         let short = "hello";
         assert_eq!(truncate_page_text(short), short);
-        let long: String = (0..PAGE_TEXT_MAX_CHARS + 1000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+        let long: String = (0..PAGE_TEXT_MAX_CHARS + 1000)
+            .map(|i| char::from(b'a' + (i % 26) as u8))
+            .collect();
         let cut = truncate_page_text(&long);
         assert!(cut.chars().count() < PAGE_TEXT_MAX_CHARS + 100);
         assert!(cut.contains("characters omitted"));

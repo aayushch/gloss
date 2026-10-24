@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Small card at the bottom of the rail that invites installing the browser
 	// extension. Shown until the user dismisses it; the dismissal is kept in
@@ -11,9 +14,22 @@
 		<div class="line">
 			<span class="mark"><Icon name="globe" size={13} /></span>
 			<span class="text">Ask about any web page</span>
-			<button type="button" class="close" title="Dismiss" aria-label="Dismiss extension notice" onclick={() => app.dismissExtensionBanner()}><Icon name="x" size={12} /></button>
+			<button
+				type="button"
+				class="close"
+				title="Dismiss"
+				aria-label="Dismiss extension notice"
+				onclick={() => app.dismissExtensionBanner()}><Icon name="x" size={12} /></button
+			>
 		</div>
-		<button type="button" class="act" onclick={() => { app.settingsTab = 'extension'; app.settingsOpen = true; }}>Install the Gloss extension</button>
+		<button
+			type="button"
+			class="act"
+			onclick={() => {
+				app.settingsTab = 'extension';
+				app.settingsOpen = true;
+			}}>Install the Gloss extension</button
+		>
 	</div>
 {/if}
 

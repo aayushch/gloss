@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Fenced code with a language header and highlighted tokens. A code block
 	// never shows an in-text mark; when a clarification is anchored to it the
@@ -74,7 +77,10 @@
 	$effect(() => {
 		latestCode = code;
 		latestLang = lang;
-		lines = mergeLines(untrack(() => lines), code);
+		lines = mergeLines(
+			untrack(() => lines),
+			code
+		);
 		if (supportsLang(lang)) schedulePass();
 	});
 
@@ -91,13 +97,25 @@
 			{#if clarified}
 				<span class="clarified"><span class="dot"></span>clarified below</span>
 			{/if}
-			<button type="button" class="copy" class:copied title="Copy code" aria-label="Copy code" onclick={copy}>
+			<button
+				type="button"
+				class="copy"
+				class:copied
+				title="Copy code"
+				aria-label="Copy code"
+				onclick={copy}
+			>
 				<Icon name={copied ? 'check' : 'copy'} size={12} />
 				<span class="label">{copied ? 'Copied' : 'Copy'}</span>
 			</button>
 		</span>
 	</div>
-	<pre><code>{#each lines as line, i (i)}<span class="line">{#each line as tok, j (j)}{#if tok.cls}<span class={tok.cls}>{tok.t}</span>{:else}{tok.t}{/if}{/each}</span>{#if i < lines.length - 1}{'\n'}{/if}{/each}</code></pre>
+	<pre><code
+			>{#each lines as line, i (i)}<span class="line"
+					>{#each line as tok, j (j)}{#if tok.cls}<span class={tok.cls}>{tok.t}</span
+							>{:else}{tok.t}{/if}{/each}</span
+				>{#if i < lines.length - 1}{'\n'}{/if}{/each}</code
+		></pre>
 </div>
 
 <style>
@@ -142,7 +160,10 @@
 		font-size: 11px;
 		cursor: pointer;
 		opacity: 0;
-		transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+		transition:
+			opacity 120ms ease,
+			color 120ms ease,
+			background 120ms ease;
 	}
 	.code:hover .copy,
 	.copy:focus-visible,

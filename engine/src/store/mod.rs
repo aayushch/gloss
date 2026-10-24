@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! SQLite persistence for conversations, turns, clarifications and settings.
 
 use std::path::Path;
@@ -75,18 +78,25 @@ pub fn new_id(prefix: &str) -> String {
 impl Store {
     pub fn open(path: &Path) -> Result<Store> {
         let conn = Connection::open(path).with_context(|| format!("open {}", path.display()))?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
+        )?;
         // The version is read before the schema runs so a version 1 file is
         // told apart from a brand new one, whose tables the schema creates
         // with every column already present.
         let version: Option<i64> = conn
-            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .optional()
             .unwrap_or(None);
         conn.execute_batch(SCHEMA)?;
         match version {
             None => {
-                conn.execute("INSERT INTO schema_version (version) VALUES (?1)", params![SCHEMA_VERSION])?;
+                conn.execute(
+                    "INSERT INTO schema_version (version) VALUES (?1)",
+                    params![SCHEMA_VERSION],
+                )?;
             }
             Some(1) => {
                 conn.execute_batch(MIGRATE_V1_TO_V2)?;
@@ -128,19 +138,29 @@ impl Store {
             }
             Some(_) => {}
         }
-        Ok(Store { conn: Mutex::new(conn) })
+        Ok(Store {
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn in_memory() -> Result<Store> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         conn.execute_batch(SCHEMA)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", params![SCHEMA_VERSION])?;
-        Ok(Store { conn: Mutex::new(conn) })
+        conn.execute(
+            "INSERT INTO schema_version (version) VALUES (?1)",
+            params![SCHEMA_VERSION],
+        )?;
+        Ok(Store {
+            conn: Mutex::new(conn),
+        })
     }
 
     fn with<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
-        let conn = self.conn.lock().map_err(|_| anyhow!("store lock poisoned"))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| anyhow!("store lock poisoned"))?;
         f(&conn)
     }
 
@@ -149,7 +169,11 @@ impl Store {
     pub fn settings(&self) -> Result<Settings> {
         self.with(|c| {
             let raw: Option<String> = c
-                .query_row("SELECT value FROM settings WHERE key = 'settings'", [], |r| r.get(0))
+                .query_row(
+                    "SELECT value FROM settings WHERE key = 'settings'",
+                    [],
+                    |r| r.get(0),
+                )
                 .optional()?;
             Ok(raw
                 .and_then(|s| serde_json::from_str(&s).ok())
@@ -219,7 +243,13 @@ impl Store {
 
     // ── conversations ───────────────────────────────────────────────────
 
-    pub fn create_conversation(&self, agent: AgentId, model: &str, web_search: bool, project_dir: Option<&str>) -> Result<Conversation> {
+    pub fn create_conversation(
+        &self,
+        agent: AgentId,
+        model: &str,
+        web_search: bool,
+        project_dir: Option<&str>,
+    ) -> Result<Conversation> {
         let id = new_id("conv");
         let now = now_ms();
         self.with(|c| {
@@ -236,9 +266,15 @@ impl Store {
     /// Conversations, pinned first and newest first within each group. `query`
     /// keeps those whose title or any finished turn matches (full-text, every
     /// word as a prefix); `tag` keeps those carrying that tag.
-    pub fn list_conversations(&self, query: Option<&str>, tag: Option<&str>) -> Result<Vec<ConversationSummary>> {
+    pub fn list_conversations(
+        &self,
+        query: Option<&str>,
+        tag: Option<&str>,
+    ) -> Result<Vec<ConversationSummary>> {
         let fts = query.and_then(fts_expression);
-        let tag = tag.map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty());
+        let tag = tag
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| !t.is_empty());
         self.with(|c| {
             let mut sql = format!("{} WHERE 1 = 1", SUMMARY_SELECT);
             let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -265,7 +301,10 @@ impl Store {
 
     pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<ConversationSummary> {
         self.with(|c| {
-            c.execute("UPDATE conversations SET pinned = ?2 WHERE id = ?1", params![id, pinned as i64])?;
+            c.execute(
+                "UPDATE conversations SET pinned = ?2 WHERE id = ?1",
+                params![id, pinned as i64],
+            )?;
             Ok(())
         })?;
         self.get_summary(id)
@@ -276,7 +315,10 @@ impl Store {
     pub fn set_tags(&self, id: &str, tags: &[String]) -> Result<ConversationSummary> {
         let json = serde_json::to_string(&normalize_tags(tags))?;
         self.with(|c| {
-            c.execute("UPDATE conversations SET tags = ?2 WHERE id = ?1", params![id, json])?;
+            c.execute(
+                "UPDATE conversations SET tags = ?2 WHERE id = ?1",
+                params![id, json],
+            )?;
             Ok(())
         })?;
         self.get_summary(id)
@@ -352,7 +394,11 @@ impl Store {
 
     pub fn get_summary(&self, id: &str) -> Result<ConversationSummary> {
         self.with(|c| {
-            c.query_row(&format!("{} WHERE c.id = ?1", SUMMARY_SELECT), params![id], row_summary)
+            c.query_row(
+                &format!("{} WHERE c.id = ?1", SUMMARY_SELECT),
+                params![id],
+                row_summary,
+            )
             .optional()?
             .ok_or_else(|| anyhow!("no conversation {}", id))
         })
@@ -436,7 +482,9 @@ impl Store {
     /// Every agent session id a conversation holds, whichever agent it belongs to.
     pub fn agent_session_ids(&self) -> Result<std::collections::HashSet<String>> {
         self.with(|c| {
-            let mut stmt = c.prepare("SELECT agent_session_id FROM conversations WHERE agent_session_id IS NOT NULL")?;
+            let mut stmt = c.prepare(
+                "SELECT agent_session_id FROM conversations WHERE agent_session_id IS NOT NULL",
+            )?;
             let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
             Ok(rows.collect::<Result<_, _>>()?)
         })
@@ -477,7 +525,10 @@ impl Store {
 
     pub fn set_model(&self, id: &str, model: &str) -> Result<ConversationSummary> {
         self.with(|c| {
-            c.execute("UPDATE conversations SET model = ?2 WHERE id = ?1", params![id, model])?;
+            c.execute(
+                "UPDATE conversations SET model = ?2 WHERE id = ?1",
+                params![id, model],
+            )?;
             Ok(())
         })?;
         self.get_summary(id)
@@ -486,7 +537,10 @@ impl Store {
     /// Sets the working mode; None means read-only.
     pub fn set_mode(&self, id: &str, mode: Option<&str>) -> Result<ConversationSummary> {
         self.with(|c| {
-            c.execute("UPDATE conversations SET mode = ?2 WHERE id = ?1", params![id, mode])?;
+            c.execute(
+                "UPDATE conversations SET mode = ?2 WHERE id = ?1",
+                params![id, mode],
+            )?;
             Ok(())
         })?;
         self.get_summary(id)
@@ -607,7 +661,10 @@ impl Store {
 
     pub fn set_turn_model(&self, id: &str, model: &str) -> Result<()> {
         self.with(|c| {
-            c.execute("UPDATE turns SET model = ?2 WHERE id = ?1", params![id, model])?;
+            c.execute(
+                "UPDATE turns SET model = ?2 WHERE id = ?1",
+                params![id, model],
+            )?;
             Ok(())
         })
     }
@@ -669,9 +726,13 @@ impl Store {
 
     pub fn get_attachment(&self, id: &str) -> Result<Attachment> {
         self.with(|c| {
-            c.query_row(&format!("{} WHERE a.id = ?1", ATTACHMENT_SELECT), params![id], row_attachment)
-                .optional()?
-                .ok_or_else(|| anyhow!("no attachment {}", id))
+            c.query_row(
+                &format!("{} WHERE a.id = ?1", ATTACHMENT_SELECT),
+                params![id],
+                row_attachment,
+            )
+            .optional()?
+            .ok_or_else(|| anyhow!("no attachment {}", id))
         })
     }
 
@@ -679,7 +740,10 @@ impl Store {
     pub fn link_attachments(&self, turn_id: &str, ids: &[String]) -> Result<()> {
         self.with(|c| {
             for id in ids {
-                c.execute("UPDATE attachments SET turn_id = ?2 WHERE id = ?1", params![id, turn_id])?;
+                c.execute(
+                    "UPDATE attachments SET turn_id = ?2 WHERE id = ?1",
+                    params![id, turn_id],
+                )?;
             }
             Ok(())
         })
@@ -695,7 +759,10 @@ impl Store {
     /// Attachments never sent with a turn and older than `max_age_ms`.
     pub fn stale_attachments(&self, max_age_ms: i64) -> Result<Vec<Attachment>> {
         self.with(|c| {
-            let mut stmt = c.prepare(&format!("{} WHERE a.turn_id IS NULL AND a.created_at < ?1", ATTACHMENT_SELECT))?;
+            let mut stmt = c.prepare(&format!(
+                "{} WHERE a.turn_id IS NULL AND a.created_at < ?1",
+                ATTACHMENT_SELECT
+            ))?;
             let rows = stmt.query_map(params![now_ms() - max_age_ms], row_attachment)?;
             Ok(rows.collect::<Result<Vec<_>, _>>()?)
         })
@@ -743,9 +810,13 @@ impl Store {
 
     pub fn get_clarification(&self, id: &str) -> Result<Clarification> {
         self.with(|c| {
-            c.query_row(&format!("{} WHERE id = ?1", CLARIFICATION_SELECT), params![id], row_clarification)
-                .optional()?
-                .ok_or_else(|| anyhow!("no clarification {}", id))
+            c.query_row(
+                &format!("{} WHERE id = ?1", CLARIFICATION_SELECT),
+                params![id],
+                row_clarification,
+            )
+            .optional()?
+            .ok_or_else(|| anyhow!("no clarification {}", id))
         })
     }
 
@@ -780,15 +851,24 @@ impl Store {
                 let mut removed = Vec::new();
                 let mut pending = vec![id.to_string()];
                 while let Some(cur) = pending.pop() {
-                    let mut stmt = c.prepare("SELECT id FROM clarifications WHERE parent_id = ?1")?;
-                    let children: Vec<String> = stmt.query_map(params![cur], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                    let mut stmt =
+                        c.prepare("SELECT id FROM clarifications WHERE parent_id = ?1")?;
+                    let children: Vec<String> = stmt
+                        .query_map(params![cur], |r| r.get(0))?
+                        .collect::<Result<_, _>>()?;
                     pending.extend(children);
                     let mut stmt = c.prepare(&format!(
                         "{} WHERE a.turn_id IN (SELECT id FROM turns WHERE clarification_id = ?1)",
                         ATTACHMENT_SELECT
                     ))?;
-                    removed.extend(stmt.query_map(params![cur], row_attachment)?.collect::<Result<Vec<_>, _>>()?);
-                    c.execute("DELETE FROM turns WHERE clarification_id = ?1", params![cur])?;
+                    removed.extend(
+                        stmt.query_map(params![cur], row_attachment)?
+                            .collect::<Result<Vec<_>, _>>()?,
+                    );
+                    c.execute(
+                        "DELETE FROM turns WHERE clarification_id = ?1",
+                        params![cur],
+                    )?;
                     c.execute("DELETE FROM clarifications WHERE id = ?1", params![cur])?;
                 }
                 Ok(removed)
@@ -810,7 +890,14 @@ impl Store {
 
     /// Creates the page or refreshes its URL, title, favicon and last-seen
     /// time. The conversation is only set on creation.
-    pub fn upsert_page(&self, url_key: &str, url: &str, title: &str, favicon_url: Option<&str>, conversation_id: &str) -> Result<Page> {
+    pub fn upsert_page(
+        &self,
+        url_key: &str,
+        url: &str,
+        title: &str,
+        favicon_url: Option<&str>,
+        conversation_id: &str,
+    ) -> Result<Page> {
         let now = now_ms();
         self.with(|c| {
             c.execute(
@@ -825,19 +912,29 @@ impl Store {
             )?;
             Ok(())
         })?;
-        self.get_page(url_key)?.ok_or_else(|| anyhow!("no page {}", url_key))
+        self.get_page(url_key)?
+            .ok_or_else(|| anyhow!("no page {}", url_key))
     }
 
     pub fn get_page(&self, url_key: &str) -> Result<Option<Page>> {
         self.with(|c| {
-            Ok(c.query_row(&format!("{} WHERE p.url_key = ?1", PAGE_SELECT), params![url_key], row_page).optional()?)
+            Ok(c.query_row(
+                &format!("{} WHERE p.url_key = ?1", PAGE_SELECT),
+                params![url_key],
+                row_page,
+            )
+            .optional()?)
         })
     }
 
     pub fn page_of_conversation(&self, conversation_id: &str) -> Result<Option<Page>> {
         self.with(|c| {
-            Ok(c.query_row(&format!("{} WHERE p.conversation_id = ?1", PAGE_SELECT), params![conversation_id], row_page)
-                .optional()?)
+            Ok(c.query_row(
+                &format!("{} WHERE p.conversation_id = ?1", PAGE_SELECT),
+                params![conversation_id],
+                row_page,
+            )
+            .optional()?)
         })
     }
 
@@ -856,18 +953,26 @@ impl Store {
     /// The hash of the page text last sent to the agent, if any.
     pub fn page_text_hash(&self, url_key: &str) -> Result<Option<String>> {
         self.with(|c| {
-            Ok(c.query_row("SELECT text_hash FROM pages WHERE url_key = ?1", params![url_key], |r| r.get(0))
-                .optional()?
-                .flatten())
+            Ok(c.query_row(
+                "SELECT text_hash FROM pages WHERE url_key = ?1",
+                params![url_key],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
         })
     }
 
     /// The page text last sent to the agent, if any.
     pub fn page_text(&self, url_key: &str) -> Result<Option<String>> {
         self.with(|c| {
-            Ok(c.query_row("SELECT text FROM pages WHERE url_key = ?1", params![url_key], |r| r.get(0))
-                .optional()?
-                .flatten())
+            Ok(c.query_row(
+                "SELECT text FROM pages WHERE url_key = ?1",
+                params![url_key],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
         })
     }
 
@@ -883,7 +988,10 @@ impl Store {
 
     pub fn touch_page(&self, url_key: &str) -> Result<()> {
         self.with(|c| {
-            c.execute("UPDATE pages SET last_seen = ?2 WHERE url_key = ?1", params![url_key, now_ms()])?;
+            c.execute(
+                "UPDATE pages SET last_seen = ?2 WHERE url_key = ?1",
+                params![url_key, now_ms()],
+            )?;
             Ok(())
         })
     }
@@ -1055,22 +1163,65 @@ mod tests {
         let conv = s.create_conversation(AgentId::Pi, "", true, None).unwrap();
         assert_eq!(conv.summary.title, "New conversation");
         let u = s
-            .create_turn(&conv.summary.id, Role::User, "hello", None, TurnStatus::Done, None, None)
+            .create_turn(
+                &conv.summary.id,
+                Role::User,
+                "hello",
+                None,
+                TurnStatus::Done,
+                None,
+                None,
+            )
             .unwrap();
         let a = s
-            .create_turn(&conv.summary.id, Role::Assistant, "", None, TurnStatus::Pending, None, None)
+            .create_turn(
+                &conv.summary.id,
+                Role::Assistant,
+                "",
+                None,
+                TurnStatus::Pending,
+                None,
+                None,
+            )
             .unwrap();
         assert_eq!((u.seq, a.seq), (1, 2));
         s.update_turn_text(&a.id, "par").unwrap();
         assert_eq!(s.get_turn(&a.id).unwrap().status, TurnStatus::Streaming);
-        let usage = Usage { input_tokens: Some(3), ..Default::default() };
-        let done = s.finish_turn(&a.id, "partial answer", TurnStatus::Done, None, Some(&usage)).unwrap();
+        let usage = Usage {
+            input_tokens: Some(3),
+            ..Default::default()
+        };
+        let done = s
+            .finish_turn(
+                &a.id,
+                "partial answer",
+                TurnStatus::Done,
+                None,
+                Some(&usage),
+            )
+            .unwrap();
         assert_eq!(done.status, TurnStatus::Done);
         assert_eq!(done.usage.unwrap().input_tokens, Some(3));
 
-        let cl = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "answer", None, None).unwrap();
+        let cl = s
+            .create_clarification(
+                &conv.summary.id,
+                &format!("{}:0", a.id),
+                "answer",
+                None,
+                None,
+            )
+            .unwrap();
         assert_eq!(cl.number, 1);
-        let cl2 = s.create_clarification(&conv.summary.id, &format!("{}:0", a.id), "partial", Some(&cl.id), None).unwrap();
+        let cl2 = s
+            .create_clarification(
+                &conv.summary.id,
+                &format!("{}:0", a.id),
+                "partial",
+                Some(&cl.id),
+                None,
+            )
+            .unwrap();
         assert_eq!(cl2.number, 2);
         s.set_clarification_open(&cl.id, false).unwrap();
 
@@ -1080,10 +1231,22 @@ mod tests {
         assert!(!full.clarifications[0].open);
         assert_eq!(full.summary.clarification_count, 2);
 
-        assert!(s.set_title_if_placeholder(&conv.summary.id, "Hello").unwrap());
-        assert!(!s.set_title_if_placeholder(&conv.summary.id, "Other").unwrap());
-        assert_eq!(s.list_conversations(Some("PARTIAL"), None).unwrap().len(), 1);
-        assert_eq!(s.list_conversations(Some("nothing-here"), None).unwrap().len(), 0);
+        assert!(s
+            .set_title_if_placeholder(&conv.summary.id, "Hello")
+            .unwrap());
+        assert!(!s
+            .set_title_if_placeholder(&conv.summary.id, "Other")
+            .unwrap());
+        assert_eq!(
+            s.list_conversations(Some("PARTIAL"), None).unwrap().len(),
+            1
+        );
+        assert_eq!(
+            s.list_conversations(Some("nothing-here"), None)
+                .unwrap()
+                .len(),
+            0
+        );
         assert_eq!(s.list_conversations(None, None).unwrap()[0].title, "Hello");
 
         s.delete_conversation(&conv.summary.id).unwrap();
@@ -1094,16 +1257,30 @@ mod tests {
     fn settings_roundtrip_and_unfinished_turns() {
         let s = Store::in_memory().unwrap();
         assert_eq!(s.settings().unwrap().default_agent, AgentId::Claude);
-        let mut st = Settings { theme: Theme::Dark, ..Default::default() };
+        let mut st = Settings {
+            theme: Theme::Dark,
+            ..Default::default()
+        };
         st.default_model.insert(AgentId::Claude, "haiku".into());
         s.save_settings(&st).unwrap();
         let back = s.settings().unwrap();
         assert_eq!(back.theme, Theme::Dark);
         assert_eq!(back.default_model[&AgentId::Claude], "haiku");
 
-        let conv = s.create_conversation(AgentId::Claude, "haiku", false, Some("/tmp/proj")).unwrap();
+        let conv = s
+            .create_conversation(AgentId::Claude, "haiku", false, Some("/tmp/proj"))
+            .unwrap();
         assert_eq!(conv.summary.project_dir.as_deref(), Some("/tmp/proj"));
-        s.create_turn(&conv.summary.id, Role::Assistant, "", None, TurnStatus::Streaming, None, None).unwrap();
+        s.create_turn(
+            &conv.summary.id,
+            Role::Assistant,
+            "",
+            None,
+            TurnStatus::Streaming,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(s.fail_unfinished_turns("closed").unwrap(), 1);
         let t = &s.get_conversation(&conv.summary.id).unwrap().turns[0];
         assert_eq!(t.status, TurnStatus::Error);
@@ -1117,12 +1294,20 @@ mod tests {
         assert_eq!(a.name, "alpha");
         s.add_project("/work/beta").unwrap();
         // Adding again keeps the original row.
-        assert_eq!(s.add_project("/work/alpha").unwrap().created_at, a.created_at);
+        assert_eq!(
+            s.add_project("/work/alpha").unwrap().created_at,
+            a.created_at
+        );
         assert_eq!(s.list_projects().unwrap().len(), 2);
 
-        let conv = s.create_conversation(AgentId::Claude, "", true, Some("/work/alpha")).unwrap();
+        let conv = s
+            .create_conversation(AgentId::Claude, "", true, Some("/work/alpha"))
+            .unwrap();
         s.with(|c| {
-            c.execute("UPDATE conversations SET updated_at = ?2 WHERE id = ?1", params![conv.summary.id, now_ms() + 60_000])?;
+            c.execute(
+                "UPDATE conversations SET updated_at = ?2 WHERE id = ?1",
+                params![conv.summary.id, now_ms() + 60_000],
+            )?;
             Ok(())
         })
         .unwrap();
@@ -1161,7 +1346,14 @@ mod tests {
         let s = Store::open(&path).unwrap();
         let list = s.list_projects().unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!((list[0].path.as_str(), list[0].created_at, list[0].last_active_at), ("/work/alpha", 3, 9));
+        assert_eq!(
+            (
+                list[0].path.as_str(),
+                list[0].created_at,
+                list[0].last_active_at
+            ),
+            ("/work/alpha", 3, 9)
+        );
     }
 
     #[test]
@@ -1186,43 +1378,96 @@ mod tests {
         let old = s.get_clarification("k1").unwrap();
         assert!(old.web_anchor.is_none());
         let anchor = r#"{"quote":{"exact":"hi","prefix":"","suffix":""}}"#;
-        let page_conv = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
-        let cl = s.create_clarification(&page_conv.summary.id, "", "hi", None, Some(anchor)).unwrap();
+        let page_conv = s
+            .create_conversation(AgentId::Claude, "", true, None)
+            .unwrap();
+        let cl = s
+            .create_clarification(&page_conv.summary.id, "", "hi", None, Some(anchor))
+            .unwrap();
         assert_eq!(cl.web_anchor.unwrap().quote.exact, "hi");
-        s.upsert_page("https://e.com/a", "https://e.com/a?x", "A", None, &page_conv.summary.id).unwrap();
+        s.upsert_page(
+            "https://e.com/a",
+            "https://e.com/a?x",
+            "A",
+            None,
+            &page_conv.summary.id,
+        )
+        .unwrap();
         assert_eq!(s.list_pages(10).unwrap()[0].ask_count, 1);
     }
 
     #[test]
     fn pages_roundtrip_and_cascade() {
         let s = Store::in_memory().unwrap();
-        let conv = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
+        let conv = s
+            .create_conversation(AgentId::Claude, "", true, None)
+            .unwrap();
         let id = conv.summary.id.clone();
-        let p = s.upsert_page("https://e.com/a", "https://e.com/a?utm=1", "Article", Some("https://e.com/i.png"), &id).unwrap();
-        assert_eq!((p.title.as_str(), p.ask_count, p.orphan_count), ("Article", 0, 0));
-        assert_eq!(s.get_summary(&id).unwrap().page_key.as_deref(), Some("https://e.com/a"));
+        let p = s
+            .upsert_page(
+                "https://e.com/a",
+                "https://e.com/a?utm=1",
+                "Article",
+                Some("https://e.com/i.png"),
+                &id,
+            )
+            .unwrap();
+        assert_eq!(
+            (p.title.as_str(), p.ask_count, p.orphan_count),
+            ("Article", 0, 0)
+        );
+        assert_eq!(
+            s.get_summary(&id).unwrap().page_key.as_deref(),
+            Some("https://e.com/a")
+        );
         // A second visit keeps first_seen, refreshes the URL and keeps the title when none is given.
-        let again = s.upsert_page("https://e.com/a", "https://e.com/a", "", None, "ignored").unwrap();
+        let again = s
+            .upsert_page("https://e.com/a", "https://e.com/a", "", None, "ignored")
+            .unwrap();
         assert_eq!(again.first_seen, p.first_seen);
         assert_eq!(again.title, "Article");
         assert_eq!(again.url, "https://e.com/a");
         assert_eq!(again.conversation_id, id);
         assert_eq!(again.favicon_url.as_deref(), Some("https://e.com/i.png"));
 
-        let anchor = r#"{"quote":{"exact":"x","prefix":"","suffix":""},"position":{"start":1,"end":2}}"#;
-        let cl = s.create_clarification(&id, "", "x", None, Some(anchor)).unwrap();
-        let t = s.create_turn(&id, Role::User, "why", None, TurnStatus::Done, Some(&cl.id), None).unwrap();
+        let anchor =
+            r#"{"quote":{"exact":"x","prefix":"","suffix":""},"position":{"start":1,"end":2}}"#;
+        let cl = s
+            .create_clarification(&id, "", "x", None, Some(anchor))
+            .unwrap();
+        let t = s
+            .create_turn(
+                &id,
+                Role::User,
+                "why",
+                None,
+                TurnStatus::Done,
+                Some(&cl.id),
+                None,
+            )
+            .unwrap();
         s.set_anchor_state(&cl.id, AnchorState::Orphan).unwrap();
         let page = s.get_page("https://e.com/a").unwrap().unwrap();
         assert_eq!((page.ask_count, page.orphan_count), (1, 1));
-        assert_eq!(s.page_of_conversation(&id).unwrap().unwrap().url_key, "https://e.com/a");
-        assert_eq!(s.get_clarification(&cl.id).unwrap().anchor_state, Some(AnchorState::Orphan));
+        assert_eq!(
+            s.page_of_conversation(&id).unwrap().unwrap().url_key,
+            "https://e.com/a"
+        );
+        assert_eq!(
+            s.get_clarification(&cl.id).unwrap().anchor_state,
+            Some(AnchorState::Orphan)
+        );
 
         assert!(s.page_text_hash("https://e.com/a").unwrap().is_none());
         s.set_page_text("https://e.com/a", "body", "h1").unwrap();
-        assert_eq!(s.page_text_hash("https://e.com/a").unwrap().as_deref(), Some("h1"));
+        assert_eq!(
+            s.page_text_hash("https://e.com/a").unwrap().as_deref(),
+            Some("h1")
+        );
 
-        let nested = s.create_clarification(&id, "", "y", Some(&cl.id), Some(anchor)).unwrap();
+        let nested = s
+            .create_clarification(&id, "", "y", Some(&cl.id), Some(anchor))
+            .unwrap();
         s.delete_clarification(&cl.id).unwrap();
         assert!(s.get_clarification(&cl.id).is_err());
         assert!(s.get_clarification(&nested.id).is_err());
@@ -1240,29 +1485,64 @@ mod search_tests {
 
     #[test]
     fn fts_expression_quotes_every_word() {
-        assert_eq!(fts_expression("  store \"buffer\" "), Some("\"store\"* \"buffer\"*".into()));
+        assert_eq!(
+            fts_expression("  store \"buffer\" "),
+            Some("\"store\"* \"buffer\"*".into())
+        );
         assert_eq!(fts_expression("   "), None);
     }
 
     #[test]
     fn search_pins_tags_and_snippets() {
         let s = Store::in_memory().unwrap();
-        let a = s.create_conversation(AgentId::Claude, "", true, None).unwrap();
+        let a = s
+            .create_conversation(AgentId::Claude, "", true, None)
+            .unwrap();
         let b = s.create_conversation(AgentId::Pi, "", true, None).unwrap();
-        s.create_turn(&a.summary.id, Role::User, "Explain the store buffer", None, TurnStatus::Done, None, None).unwrap();
-        let reply = s.create_turn(&a.summary.id, Role::Assistant, "", None, TurnStatus::Pending, None, None).unwrap();
+        s.create_turn(
+            &a.summary.id,
+            Role::User,
+            "Explain the store buffer",
+            None,
+            TurnStatus::Done,
+            None,
+            None,
+        )
+        .unwrap();
+        let reply = s
+            .create_turn(
+                &a.summary.id,
+                Role::Assistant,
+                "",
+                None,
+                TurnStatus::Pending,
+                None,
+                None,
+            )
+            .unwrap();
         // Streaming text is not indexed until the turn finishes.
-        s.update_turn_text(&reply.id, "A store buffer holds pending writes").unwrap();
+        s.update_turn_text(&reply.id, "A store buffer holds pending writes")
+            .unwrap();
         assert!(s.search("pending", 10).unwrap().is_empty());
-        s.finish_turn(&reply.id, "A store buffer holds pending writes", TurnStatus::Done, None, None).unwrap();
+        s.finish_turn(
+            &reply.id,
+            "A store buffer holds pending writes",
+            TurnStatus::Done,
+            None,
+            None,
+        )
+        .unwrap();
         let hits = s.search("pend", 10).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].turn_id.as_deref(), Some(reply.id.as_str()));
         assert!(hits[0].snippet.contains("\u{1}pending\u{2}"));
-        s.rename_conversation(&b.summary.id, "Pending work").unwrap();
+        s.rename_conversation(&b.summary.id, "Pending work")
+            .unwrap();
         let hits = s.search("pending", 10).unwrap();
         assert_eq!(hits.len(), 2);
-        assert!(hits.iter().any(|h| h.turn_id.is_none() && h.conversation_id == b.summary.id));
+        assert!(hits
+            .iter()
+            .any(|h| h.turn_id.is_none() && h.conversation_id == b.summary.id));
 
         s.set_pinned(&b.summary.id, true).unwrap();
         s.touch_conversation(&a.summary.id).unwrap();
@@ -1270,22 +1550,59 @@ mod search_tests {
         assert_eq!(list[0].id, b.summary.id);
         assert!(list[0].pinned);
 
-        let tagged = s.set_tags(&a.summary.id, &["CPU".into(), " cpu ".into(), "memory".into(), "".into()]).unwrap();
+        let tagged = s
+            .set_tags(
+                &a.summary.id,
+                &["CPU".into(), " cpu ".into(), "memory".into(), "".into()],
+            )
+            .unwrap();
         assert_eq!(tagged.tags, vec!["cpu", "memory"]);
         assert_eq!(s.list_conversations(None, Some("cpu")).unwrap().len(), 1);
-        assert_eq!(s.list_conversations(Some("buffer"), Some("cpu")).unwrap().len(), 1);
-        assert_eq!(s.list_conversations(Some("buffer"), Some("nope")).unwrap().len(), 0);
+        assert_eq!(
+            s.list_conversations(Some("buffer"), Some("cpu"))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            s.list_conversations(Some("buffer"), Some("nope"))
+                .unwrap()
+                .len(),
+            0
+        );
         assert_eq!(s.list_tags().unwrap(), vec!["cpu", "memory"]);
 
-        let att = s.create_attachment("att_1", "notes.txt", "text/plain", AttachmentKind::Text, 5, "/tmp/x").unwrap();
+        let att = s
+            .create_attachment(
+                "att_1",
+                "notes.txt",
+                "text/plain",
+                AttachmentKind::Text,
+                5,
+                "/tmp/x",
+            )
+            .unwrap();
         assert!(att.turn_id.is_none());
         assert_eq!(s.stale_attachments(-1).unwrap().len(), 1);
-        let user = s.create_turn(&a.summary.id, Role::User, "see file", None, TurnStatus::Done, None, None).unwrap();
+        let user = s
+            .create_turn(
+                &a.summary.id,
+                Role::User,
+                "see file",
+                None,
+                TurnStatus::Done,
+                None,
+                None,
+            )
+            .unwrap();
         s.link_attachments(&user.id, &["att_1".into()]).unwrap();
         assert!(s.stale_attachments(-1).unwrap().is_empty());
         let conv = s.get_conversation(&a.summary.id).unwrap();
         assert_eq!(conv.turns[2].attachments[0].name, "notes.txt");
-        assert_eq!(s.attachments_of_conversation(&a.summary.id).unwrap().len(), 1);
+        assert_eq!(
+            s.attachments_of_conversation(&a.summary.id).unwrap().len(),
+            1
+        );
         s.delete_conversation(&a.summary.id).unwrap();
         assert!(s.get_attachment("att_1").is_err());
         assert!(s.search("buffer", 10).unwrap().is_empty());

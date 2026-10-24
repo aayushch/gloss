@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Find-in-conversation bar, docked under the header. Enter and Shift+Enter
 	// step through matches, Escape closes.
@@ -15,7 +18,9 @@
 		}
 	});
 
-	const label = $derived(!find.query.trim() ? '' : find.count ? `${find.current + 1} of ${find.count}` : 'No matches');
+	const label = $derived(
+		!find.query.trim() ? '' : find.count ? `${find.current + 1} of ${find.count}` : 'No matches'
+	);
 
 	function onKey(e: KeyboardEvent) {
 		if (e.key === 'Enter') {
@@ -32,11 +37,39 @@
 {#if find.open}
 	<div class="findbar" role="search" data-nofind>
 		<Icon name="search" size={13} />
-		<input bind:this={input} class="q" placeholder="Find in conversation" value={find.query} oninput={(e) => find.setQuery(e.currentTarget.value)} onkeydown={onKey} aria-label="Find in conversation" />
+		<input
+			bind:this={input}
+			class="q"
+			placeholder="Find in conversation"
+			value={find.query}
+			oninput={(e) => find.setQuery(e.currentTarget.value)}
+			onkeydown={onKey}
+			aria-label="Find in conversation"
+		/>
 		<span class="status" class:none={find.query.trim() !== '' && !find.count}>{label}</span>
-		<button type="button" class="nav" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled={!find.count} onclick={() => find.prev()}><Icon name="chevron-up" size={13} /></button>
-		<button type="button" class="nav" title="Next match (Enter)" aria-label="Next match" disabled={!find.count} onclick={() => find.next()}><Icon name="chevron-down" size={13} /></button>
-		<button type="button" class="nav" title="Close (Esc)" aria-label="Close find" onclick={() => find.hide()}><Icon name="x" size={13} /></button>
+		<button
+			type="button"
+			class="nav"
+			title="Previous match (Shift+Enter)"
+			aria-label="Previous match"
+			disabled={!find.count}
+			onclick={() => find.prev()}><Icon name="chevron-up" size={13} /></button
+		>
+		<button
+			type="button"
+			class="nav"
+			title="Next match (Enter)"
+			aria-label="Next match"
+			disabled={!find.count}
+			onclick={() => find.next()}><Icon name="chevron-down" size={13} /></button
+		>
+		<button
+			type="button"
+			class="nav"
+			title="Close (Esc)"
+			aria-label="Close find"
+			onclick={() => find.hide()}><Icon name="x" size={13} /></button
+		>
 	</div>
 {/if}
 

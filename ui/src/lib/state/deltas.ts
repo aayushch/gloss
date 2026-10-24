@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // Coalesces streamed text deltas before they reach the app state. Agents
 // send a delta per few tokens, and every one the UI applies re-parses the
 // turn and re-renders its blocks, so chunks are joined and handed on
@@ -60,6 +63,10 @@ export class DeltaBatcher {
 		const p = this.pending;
 		if (!p) return;
 		this.pending = null;
-		this.deliver({ conversationId: p.conversationId, turnId: p.turnId, event: { type: 'delta', text: p.text } });
+		this.deliver({
+			conversationId: p.conversationId,
+			turnId: p.turnId,
+			event: { type: 'delta', text: p.text }
+		});
 	}
 }

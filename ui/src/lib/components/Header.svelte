@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Conversation header: title, project (a picker while the chat is a
 	// draft), tags, pin, web-search toggle, model pill, clarification count
@@ -26,7 +29,10 @@
 	function commitTags() {
 		if (!editingTags) return;
 		editingTags = false;
-		const tags = tagText.split(',').map((t) => t.trim()).filter(Boolean);
+		const tags = tagText
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
 		if (tags.join(',') !== (app.active?.tags ?? []).join(',')) app.setTags(tags);
 	}
 
@@ -71,7 +77,9 @@
 
 	const page = $derived(app.activePage);
 	const isPage = $derived(!!app.active?.pageKey);
-	const title = $derived(page?.title || app.active?.title || app.viewing?.session.title || 'New conversation');
+	const title = $derived(
+		page?.title || app.active?.title || app.viewing?.session.title || 'New conversation'
+	);
 	// A page's conversation is named after the page and renamed with it, so
 	// only an ordinary conversation can be given a title here.
 	const canRename = $derived(!!app.active && !isPage);
@@ -79,7 +87,9 @@
 	const agent = $derived(app.activeAgent);
 	const agentId = $derived(app.activeAgentId);
 	const models = $derived(app.models[agentId] ?? []);
-	const modelLabel = $derived(agent && !agent.supportsModelSelect ? 'Auto' : app.modelName(agentId, app.activeModelId));
+	const modelLabel = $derived(
+		agent && !agent.supportsModelSelect ? 'Auto' : app.modelName(agentId, app.activeModelId)
+	);
 	const canPickModel = $derived((!agent || agent.supportsModelSelect) && !app.viewing);
 	const showWeb = $derived((!agent || agent.supportsWebSearch) && !app.viewing);
 </script>
@@ -90,7 +100,11 @@
 			{#if page?.faviconUrl}
 				<img src={page.faviconUrl} alt="" width="16" height="16" />
 			{:else}
-				<span class="letter">{hostOf(page?.url ?? app.active?.pageKey ?? '').charAt(0).toUpperCase()}</span>
+				<span class="letter"
+					>{hostOf(page?.url ?? app.active?.pageKey ?? '')
+						.charAt(0)
+						.toUpperCase()}</span
+				>
 			{/if}
 		</span>
 	{/if}
@@ -107,9 +121,13 @@
 			}}
 		/>
 	{:else if canRename}
-		<h1 title={title}><button type="button" class="h1btn" title="Rename conversation" onclick={startTitle}>{title}</button></h1>
+		<h1 {title}>
+			<button type="button" class="h1btn" title="Rename conversation" onclick={startTitle}
+				>{title}</button
+			>
+		</h1>
 	{:else}
-		<h1 title={title}>{title}</h1>
+		<h1 {title}>{title}</h1>
 	{/if}
 	{#if isPage}
 		<span class="host">{hostOf(page?.url ?? app.active?.pageKey ?? '')}</span>
@@ -119,29 +137,53 @@
 				<button
 					type="button"
 					class="pick"
-					title={app.activeProjectDir ? `Agent runs in ${app.activeProjectDir}` : 'Run the agent inside one of your projects'}
+					title={app.activeProjectDir
+						? `Agent runs in ${app.activeProjectDir}`
+						: 'Run the agent inside one of your projects'}
 					aria-haspopup="menu"
 					aria-expanded={projectMenuOpen}
 					onclick={() => (projectMenuOpen = !projectMenuOpen)}
 				>
 					<Icon name="folder" size={12} />
-					<span class="fname">{app.activeProjectDir ? folderName(app.activeProjectDir) : 'No project'}</span>
+					<span class="fname"
+						>{app.activeProjectDir ? folderName(app.activeProjectDir) : 'No project'}</span
+					>
 					<Icon name="chevron-down" size={11} />
 				</button>
 				{#if app.activeProjectDir}
-					<button type="button" class="unbind" title="Start this chat outside any project" aria-label="Remove project" onclick={() => pickProject(null)}><Icon name="x" size={11} /></button>
+					<button
+						type="button"
+						class="unbind"
+						title="Start this chat outside any project"
+						aria-label="Remove project"
+						onclick={() => pickProject(null)}><Icon name="x" size={11} /></button
+					>
 				{/if}
 			</span>
 			{#if projectMenuOpen}
 				<div class="menu left" role="menu">
 					{#each app.projects as p (p.path)}
-						<button type="button" role="menuitemradio" aria-checked={app.activeProjectDir === p.path} class:on={app.activeProjectDir === p.path} title={p.path} onclick={() => pickProject(p.path)}>
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={app.activeProjectDir === p.path}
+							class:on={app.activeProjectDir === p.path}
+							title={p.path}
+							onclick={() => pickProject(p.path)}
+						>
 							<Icon name="folder" size={12} />
 							<span class="fname">{p.name}</span>
 						</button>
 					{/each}
 					{#if app.projects.length}<div class="sep"></div>{/if}
-					<button type="button" role="menuitem" onclick={() => { projectMenuOpen = false; app.addProjectToDraft(); }}>
+					<button
+						type="button"
+						role="menuitem"
+						onclick={() => {
+							projectMenuOpen = false;
+							app.addProjectToDraft();
+						}}
+					>
 						<Icon name="plus" size={12} />
 						<span>Add project…</span>
 					</button>
@@ -157,10 +199,12 @@
 	{#if app.activeProjectDir && app.activeModes.length && !app.viewing}
 		<select
 			class="mode"
-			title={app.activeModes.find((m) => m.id === app.activeMode)?.description ?? 'Reads files only; never changes them'}
+			title={app.activeModes.find((m) => m.id === app.activeMode)?.description ??
+				'Reads files only; never changes them'}
 			aria-label="Working mode"
 			value={app.activeMode ?? 'read-only'}
-			onchange={(e) => app.setMode(e.currentTarget.value === 'read-only' ? null : e.currentTarget.value)}
+			onchange={(e) =>
+				app.setMode(e.currentTarget.value === 'read-only' ? null : e.currentTarget.value)}
 		>
 			<option value="read-only">Read only</option>
 			{#each app.activeModes as m (m.id)}
@@ -191,7 +235,14 @@
 				{/if}
 			</button>
 		{/if}
-		<button type="button" class="ico" class:on={app.active.pinned} title={app.active.pinned ? 'Unpin' : 'Pin'} aria-label={app.active.pinned ? 'Unpin conversation' : 'Pin conversation'} onclick={() => app.togglePin()}>
+		<button
+			type="button"
+			class="ico"
+			class:on={app.active.pinned}
+			title={app.active.pinned ? 'Unpin' : 'Pin'}
+			aria-label={app.active.pinned ? 'Unpin conversation' : 'Pin conversation'}
+			onclick={() => app.togglePin()}
+		>
 			<Icon name="pin" size={14} />
 		</button>
 	{/if}
@@ -201,7 +252,9 @@
 			type="button"
 			class="pill web"
 			class:on={app.activeWebSearch}
-			title={app.activeWebSearch ? 'Web search is on for this conversation' : 'Web search is off for this conversation'}
+			title={app.activeWebSearch
+				? 'Web search is on for this conversation'
+				: 'Web search is off for this conversation'}
 			onclick={() => app.setWebSearch(!app.activeWebSearch)}
 		>
 			<Icon name="globe" size={12} />
@@ -223,11 +276,22 @@
 			{#if canPickModel}<Icon name="chevron-down" size={12} />{/if}
 		</button>
 		{#if app.modelMenuOpen && canPickModel}
-			<ModelMenu agentName={agent?.name ?? agentId} {models} selected={app.activeModelId} onselect={(id) => app.setModel(id)} onclose={() => (app.modelMenuOpen = false)} />
+			<ModelMenu
+				agentName={agent?.name ?? agentId}
+				{models}
+				selected={app.activeModelId}
+				onselect={(id) => app.setModel(id)}
+				onclose={() => (app.modelMenuOpen = false)}
+			/>
 		{/if}
 	</div>
 	{#if app.viewing}
-		<button type="button" class="ibtn continue" title="Resume this session in Gloss; it stays in the agent's own history too" onclick={() => app.continueSession()}>Continue in Gloss</button>
+		<button
+			type="button"
+			class="ibtn continue"
+			title="Resume this session in Gloss; it stays in the agent's own history too"
+			onclick={() => app.continueSession()}>Continue in Gloss</button
+		>
 	{:else if isPage}
 		<span class="pill count">{count} ask{count === 1 ? '' : 's'}</span>
 	{:else}
@@ -235,18 +299,51 @@
 	{/if}
 	{#if app.active && app.active.turns.length}
 		<div class="export-wrap" data-export>
-			<button type="button" class="ico" title="Export conversation" aria-label="Export conversation" aria-haspopup="menu" aria-expanded={exportOpen} onclick={() => (exportOpen = !exportOpen)}>
+			<button
+				type="button"
+				class="ico"
+				title="Export conversation"
+				aria-label="Export conversation"
+				aria-haspopup="menu"
+				aria-expanded={exportOpen}
+				onclick={() => (exportOpen = !exportOpen)}
+			>
 				<Icon name="download" size={14} />
 			</button>
 			{#if exportOpen}
 				<div class="menu" role="menu">
 					{#if isPage}
-						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.copyPageMarkdown(); }}>Copy page notes as Markdown</button>
-						<div class="hint">The page's title and link, then each highlighted passage with what was asked about it.</div>
+						<button
+							type="button"
+							role="menuitem"
+							onclick={() => {
+								exportOpen = false;
+								app.copyPageMarkdown();
+							}}>Copy page notes as Markdown</button
+						>
+						<div class="hint">
+							The page's title and link, then each highlighted passage with what was asked about it.
+						</div>
 					{:else}
-						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.copyConversationMarkdown(); }}>Copy as Markdown</button>
-						<button type="button" role="menuitem" onclick={() => { exportOpen = false; app.saveConversationMarkdown(); }}>Save as Markdown…</button>
-						<div class="hint">Clarifications are folded in under the sentences they were asked about.</div>
+						<button
+							type="button"
+							role="menuitem"
+							onclick={() => {
+								exportOpen = false;
+								app.copyConversationMarkdown();
+							}}>Copy as Markdown</button
+						>
+						<button
+							type="button"
+							role="menuitem"
+							onclick={() => {
+								exportOpen = false;
+								app.saveConversationMarkdown();
+							}}>Save as Markdown…</button
+						>
+						<div class="hint">
+							Clarifications are folded in under the sentences they were asked about.
+						</div>
 					{/if}
 				</div>
 			{/if}

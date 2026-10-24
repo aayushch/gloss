@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import type { PillState } from './store.svelte';
@@ -22,7 +25,9 @@
 	class="gloss-pill"
 	class:is-inert={inert}
 	{style}
-	title={inert ? 'Wait for the current reply to finish' : 'Ask Gloss about the selection (Alt+Shift+G)'}
+	title={inert
+		? 'Wait for the current reply to finish'
+		: 'Ask Gloss about the selection (Alt+Shift+G)'}
 	onmousedown={(e) => {
 		// Opens on press rather than click: Safari collapses the page
 		// selection on the press even though the default is prevented, and

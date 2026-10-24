@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // In-app updates. The Tauri updater plugin reads `latest.json` from the
 // newest GitHub release, compares its version with the running app and, when
 // the user agrees, downloads the platform bundle, verifies its signature

@@ -1,8 +1,17 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from 'vitest';
 import { resolveMark, segmentRuns } from './anchor';
 import type { Run } from './blocks';
 
-const runs: Run[] = [{ t: 'The ' }, { t: 'quick', b: true }, { t: ' brown ' }, { t: 'fox', code: true }, { t: ' jumps.' }];
+const runs: Run[] = [
+	{ t: 'The ' },
+	{ t: 'quick', b: true },
+	{ t: ' brown ' },
+	{ t: 'fox', code: true },
+	{ t: ' jumps.' }
+];
 // text: "The quick brown fox jumps."
 
 describe('resolveMark', () => {

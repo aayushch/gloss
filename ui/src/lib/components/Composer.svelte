@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Aayush Chawla -->
+<!-- SPDX-License-Identifier: MIT -->
+
 <script lang="ts">
 	// Main message box at the bottom of the conversation column. Files can be
 	// attached with the paperclip, by dropping them on the window, or by
@@ -15,7 +18,12 @@
 		running = false,
 		onsend,
 		onstop
-	}: { disabled?: boolean; running?: boolean; onsend: (text: string) => void; onstop: () => void } = $props();
+	}: {
+		disabled?: boolean;
+		running?: boolean;
+		onsend: (text: string) => void;
+		onstop: () => void;
+	} = $props();
 
 	let value = $state('');
 	let ta: HTMLTextAreaElement | undefined = $state();
@@ -114,7 +122,13 @@
 						<Icon name="file" size={12} />
 					{/if}
 					<span class="name">{att.name}</span>
-					<button type="button" class="rm" title="Remove" aria-label="Remove {att.name}" onclick={() => app.unstage(att.id)}><Icon name="x" size={11} /></button>
+					<button
+						type="button"
+						class="rm"
+						title="Remove"
+						aria-label="Remove {att.name}"
+						onclick={() => app.unstage(att.id)}><Icon name="x" size={11} /></button
+					>
 				</span>
 			{/each}
 			{#if app.attachError}
@@ -123,8 +137,22 @@
 		</div>
 	{/if}
 	<div class="rowbox">
-		<input bind:this={picker} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,text/*,.md,.txt,.json,.csv,.xml,.yaml,.yml,.toml,.ini,.log,.rs,.ts,.js,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.rb,.sh,.sql,.html,.css,.svelte" hidden onchange={onPick} />
-		<button type="button" class="attach" title="Attach an image or text file" aria-label="Attach a file" disabled={disabled || running} onclick={pick}>
+		<input
+			bind:this={picker}
+			type="file"
+			multiple
+			accept="image/png,image/jpeg,image/gif,image/webp,text/*,.md,.txt,.json,.csv,.xml,.yaml,.yml,.toml,.ini,.log,.rs,.ts,.js,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.rb,.sh,.sql,.html,.css,.svelte"
+			hidden
+			onchange={onPick}
+		/>
+		<button
+			type="button"
+			class="attach"
+			title="Attach an image or text file"
+			aria-label="Attach a file"
+			disabled={disabled || running}
+			onclick={pick}
+		>
 			<Icon name="paperclip" size={15} />
 		</button>
 		<textarea
@@ -132,7 +160,13 @@
 			bind:value
 			class="iinput"
 			rows="1"
-			placeholder={disabled ? 'Pick an available agent in Settings to start' : running ? 'Waiting for the reply…' : app.active?.pageKey ? 'Ask about this page…' : 'Message the agent…'}
+			placeholder={disabled
+				? 'Pick an available agent in Settings to start'
+				: running
+					? 'Waiting for the reply…'
+					: app.active?.pageKey
+						? 'Ask about this page…'
+						: 'Message the agent…'}
 			disabled={disabled || running}
 			oninput={(e) => grow(e.currentTarget)}
 			onpaste={onPaste}
@@ -141,14 +175,18 @@
 					e.preventDefault();
 					send();
 				}
-			}}
-		></textarea>
+			}}></textarea>
 		{#if running}
 			<button type="button" class="ibtn pill stop" onclick={onstop} title="Stop the agent">
 				<Icon name="square" size={12} /> Stop
 			</button>
 		{:else}
-			<button type="button" class="ibtn primary pill send" onclick={send} disabled={disabled || !value.trim()}>Send</button>
+			<button
+				type="button"
+				class="ibtn primary pill send"
+				onclick={send}
+				disabled={disabled || !value.trim()}>Send</button
+			>
 		{/if}
 	</div>
 </div>

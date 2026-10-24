@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 //! Starts or brings forward the Gloss app from the bridge, which runs while
 //! the app may not: the browser spawns the bridge whenever the extension
 //! connects, even with Gloss closed.
@@ -9,7 +12,11 @@ use std::process::Command;
 pub fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     {
-        let ok = Command::new("open").arg(url).status().map(|s| s.success()).unwrap_or(false);
+        let ok = Command::new("open")
+            .arg(url)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
         if ok {
             return Ok(());
         }
@@ -25,12 +32,16 @@ pub fn open_url(url: &str) -> std::io::Result<()> {
     }
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd").args(["/c", "start", "", url]).status()?;
+        Command::new("cmd")
+            .args(["/c", "start", "", url])
+            .status()?;
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = url;
-        Err(std::io::Error::other("no way to launch Gloss on this platform"))
+        Err(std::io::Error::other(
+            "no way to launch Gloss on this platform",
+        ))
     }
 }

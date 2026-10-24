@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // What the in-page components can ask the content script to do.
 
 export interface Actions {

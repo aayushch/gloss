@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 // In-conversation find (Cmd/Ctrl+F). Matches are DOM ranges over the text
 // the transcript currently renders. A collapsed well renders nothing, so
 // once typing pauses the bar asks the app (through `expand`) to open every

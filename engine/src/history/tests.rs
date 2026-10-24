@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Aayush Chawla
+// SPDX-License-Identifier: MIT
+
 use super::*;
 use crate::types::AgentId;
 
@@ -27,21 +30,33 @@ fn plant_claude(homes: &AgentHomes) {
     // No title from the agent: the first prompt is the title.
     write(
         &dir.join("c2.jsonl"),
-        &[serde_json::json!({"type": "user", "sessionId": "c2", "cwd": PROJECT, "entrypoint": "sdk-cli",
-            "message": {"role": "user", "content": "Explain the build"}})],
+        &[
+            serde_json::json!({"type": "user", "sessionId": "c2", "cwd": PROJECT, "entrypoint": "sdk-cli",
+            "message": {"role": "user", "content": "Explain the build"}}),
+        ],
     );
     // Opened and left without a message.
-    write(&dir.join("c3.jsonl"), &[serde_json::json!({"type": "mode", "sessionId": "c3"})]);
+    write(
+        &dir.join("c3.jsonl"),
+        &[serde_json::json!({"type": "mode", "sessionId": "c3"})],
+    );
     // Same slug, different folder (`/work/my-app` also slugs to `-work-my-app`).
     write(
         &dir.join("c4.jsonl"),
-        &[serde_json::json!({"type": "user", "sessionId": "c4", "cwd": "/work/my-app",
-            "message": {"role": "user", "content": "Other folder"}})],
+        &[
+            serde_json::json!({"type": "user", "sessionId": "c4", "cwd": "/work/my-app",
+            "message": {"role": "user", "content": "Other folder"}}),
+        ],
     );
 }
 
 fn plant_codex(homes: &AgentHomes) {
-    let day = homes.codex.join("sessions").join("2026").join("10").join("02");
+    let day = homes
+        .codex
+        .join("sessions")
+        .join("2026")
+        .join("10")
+        .join("02");
     let meta = |id: &str, cwd: &str| {
         serde_json::json!({"type": "session_meta", "payload": {"id": id, "cwd": cwd, "source": "cli", "originator": "codex_cli_rs",
             "timestamp": "2026-10-02T09:00:00Z", "base_instructions": {"text": "You are Codex"}}})
@@ -49,14 +64,28 @@ fn plant_codex(homes: &AgentHomes) {
     let prompt = |text: &str| serde_json::json!({"type": "event_msg", "payload": {"type": "user_message", "message": text}});
     let context = serde_json::json!({"type": "response_item", "payload": {"type": "message", "role": "user",
         "content": [{"type": "input_text", "text": "<environment_context>…</environment_context>"}]}});
-    write(&day.join("rollout-2026-10-02T09-00-00-x1.jsonl"), &[meta("x1", PROJECT), context.clone(), prompt("Add a CLI flag")]);
-    write(&day.join("rollout-2026-10-02T09-30-00-x2.jsonl"), &[meta("x2", "/elsewhere"), context, prompt("Not this one")]);
+    write(
+        &day.join("rollout-2026-10-02T09-00-00-x1.jsonl"),
+        &[
+            meta("x1", PROJECT),
+            context.clone(),
+            prompt("Add a CLI flag"),
+        ],
+    );
+    write(
+        &day.join("rollout-2026-10-02T09-30-00-x2.jsonl"),
+        &[meta("x2", "/elsewhere"), context, prompt("Not this one")],
+    );
 }
 
 fn plant_gemini(homes: &AgentHomes) {
     let hash = gemini::project_hash(PROJECT);
     std::fs::create_dir_all(&homes.gemini).unwrap();
-    std::fs::write(homes.gemini.join("projects.json"), serde_json::json!({"projects": {PROJECT: "my.app"}}).to_string()).unwrap();
+    std::fs::write(
+        homes.gemini.join("projects.json"),
+        serde_json::json!({"projects": {PROJECT: "my.app"}}).to_string(),
+    )
+    .unwrap();
     let chats = homes.gemini.join("tmp").join("my.app").join("chats");
     write(
         &chats.join("session-2026-10-03T08-00-g1.jsonl"),
@@ -69,7 +98,10 @@ fn plant_gemini(homes: &AgentHomes) {
         ],
     );
     // Header only: no message was sent.
-    write(&chats.join("session-2026-10-03T08-05-g2.jsonl"), &[serde_json::json!({"sessionId": "g2", "projectHash": hash, "kind": "main"})]);
+    write(
+        &chats.join("session-2026-10-03T08-05-g2.jsonl"),
+        &[serde_json::json!({"sessionId": "g2", "projectHash": hash, "kind": "main"})],
+    );
     // A folder that shares the directory name but hashes differently.
     write(
         &chats.join("session-2026-10-03T08-10-g3.jsonl"),
@@ -79,7 +111,12 @@ fn plant_gemini(homes: &AgentHomes) {
         ],
     );
     // The older single-object format, in the hash-named directory.
-    let old = homes.gemini.join("tmp").join(&hash).join("chats").join("session-2026-03-11T05-08-g4.json");
+    let old = homes
+        .gemini
+        .join("tmp")
+        .join(&hash)
+        .join("chats")
+        .join("session-2026-03-11T05-08-g4.json");
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
     std::fs::write(
         &old,
@@ -114,7 +151,10 @@ fn lists_each_agents_sessions_for_the_project_only() {
 
     let index = SessionIndex::default();
     let list = index.list(&homes, PROJECT);
-    let mut found: Vec<(AgentId, &str, &str)> = list.iter().map(|s| (s.agent, s.id.as_str(), s.title.as_str())).collect();
+    let mut found: Vec<(AgentId, &str, &str)> = list
+        .iter()
+        .map(|s| (s.agent, s.id.as_str(), s.title.as_str()))
+        .collect();
     found.sort_by_key(|s| s.1);
     assert_eq!(
         found,
@@ -132,12 +172,19 @@ fn lists_each_agents_sessions_for_the_project_only() {
     assert_eq!(by_id("c2").origin, Some(SessionOrigin::Headless));
     assert_eq!(by_id("x1").origin, Some(SessionOrigin::Terminal));
     assert_eq!(by_id("g1").origin, None);
-    assert_eq!(by_id("x1").created_at, parse_time("2026-10-02T09:00:00Z").unwrap());
+    assert_eq!(
+        by_id("x1").created_at,
+        parse_time("2026-10-02T09:00:00Z").unwrap()
+    );
     assert!(list.windows(2).all(|w| w[0].updated_at >= w[1].updated_at));
 
     // A second listing reads from the cache; a rewritten file is read again.
     assert_eq!(index.list(&homes, PROJECT).len(), 6);
-    let c2 = homes.claude.join("projects").join("-work-my-app").join("c2.jsonl");
+    let c2 = homes
+        .claude
+        .join("projects")
+        .join("-work-my-app")
+        .join("c2.jsonl");
     write(
         &c2,
         &[
@@ -146,13 +193,18 @@ fn lists_each_agents_sessions_for_the_project_only() {
         ],
     );
     let again = index.list(&homes, PROJECT);
-    assert_eq!(again.iter().find(|s| s.id == "c2").unwrap().title, "Build notes");
+    assert_eq!(
+        again.iter().find(|s| s.id == "c2").unwrap().title,
+        "Build notes"
+    );
 }
 
 #[test]
 fn missing_homes_list_nothing() {
     let root = tempfile::tempdir().unwrap();
-    assert!(SessionIndex::default().list(&AgentHomes::under(root.path()), PROJECT).is_empty());
+    assert!(SessionIndex::default()
+        .list(&AgentHomes::under(root.path()), PROJECT)
+        .is_empty());
 }
 
 #[test]
@@ -174,7 +226,11 @@ fn titles_are_one_short_line() {
 fn reads_turns_with_tool_calls_collapsed() {
     let root = tempfile::tempdir().unwrap();
     let homes = AgentHomes::under(root.path());
-    let claude_file = homes.claude.join("projects").join("-work-my-app").join("t1.jsonl");
+    let claude_file = homes
+        .claude
+        .join("projects")
+        .join("-work-my-app")
+        .join("t1.jsonl");
     write(
         &claude_file,
         &[
@@ -191,10 +247,16 @@ fn reads_turns_with_tool_calls_collapsed() {
     );
     let turns = read_turns(AgentId::Claude, &claude_file);
     assert_eq!(turns.len(), 2);
-    assert_eq!((turns[0].role, turns[0].text.as_str()), (Role::User, "Fix the bug"));
+    assert_eq!(
+        (turns[0].role, turns[0].text.as_str()),
+        (Role::User, "Fix the bug")
+    );
     assert_eq!(turns[0].at, parse_time("2026-10-01T10:00:00Z").unwrap());
     assert_eq!(turns[1].text, "Looking.\n\nFixed.");
-    assert_eq!(turns[1].tools, vec!["Read engine.rs", "Bash cargo test --all"]);
+    assert_eq!(
+        turns[1].tools,
+        vec!["Read engine.rs", "Bash cargo test --all"]
+    );
 
     let codex_file = root.path().join("rollout-x.jsonl");
     write(
@@ -208,7 +270,10 @@ fn reads_turns_with_tool_calls_collapsed() {
         ],
     );
     let turns = read_turns(AgentId::Codex, &codex_file);
-    assert_eq!(turns.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), vec!["Add a flag", "Done."]);
+    assert_eq!(
+        turns.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(),
+        vec!["Add a flag", "Done."]
+    );
     assert_eq!(turns[1].tools, vec!["shell rg flag"]);
 
     let gemini_file = root.path().join("session-g.jsonl");
@@ -224,7 +289,10 @@ fn reads_turns_with_tool_calls_collapsed() {
     );
     let turns = read_turns(AgentId::Gemini, &gemini_file);
     assert_eq!(turns.len(), 2);
-    assert_eq!((turns[1].text.as_str(), turns[1].tools.clone()), ("It is a CLI.", vec!["read_file README.md".to_string()]));
+    assert_eq!(
+        (turns[1].text.as_str(), turns[1].tools.clone()),
+        ("It is a CLI.", vec!["read_file README.md".to_string()])
+    );
 
     let pi_file = root.path().join("pi.jsonl");
     write(
@@ -241,7 +309,10 @@ fn reads_turns_with_tool_calls_collapsed() {
     );
     let turns = read_turns(AgentId::Pi, &pi_file);
     assert_eq!(turns.len(), 2);
-    assert_eq!((turns[1].text.as_str(), turns[1].tools.clone()), ("A repo.", vec!["bash ls".to_string()]));
+    assert_eq!(
+        (turns[1].text.as_str(), turns[1].tools.clone()),
+        ("A repo.", vec!["bash ls".to_string()])
+    );
 }
 
 #[test]
