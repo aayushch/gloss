@@ -223,7 +223,7 @@ fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
     {
         let candidates = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
             .iter()
-            .filter_map(|v| std::env::var_os(v))
+            .filter_map(std::env::var_os)
             .map(|base| {
                 PathBuf::from(base)
                     .join("Mozilla Firefox")
