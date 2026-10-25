@@ -1,6 +1,6 @@
 {
   "name": "gloss-extension",
-  "version": "2.1.9",
+  "version": "2.2.0",
   "private": true,
   "description": "Browser extension for Gloss: ask about any text you highlight on the web.",
   "type": "module",
