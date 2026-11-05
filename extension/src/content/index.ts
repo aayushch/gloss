@@ -41,6 +41,7 @@ import {
 	type WebAnchor
 } from '../shared/protocol';
 import { describe, resolve } from './anchor';
+import { controlSelection, isHiddenControl } from './control';
 import { isEditing } from './editable';
 import { Dock, fractionOf } from './dock';
 import { GUARD_KEY, GUARDED_EVENTS, guardListening, type GuardHolder } from './events';
@@ -62,7 +63,7 @@ import {
 } from './state';
 import { passageY, scrollToSpot, spotOf } from './spot';
 import styles from './styles.css';
-import { HOST_TAG, normalise, TextIndex } from './text';
+import { HOST_TAG, normalise, occurrences, TextIndex } from './text';
 import type { Actions } from './ui/actions';
 import App from './ui/App.svelte';
 import { rectOf, UiStore } from './ui/store.svelte';
@@ -114,6 +115,8 @@ class ContentApp {
 	private pending: PendingAsk | null = null;
 	/** The selection the pill was last shown for, kept for `askRange`. */
 	private pillRange: Range | null = null;
+	/** Where the mouse was last pressed or released, to pick among repeated passages. */
+	private pointer: { x: number; y: number } | null = null;
 	private launchTimer: ReturnType<typeof setTimeout> | null = null;
 	private loading: Promise<void> | null = null;
 	private retryTimers: ReturnType<typeof setTimeout>[] = [];
@@ -213,7 +216,15 @@ class ContentApp {
 		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.uiGuard.handle, true);
 		// Capture phase: a page that stops these events from bubbling (code
 		// and diff viewers handle the mouse themselves) still gets the pill.
-		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck(), true);
+		this.listen(
+			document,
+			'mouseup',
+			(e) => {
+				this.trackPointer(e as MouseEvent);
+				this.scheduleSelectionCheck();
+			},
+			true
+		);
 		this.listen(document, 'keyup', () => this.scheduleSelectionCheck(), true);
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
 		this.listen(document, 'mousedown', (e) => this.onDocumentMouseDown(e as MouseEvent), true);
@@ -531,15 +542,36 @@ class ContentApp {
 	 */
 	private selectedRange(asked = false): Range | null {
 		const sel = document.getSelection();
-		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return this.editorSelection();
 		const range = sel.getRangeAt(0);
-		if (range.collapsed) return null;
+		if (range.collapsed) return this.editorSelection();
 		const node = range.commonAncestorContainer;
 		if (node.getRootNode() !== document) return null;
 		if (this.host.contains(node)) return null;
 		if (!asked && isEditing(node)) return null;
 		if (normalise(range.toString()).length < MIN_SELECTION_CHARS) return null;
 		return range;
+	}
+
+	/**
+	 * The selection of a code editor that draws its own selection and keeps
+	 * the selected text in a hidden textarea it focuses (CodeMirror 5, which
+	 * Bitbucket's diff view uses; Ace and Monaco do the same). The DOM
+	 * selection is collapsed inside that textarea, so the text is read from
+	 * the textarea and found among the editor's rendered lines, looking
+	 * outward from the textarea so the editor that has focus wins over
+	 * another showing the same lines.
+	 */
+	private editorSelection(): Range | null {
+		const active = document.activeElement;
+		const text = controlSelection(active);
+		if (text === null || normalise(text).length < MIN_SELECTION_CHARS) return null;
+		if (!isHiddenControl(active as HTMLElement)) return null;
+		return this.rangeOfText(text, active as HTMLElement);
+	}
+
+	private trackPointer(e: MouseEvent): void {
+		this.pointer = { x: e.clientX, y: e.clientY };
 	}
 
 	private checkSelection(): void {
@@ -582,24 +614,59 @@ class ContentApp {
 		return kept;
 	}
 
-	/** The range of `text` where it occurs exactly once in the page text; null otherwise. */
-	private rangeOfText(text: string): Range | null {
+	/**
+	 * The range of `text` on the page, or null when it occurs nowhere. The
+	 * search starts in the smallest ancestor of `near` whose text holds it
+	 * and widens to the whole page. Among several occurrences, the one
+	 * closest to where the mouse was last pressed or released wins; a
+	 * diff shows an unchanged line on both sides, and the reader selected
+	 * one of them.
+	 */
+	private rangeOfText(text: string, near: Element | null = null): Range | null {
 		const needle = normalise(text);
 		if (needle.length < MIN_SELECTION_CHARS) return null;
 		const index = this.textIndex();
-		const start = index.text.indexOf(needle);
-		if (start < 0 || index.text.indexOf(needle, start + 1) >= 0) return null;
-		return index.toRange(start, start + needle.length);
+		let found: number[] = [];
+		for (let el: Element | null = near; el && !found.length; el = el.parentElement) {
+			const offs = index.ofElement(el);
+			if (offs) found = occurrences(index.text, needle, offs.start, offs.end);
+		}
+		if (!found.length) found = occurrences(index.text, needle);
+		if (!found.length) return null;
+		const ranges = found.map((s) => index.toRange(s, s + needle.length));
+		return this.nearestToPointer(ranges);
+	}
+
+	/** Of several ranges, the one whose box is closest to the last mouse position; the first when none is known. */
+	private nearestToPointer(ranges: Range[]): Range {
+		if (ranges.length === 1 || !this.pointer) return ranges[0];
+		const { x, y } = this.pointer;
+		let best = ranges[0];
+		let bestDist = Infinity;
+		for (const r of ranges) {
+			const b = r.getBoundingClientRect();
+			const dx = x < b.left ? b.left - x : x > b.right ? x - b.right : 0;
+			const dy = y < b.top ? b.top - y : y > b.bottom ? y - b.bottom : 0;
+			const dist = dx * dx + dy * dy;
+			if (dist < bestDist) {
+				best = r;
+				bestDist = dist;
+			}
+		}
+		return best;
 	}
 
 	private onSelectionChange(): void {
-		if (this.store.pill && !this.store.composer) {
-			const sel = document.getSelection();
-			if (!sel || sel.isCollapsed) this.hidePill();
-		}
+		if (!this.store.pill || this.store.composer) return;
+		const sel = document.getSelection();
+		if (sel && !sel.isCollapsed) return;
+		// An editor's selection lives in its hidden textarea while the DOM selection stays collapsed.
+		if (controlSelection(document.activeElement) !== null) return;
+		this.hidePill();
 	}
 
 	private onDocumentMouseDown(e: MouseEvent): void {
+		this.trackPointer(e);
 		if (e.composedPath().includes(this.host)) return;
 		this.hidePill();
 		if (

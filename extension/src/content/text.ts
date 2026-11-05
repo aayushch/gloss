@@ -289,6 +289,18 @@ export class TextIndex {
 	}
 }
 
+/** Start offsets of every occurrence of `needle` in `text`, within `[from, to)`. */
+export function occurrences(text: string, needle: string, from = 0, to = text.length): number[] {
+	const out: number[] = [];
+	if (!needle) return out;
+	let i = text.indexOf(needle, from);
+	while (i >= 0 && i + needle.length <= to) {
+		out.push(i);
+		i = text.indexOf(needle, i + 1);
+	}
+	return out;
+}
+
 /** Collapses whitespace runs to one space and trims, the way the index normalises page text. */
 export function normalise(s: string): string {
 	return s.replace(/\s+/g, ' ').trim();

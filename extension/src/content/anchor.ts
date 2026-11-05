@@ -6,7 +6,7 @@
 
 import search from 'approx-string-match';
 import type { WebAnchor } from '../shared/protocol';
-import { normalise, type Offsets, type TextIndex } from './text';
+import { normalise, occurrences, type Offsets, type TextIndex } from './text';
 
 /** Characters of context kept on either side of the quote. */
 const CONTEXT_CHARS = 32;
@@ -121,16 +121,6 @@ function commonPrefix(a: string, b: string): number {
 	return n;
 }
 
-function allOccurrences(text: string, needle: string): number[] {
-	const out: number[] = [];
-	let i = text.indexOf(needle);
-	while (i >= 0) {
-		out.push(i);
-		i = text.indexOf(needle, i + 1);
-	}
-	return out;
-}
-
 /** Straightens curly quotes and dashes and lowercases, for the container-scoped stage. */
 function fold(s: string): string {
 	return s
@@ -171,12 +161,12 @@ export function resolve(anchor: WebAnchor, index: TextIndex, approximate = true)
 	}
 
 	// 2. The quote moved: pick the occurrence whose surroundings match best.
-	const occurrences = allOccurrences(text, exact);
-	if (occurrences.length) {
-		let best = occurrences[0];
+	const hits = occurrences(text, exact);
+	if (hits.length) {
+		let best = hits[0];
 		let bestScore = -1;
 		let bestDist = Infinity;
-		for (const at of occurrences) {
+		for (const at of hits) {
 			const before = text.slice(Math.max(0, at - CONTEXT_CHARS), at);
 			const after = text.slice(at + exact.length, at + exact.length + CONTEXT_CHARS);
 			const score = commonSuffix(prefix, before) + commonPrefix(suffix, after);
