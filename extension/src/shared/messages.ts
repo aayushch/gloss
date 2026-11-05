@@ -47,7 +47,12 @@ export type TabMessage =
 	| { type: 'navigator-state' }
 	/** Puts back the note navigator the reader hid on this page. */
 	| { type: 'show-navigator' }
-	/** Open the composer for the page's current selection. */
+	/**
+	 * Open the composer for the page's current selection, asked for through
+	 * the context menu or the keyboard shortcut. `selectionText` is the text
+	 * the browser reported as selected (empty for the shortcut); the content
+	 * script looks it up on the page when the live selection is unusable.
+	 */
 	| { type: 'open-composer'; selectionText: string };
 
 /** Whether the page's note navigator is showing, for the toolbar popup. */

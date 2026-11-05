@@ -41,6 +41,7 @@ import {
 	type WebAnchor
 } from '../shared/protocol';
 import { describe, resolve } from './anchor';
+import { isEditing } from './editable';
 import { Dock, fractionOf } from './dock';
 import { GUARD_KEY, GUARDED_EVENTS, guardListening, type GuardHolder } from './events';
 import { UiGuard } from './uiguard';
@@ -210,8 +211,10 @@ class ContentApp {
 		this.uiGuard = new UiGuard(this.host, this.shadow, (e) => this.onDocumentKeyDown(e));
 		if (guardListening()) (globalThis as GuardHolder)[GUARD_KEY] = this.uiGuard.handle;
 		else for (const type of GUARDED_EVENTS) this.listen(window, type, this.uiGuard.handle, true);
-		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck());
-		this.listen(document, 'keyup', () => this.scheduleSelectionCheck());
+		// Capture phase: a page that stops these events from bubbling (code
+		// and diff viewers handle the mouse themselves) still gets the pill.
+		this.listen(document, 'mouseup', () => this.scheduleSelectionCheck(), true);
+		this.listen(document, 'keyup', () => this.scheduleSelectionCheck(), true);
 		this.listen(document, 'selectionchange', () => this.onSelectionChange());
 		this.listen(document, 'mousedown', (e) => this.onDocumentMouseDown(e as MouseEvent), true);
 		this.listen(document, 'keydown', (e) => this.onDocumentKeyDown(e as KeyboardEvent), true);
@@ -490,7 +493,7 @@ class ContentApp {
 	}
 
 	private onUrlChange(): void {
-		this.store.pill = null;
+		this.hidePill();
 		this.closePopover();
 		this.cancelComposer();
 		this.store.lastAskId = null;
@@ -520,7 +523,13 @@ class ContentApp {
 		setTimeout(() => this.checkSelection(), 0);
 	}
 
-	private selectedRange(): Range | null {
+	/**
+	 * The page's current selection, or null when there is none Gloss can
+	 * ask about. Text the reader is editing is left alone, except when
+	 * they `asked` for it themselves through the context menu or the
+	 * keyboard shortcut.
+	 */
+	private selectedRange(asked = false): Range | null {
 		const sel = document.getSelection();
 		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
 		const range = sel.getRangeAt(0);
@@ -528,7 +537,7 @@ class ContentApp {
 		const node = range.commonAncestorContainer;
 		if (node.getRootNode() !== document) return null;
 		if (this.host.contains(node)) return null;
-		if (isEditable(node)) return null;
+		if (!asked && isEditing(node)) return null;
 		if (normalise(range.toString()).length < MIN_SELECTION_CHARS) return null;
 		return range;
 	}
@@ -537,42 +546,62 @@ class ContentApp {
 		if (this.disposed || this.store.composer) return;
 		const range = this.selectedRange();
 		if (!range) {
-			this.store.pill = null;
+			this.hidePill();
 			return;
 		}
 		const rect = lastRect(range);
 		if (!rect) {
-			this.store.pill = null;
+			this.hidePill();
 			return;
 		}
 		this.pillRange = range.cloneRange();
 		this.store.pill = { x: rect.right, y: rect.bottom };
 	}
 
+	/** Takes the pill down along with the selection it was shown for. */
+	private hidePill(): void {
+		this.store.pill = null;
+		this.pillRange = null;
+	}
+
 	/**
-	 * The passage an ask is about: the live selection, or else the one the
-	 * pill was shown for. Safari drops the page selection when the pill is
-	 * pressed, before the press is handled, so the copy taken when the pill
-	 * appeared is what the composer then opens on.
+	 * The passage an ask is about. From the pill: the live selection, or
+	 * else the one the pill is showing for; Safari drops the page selection
+	 * when the pill is pressed, before the press is handled, so the copy
+	 * taken when the pill appeared is what the composer then opens on. From
+	 * the context menu or the keyboard shortcut (`asked`): the live
+	 * selection wherever it is, or else the one place on the page where the
+	 * text the browser reported as selected occurs.
 	 */
-	private askRange(): Range | null {
-		const live = this.selectedRange();
+	private askRange(asked: { selectionText: string } | null): Range | null {
+		const live = this.selectedRange(asked !== null);
 		if (live) return live;
+		if (asked) return this.rangeOfText(asked.selectionText);
 		const kept = this.pillRange;
 		if (!kept || kept.collapsed || !document.contains(kept.commonAncestorContainer)) return null;
 		return kept;
 	}
 
+	/** The range of `text` where it occurs exactly once in the page text; null otherwise. */
+	private rangeOfText(text: string): Range | null {
+		const needle = normalise(text);
+		if (needle.length < MIN_SELECTION_CHARS) return null;
+		const index = this.textIndex();
+		const start = index.text.indexOf(needle);
+		if (start < 0 || index.text.indexOf(needle, start + 1) >= 0) return null;
+		return index.toRange(start, start + needle.length);
+	}
+
 	private onSelectionChange(): void {
 		if (this.store.pill && !this.store.composer) {
 			const sel = document.getSelection();
-			if (!sel || sel.isCollapsed) this.store.pill = null;
+			if (!sel || sel.isCollapsed) this.hidePill();
 		}
 	}
 
 	private onDocumentMouseDown(e: MouseEvent): void {
 		if (e.composedPath().includes(this.host)) return;
-		this.store.pill = null;
+		this.hidePill();
 		if (
 			this.store.composer &&
 			!this.store.composer.text.trim() &&
@@ -585,16 +614,24 @@ class ContentApp {
 		if (e.key !== 'Escape') return;
 		if (this.store.composer) this.cancelComposer();
 		else if (this.store.popover) this.closePopover();
-		else if (this.store.pill) this.store.pill = null;
+		else if (this.store.pill) this.hidePill();
 	}
 
 	// ---- composer ------------------------------------------------------------
 
-	/** Opens the composer for the current selection; shows a toast when there is none. */
-	private openComposer(): void {
-		const range = this.askRange();
+	/**
+	 * Opens the composer for the current selection; shows a toast when there
+	 * is none. `asked` is set when the reader used the context menu or the
+	 * keyboard shortcut, with the text the browser reported as selected.
+	 */
+	private openComposer(asked: { selectionText: string } | null = null): void {
+		const range = this.askRange(asked);
 		if (!range) {
-			this.store.showToast('Select some text on the page first.');
+			this.store.showToast(
+				asked?.selectionText
+					? 'Gloss could not find that selection on the page.'
+					: 'Select some text on the page first.'
+			);
 			return;
 		}
 		const index = this.textIndex();
@@ -614,7 +651,7 @@ class ContentApp {
 			}
 		};
 		const rect = lastRect(captured) ?? captured.getBoundingClientRect();
-		this.store.pill = null;
+		this.hidePill();
 		this.closePopover();
 		this.highlights.setActive(captured);
 		this.store.composer = {
@@ -719,7 +756,7 @@ class ContentApp {
 		if (!entry) return;
 		if (this.store.popover && this.store.popover.askId !== id) this.closePopover();
 		this.cancelComposer();
-		this.store.pill = null;
+		this.hidePill();
 		this.store.popover = { askId: id };
 		this.store.lastAskId = id;
 		this.highlights.setActive(entry.range);
@@ -942,7 +979,7 @@ class ContentApp {
 				sendResponse({ ok: true });
 				return;
 			case 'open-composer':
-				this.openComposer();
+				this.openComposer({ selectionText: msg.selectionText });
 				sendResponse({ ok: true });
 				return;
 			case 'navigator-state': {
@@ -969,14 +1006,6 @@ class ContentApp {
 			}
 		}
 	};
-}
-
-function isEditable(node: Node): boolean {
-	const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-	if (!el) return false;
-	if (el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
-		return true;
-	return (el as HTMLElement).isContentEditable === true;
 }
 
 /** The last non-empty client rect of a range, where the pill and glyph sit. */

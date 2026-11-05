@@ -316,17 +316,28 @@ browser.runtime.onConnect.addListener((port) => {
 
 // ---- context menu and keyboard command ---------------------------------
 
-async function setupMenu(): Promise<void> {
-	try {
-		await browser.contextMenus.removeAll();
-		browser.contextMenus.create({
-			id: MENU_ID,
-			title: 'Ask Gloss about “%s”',
-			contexts: ['selection']
-		});
-	} catch (e) {
-		console.warn('gloss: context menu unavailable', e);
-	}
+/**
+ * The menu setup in progress or last finished. Install and startup fire
+ * together when the browser launches after an update; run side by side,
+ * both would clear the menu and then both add the item, so each run waits
+ * for the one before it.
+ */
+let menuSetup: Promise<void> = Promise.resolve();
+
+function setupMenu(): Promise<void> {
+	menuSetup = menuSetup.then(async () => {
+		try {
+			await browser.contextMenus.removeAll();
+			browser.contextMenus.create({
+				id: MENU_ID,
+				title: 'Ask Gloss about “%s”',
+				contexts: ['selection']
+			});
+		} catch (e) {
+			console.warn('gloss: context menu unavailable', e);
+		}
+	});
+	return menuSetup;
 }
 
 /** How long the tab's content script gets to take an ask before the ask window opens instead. */
