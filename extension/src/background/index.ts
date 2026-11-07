@@ -12,6 +12,8 @@ import {
 	PORT_NAME,
 	type AskWindowParams,
 	type BackgroundMessage,
+	type BackgroundPing,
+	type BackgroundPingReply,
 	type ClientMessage,
 	type ConnectionStatus
 } from '../shared/messages';
@@ -39,6 +41,14 @@ const LAUNCH_PROBE_MS = 2_000;
 const LAUNCH_PROBE_MAX_MS = 30_000;
 /** Safari, while Gloss is away: how often the background checks whether it is back. */
 const RECOVERY_PROBE_MS = 10_000;
+
+/**
+ * A random id for this run of the background script. Safari unloads the
+ * background page when it has been idle and loads it again on the next
+ * event, which gives it a new id. Clients compare it with the id their
+ * port was opened against to find out that their port is dead.
+ */
+const INSTANCE = randomId();
 
 const registry = new ClientRegistry();
 const transport: Transport =
@@ -307,12 +317,29 @@ browser.runtime.onConnect.addListener((port) => {
 			});
 	});
 	port.onDisconnect.addListener(() => registry.remove(entry));
+	port.postMessage({ type: 'welcome', instance: INSTANCE } satisfies BackgroundMessage);
 	port.postMessage({
 		type: 'event',
 		event: 'connection',
 		data: status
 	} satisfies BackgroundMessage);
 });
+
+// A one-shot message from a client starts this script if Safari has
+// unloaded it. The reply tells the client which run of the script is
+// alive, so it can replace a port opened against an earlier run.
+browser.runtime.onMessage.addListener((msg: unknown) => {
+	if ((msg as BackgroundPing | null)?.type !== 'background-ping') return undefined;
+	return Promise.resolve({ instance: INSTANCE } satisfies BackgroundPingReply);
+});
+
+function randomId(): string {
+	try {
+		return crypto.randomUUID();
+	} catch {
+		return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+	}
+}
 
 // ---- context menu and keyboard command ---------------------------------
 

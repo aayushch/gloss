@@ -29,6 +29,8 @@
 		456CC96B30872C5A0054D2B9 /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = 456CC95E30872C5A0054D2B9 /* options.html */; };
 		456CC96C30872C5A0054D2B9 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 456CC95F30872C5A0054D2B9 /* popup.css */; };
 		456CC96D30872C5A0054D2B9 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 456CC96030872C5A0054D2B9 /* content.js */; };
+		1E57A0010000000000000003 /* pageguard.js in Resources */ = {isa = PBXBuildFile; fileRef = 1E57A0010000000000000004 /* pageguard.js */; };
+		1E57A0010000000000000001 /* guard.js in Resources */ = {isa = PBXBuildFile; fileRef = 1E57A0010000000000000002 /* guard.js */; };
 		456CC96E30872C5A0054D2B9 /* options.css in Resources */ = {isa = PBXBuildFile; fileRef = 456CC96130872C5A0054D2B9 /* options.css */; };
 /* End PBXBuildFile section */
 
@@ -80,6 +82,8 @@
 		456CC95E30872C5A0054D2B9 /* options.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = options.html; path = ../../../extension/dist/safari/options.html; sourceTree = "<group>"; };
 		456CC95F30872C5A0054D2B9 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = popup.css; path = ../../../extension/dist/safari/popup.css; sourceTree = "<group>"; };
 		456CC96030872C5A0054D2B9 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = ../../../extension/dist/safari/content.js; sourceTree = "<group>"; };
+		1E57A0010000000000000004 /* pageguard.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = pageguard.js; path = ../../../extension/dist/safari/pageguard.js; sourceTree = "<group>"; };
+		1E57A0010000000000000002 /* guard.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = guard.js; path = ../../../extension/dist/safari/guard.js; sourceTree = "<group>"; };
 		456CC96130872C5A0054D2B9 /* options.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = options.css; path = ../../../extension/dist/safari/options.css; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -164,6 +168,8 @@
 				456CC95E30872C5A0054D2B9 /* options.html */,
 				456CC95F30872C5A0054D2B9 /* popup.css */,
 				456CC96030872C5A0054D2B9 /* content.js */,
+				1E57A0010000000000000004 /* pageguard.js */,
+				1E57A0010000000000000002 /* guard.js */,
 				456CC96130872C5A0054D2B9 /* options.css */,
 			);
 			name = Resources;
@@ -261,6 +267,8 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				456CC96D30872C5A0054D2B9 /* content.js in Resources */,
+				1E57A0010000000000000003 /* pageguard.js in Resources */,
+				1E57A0010000000000000001 /* guard.js in Resources */,
 				456CC96C30872C5A0054D2B9 /* popup.css in Resources */,
 				456CC96230872C5A0054D2B9 /* ask.js in Resources */,
 				456CC96930872C5A0054D2B9 /* icons in Resources */,
@@ -457,7 +465,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.2.6;
+				MARKETING_VERSION = 2.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -491,7 +499,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.2.6;
+				MARKETING_VERSION = 2.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -530,7 +538,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.2.6;
+				MARKETING_VERSION = 2.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -572,7 +580,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.2.6;
+				MARKETING_VERSION = 2.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

@@ -3,7 +3,9 @@
 
 // Messages between the background and the extension's own pages: content
 // scripts, the toolbar popup and the ask window. All of them connect a
-// runtime port and speak the same request/response/event shape.
+// runtime port and speak the same request/response/event shape. Safari
+// clients also send a `BackgroundPing` before each request; see
+// `shared/client.ts` for why.
 
 import type { BridgeError, ExtensionSettings } from './protocol';
 
@@ -35,8 +37,32 @@ export type ClientMessage =
 
 /** Background → client. */
 export type BackgroundMessage =
+	/**
+	 * The first message on every port. `instance` identifies the run of the
+	 * background script that accepted the port; see `BackgroundPing`.
+	 */
+	| { type: 'welcome'; instance: string }
 	| { type: 'response'; id: string; result?: unknown; error?: BridgeError }
 	| { type: 'event'; event: string; data: unknown };
+
+/**
+ * Sent by a client with `runtime.sendMessage`, outside its port. Unlike a
+ * port message, a one-shot runtime message starts the background script
+ * when the browser has unloaded it. The background answers with
+ * `BackgroundPingReply`.
+ */
+export interface BackgroundPing {
+	type: 'background-ping';
+}
+
+export interface BackgroundPingReply {
+	/**
+	 * A random id the background script picks each time it starts. If it
+	 * differs from the `instance` in the port's `welcome` message, the
+	 * background that accepted the port has since been unloaded.
+	 */
+	instance: string;
+}
 
 /** Sent to a tab's content script with `tabs.sendMessage`; answered with a promise. */
 export type TabMessage =
