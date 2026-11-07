@@ -74,6 +74,27 @@ pub fn targets() -> Vec<BrowserTarget> {
             Family::Chromium,
             support.join("Google/Chrome/NativeMessagingHosts"),
         );
+        // Each Chrome release channel keeps its own profile folder and reads
+        // host manifests only from it, so Beta, Dev and Canary each need
+        // their own copy.
+        add(
+            "chrome-beta",
+            "Google Chrome Beta",
+            Family::Chromium,
+            support.join("Google/Chrome Beta/NativeMessagingHosts"),
+        );
+        add(
+            "chrome-dev",
+            "Google Chrome Dev",
+            Family::Chromium,
+            support.join("Google/Chrome Dev/NativeMessagingHosts"),
+        );
+        add(
+            "chrome-canary",
+            "Google Chrome Canary",
+            Family::Chromium,
+            support.join("Google/Chrome Canary/NativeMessagingHosts"),
+        );
         add(
             "chromium",
             "Chromium",
@@ -120,6 +141,27 @@ pub fn targets() -> Vec<BrowserTarget> {
             Family::Chromium,
             config.join("google-chrome/NativeMessagingHosts"),
         );
+        // Each Chrome release channel keeps its own profile folder and reads
+        // host manifests only from it. The Dev channel's folder is named
+        // `google-chrome-unstable`.
+        add(
+            "chrome-beta",
+            "Google Chrome Beta",
+            Family::Chromium,
+            config.join("google-chrome-beta/NativeMessagingHosts"),
+        );
+        add(
+            "chrome-dev",
+            "Google Chrome Dev",
+            Family::Chromium,
+            config.join("google-chrome-unstable/NativeMessagingHosts"),
+        );
+        add(
+            "chrome-canary",
+            "Google Chrome Canary",
+            Family::Chromium,
+            config.join("google-chrome-canary/NativeMessagingHosts"),
+        );
         add(
             "chromium",
             "Chromium",
@@ -155,6 +197,8 @@ pub fn targets() -> Vec<BrowserTarget> {
     {
         // Windows browsers find the manifest through the registry; the files
         // live in the Gloss home folder and the registry keys point at them.
+        // Every Chrome release channel (Beta, Dev, Canary) reads the same
+        // registry key as stable Chrome, so the "chrome" entry covers them.
         let base = home.join(".gloss").join("native-hosts");
         add(
             "chrome",

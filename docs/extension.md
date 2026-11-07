@@ -18,7 +18,7 @@ Open **Settings › Browser extension** in Gloss for the buttons below.
 
 | Browser | How |
 | --- | --- |
-| Chrome, Brave, Edge, Arc, Vivaldi, Chromium | Install from the Chrome Web Store (the listing is unlisted; Gloss links to it). These browsers only install extensions from the store, so Gloss cannot do it for you. Gloss writes the native-messaging host file each browser needs at every launch. |
+| Chrome (including Beta, Dev and Canary), Brave, Edge, Arc, Vivaldi, Chromium | Install from the Chrome Web Store (the listing is unlisted; Gloss links to it). These browsers only install extensions from the store, so Gloss cannot do it for you. Gloss writes the native-messaging host file each browser needs at every launch. |
 | Firefox | Click **Install in Firefox**: Gloss hands Firefox the add-on it ships with (signed by Mozilla), and Firefox asks to install it. |
 | Safari | The extension is inside Gloss.app. Click **Turn on in Safari**: Safari opens its Settings › Extensions pane at Gloss, where you tick it; Gloss shows "Enabled" once that is done. A build that is not notarized needs "Allow unsigned extensions" in Safari's Develop menu. |
 
