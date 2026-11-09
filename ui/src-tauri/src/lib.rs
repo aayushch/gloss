@@ -239,12 +239,37 @@ fn install_firefox_extension(app: AppHandle) -> Result<(), String> {
     }
     #[cfg(target_os = "linux")]
     {
+        // Snap and Flatpak Firefox run sandboxed and cannot read the add-on
+        // where the package installed it (under /usr/lib), so each gets a
+        // copy in a folder its sandbox can see.
+        let home = dirs::home_dir();
+        let snap_dir = home
+            .as_ref()
+            .map(|h| h.join("snap/firefox/common"))
+            .filter(|_| std::path::Path::new("/snap/bin/firefox").exists());
+        let flatpak_dir = home
+            .as_ref()
+            .map(|h| h.join(".var/app/org.mozilla.firefox"))
+            .filter(|d| d.is_dir())
+            .map(|d| d.join("cache"));
+        let copy_into = |dir: &PathBuf| -> Result<String, String> {
+            std::fs::create_dir_all(dir).map_err(err)?;
+            let dest = dir.join("gloss.xpi");
+            std::fs::copy(&path, &dest).map_err(err)?;
+            Ok(dest.to_string_lossy().to_string())
+        };
         for exe in ["firefox", "firefox-esr", "flatpak"] {
             let mut cmd = std::process::Command::new(exe);
-            if exe == "flatpak" {
-                cmd.args(["run", "org.mozilla.firefox"]);
-            }
-            if cmd.arg(&xpi).spawn().is_ok() {
+            let file = match (exe, &snap_dir, &flatpak_dir) {
+                ("flatpak", _, Some(dir)) => {
+                    cmd.args(["run", "org.mozilla.firefox"]);
+                    copy_into(dir)?
+                }
+                ("flatpak", _, None) => continue,
+                ("firefox", Some(dir), _) => copy_into(dir)?,
+                _ => xpi.clone(),
+            };
+            if cmd.arg(&file).spawn().is_ok() {
                 return Ok(());
             }
         }

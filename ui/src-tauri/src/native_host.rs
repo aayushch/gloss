@@ -247,7 +247,20 @@ fn installed(target: &BrowserTarget) -> bool {
     if cfg!(target_os = "windows") {
         return true;
     }
-    target.dir.parent().map(|p| p.is_dir()).unwrap_or(false)
+    if target.dir.parent().map(|p| p.is_dir()).unwrap_or(false) {
+        return true;
+    }
+    // Snap and Flatpak Firefox keep their profiles inside the sandbox, so
+    // `~/.mozilla` may never appear. They still read host manifests from
+    // `~/.mozilla/native-messaging-hosts`, through the WebExtensions portal.
+    #[cfg(target_os = "linux")]
+    if target.id == "firefox" {
+        if let Some(home) = dirs::home_dir() {
+            return home.join("snap/firefox").is_dir()
+                || home.join(".var/app/org.mozilla.firefox").is_dir();
+        }
+    }
+    false
 }
 
 /// Writes the manifest for every installed browser, replacing a stale one.
