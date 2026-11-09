@@ -952,10 +952,14 @@ pub fn run() {
                 .separator()
                 .text("quit", "Quit Gloss")
                 .build()?;
+            // macOS tints the black glyph itself (template image); Linux draws
+            // the PNG as-is on a usually dark panel, so it gets a white copy.
+            #[cfg(target_os = "linux")]
+            let tray_png: &[u8] = include_bytes!("../icons/tray-light.png");
+            #[cfg(not(target_os = "linux"))]
+            let tray_png: &[u8] = include_bytes!("../icons/tray.png");
             TrayIconBuilder::with_id("main")
-                .icon(tauri::image::Image::from_bytes(include_bytes!(
-                    "../icons/tray.png"
-                ))?)
+                .icon(tauri::image::Image::from_bytes(tray_png)?)
                 .icon_as_template(true)
                 .tooltip("Gloss")
                 .menu(&menu)

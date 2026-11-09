@@ -9,7 +9,9 @@
 #                                 appearance; macOS 26 and newer pick the one
 #                                 matching the system appearance
 # design/icon/tray.svg            the menu bar glyph, black on transparent;
-#                                 macOS tints it as a template image
+#                                 macOS tints it as a template image. Linux
+#                                 shows tray icons as-is on a dark top bar,
+#                                 so it also gets a white copy (tray-light.png)
 # design/icon/gloss-small.svg     the mark without the text lines, for the
 #                                 16 and 32 px browser toolbar icons where
 #                                 the lines would blur into a smudge
@@ -39,6 +41,10 @@ find "$TMP/set" -maxdepth 1 -type f \( -name '*.png' -o -name '*.ico' \) -exec c
 echo "== menu bar glyph =="
 # 36 px for an 18 pt menu bar slot, so Retina displays get a crisp 2x image.
 rsvg-convert -w 36 -h 36 "$REPO_ROOT/design/icon/tray.svg" -o "$ICONS/tray.png"
+# Linux has no template images: the PNG is drawn untouched, and GNOME's and
+# most other panels are dark, so ship the glyph in white there.
+sed 's/fill="#000"/fill="#fff"/' "$REPO_ROOT/design/icon/tray.svg" > "$TMP/tray-light.svg"
+rsvg-convert -w 36 -h 36 "$TMP/tray-light.svg" -o "$ICONS/tray-light.png"
 
 echo "== browser extension =="
 EXT="$REPO_ROOT/extension/icons"
