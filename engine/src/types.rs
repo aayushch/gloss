@@ -370,6 +370,14 @@ pub struct Clarification {
     /// Whether the extension last found the web anchor on the page.
     #[serde(default)]
     pub anchor_state: Option<AnchorState>,
+    /// For an ask made on a web page: the key of the view of the page it
+    /// was made on (see `pages::page_keys`). None for an ask stored before
+    /// views were recorded.
+    #[serde(default)]
+    pub view_key: Option<String>,
+    /// The browser URL of that view, for opening the ask where it was made.
+    #[serde(default)]
+    pub view_url: Option<String>,
 }
 
 /// The highlighted text with a little of what surrounds it, in the W3C Web
@@ -454,9 +462,10 @@ pub struct AskContext {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Page {
-    /// Canonical URL, see `pages::url_key`.
+    /// Canonical URL, see `pages::page_keys`.
     pub url_key: String,
-    /// The URL as last seen in the browser.
+    /// The URL as last seen in the browser, without a fragment that only
+    /// selects a view of the page.
     pub url: String,
     pub title: String,
     pub favicon_url: Option<String>,
@@ -481,6 +490,19 @@ pub struct PageDetail {
     pub conversation: Conversation,
 }
 
+/// What a browser URL maps to in Gloss.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageLookup {
+    /// Canonical key of the page, see `pages::page_keys`.
+    pub url_key: String,
+    /// Key of the view of the page the URL shows.
+    pub view_key: String,
+    /// None when Gloss has not stored this page yet, so it has no
+    /// conversation or asks.
+    pub page: Option<PageDetail>,
+}
+
 /// What the browser knows about the page it is on.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -503,6 +525,12 @@ pub struct PageAskRequest {
     #[serde(default)]
     pub context: AskContext,
     pub question: String,
+    /// The text the reader selected, when the browser reported it. It
+    /// becomes the ask's quote in place of the anchor's `exact` text, which
+    /// can hold text the reader did not select, such as the line numbers
+    /// between the lines of a diff.
+    #[serde(default)]
+    pub quote: Option<String>,
     /// The page's readable text, when the extension may send it.
     #[serde(default)]
     pub page_text: Option<String>,
@@ -515,6 +543,8 @@ pub struct PageAskRequest {
 #[serde(rename_all = "camelCase")]
 pub struct PageAskResult {
     pub url_key: String,
+    /// Key of the view of the page the ask was made on.
+    pub view_key: String,
     pub conversation_id: String,
     pub clarification: Option<Clarification>,
     pub user_turn: Turn,
@@ -740,6 +770,9 @@ pub enum ClarificationTarget {
         anchor: WebAnchor,
         #[serde(default)]
         context: AskContext,
+        /// Key of the view of the page the ask is made on.
+        #[serde(default, rename = "viewKey")]
+        view_key: Option<String>,
     },
 }
 

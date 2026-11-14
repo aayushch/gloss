@@ -12,9 +12,11 @@ import type {
 import {
 	agentsIn,
 	anchorLabel,
+	hasViewHeadings,
 	hostOf,
 	pageQuestions,
 	pageThreads,
+	pageViews,
 	projectItems,
 	splitByProject,
 	splitForRail,
@@ -177,6 +179,46 @@ describe('page threads', () => {
 		expect(threads.map((t) => t.clarification.id)).toEqual(['w1', 'w2']);
 		expect(threads[0].turns).toHaveLength(1);
 		expect(threads[0].turns[0].reply?.id).toBe('a2');
+	});
+
+	it('groups the asks by the view of the page they were made on', () => {
+		const page = 'https://git.example.com/pr/7/diff';
+		const ask = (id: string, viewKey?: string, viewUrl?: string) => ({
+			id,
+			anchorBlockId: '',
+			quote: id,
+			parentId: null,
+			webAnchor: web,
+			anchorState: null,
+			viewKey,
+			viewUrl
+		});
+		const diff = {
+			id: 'd',
+			pageKey: page,
+			turns: [],
+			clarifications: [
+				ask('a', `${page}#src/Foo.java`, `${page}#src%2FFoo.java`),
+				ask('b', `${page}#src/Bar.java`, `${page}#src/Bar.java`),
+				ask('c', `${page}#src/Foo.java`, `${page}#src/Foo.java`),
+				ask('old'),
+				ask('plain', page, `${page}?x=1`)
+			]
+		} as unknown as Conversation;
+		const views = pageViews(diff);
+		expect(
+			views.map((v) => [v.fragment, v.url, v.asks.map((t) => t.clarification.id).join()])
+		).toEqual([
+			['src/Foo.java', `${page}#src%2FFoo.java`, 'a,c'],
+			['src/Bar.java', `${page}#src/Bar.java`, 'b'],
+			// An ask stored without a view joins the asks made at the page URL.
+			['', `${page}?x=1`, 'old,plain']
+		]);
+		expect(hasViewHeadings(views)).toBe(true);
+		expect(hasViewHeadings(views.slice(0, 1))).toBe(true);
+		// A page asked about only at its plain URL has one view and no headings.
+		expect(hasViewHeadings(pageViews(pageConv))).toBe(false);
+		expect(pageViews(pageConv)[0].asks.map((t) => t.clarification.id)).toEqual(['w1', 'w2']);
 	});
 
 	it('page questions are the turns outside any ask', () => {

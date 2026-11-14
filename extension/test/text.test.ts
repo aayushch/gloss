@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from 'vitest';
-import { TextIndex, normalise } from '../src/content/text';
+import { TextIndex, lineRuns, normalise } from '../src/content/text';
 
 function page(html: string): TextIndex {
 	document.body.innerHTML = html;
@@ -74,5 +74,41 @@ describe('TextIndex', () => {
 
 	it('normalise collapses and trims', () => {
 		expect(normalise('  a \n b  ')).toBe('a b');
+	});
+});
+
+describe('lineRuns', () => {
+	// A code editor's lines with its line numbers between them.
+	const text = '3 Order order = load(id); 4 if (order == null) { 5 return null; 6 }';
+
+	it('finds lines that have other text between them', () => {
+		const lines = ['order = load(id);', 'if (order == null) {', 'return'];
+		const start = text.indexOf('order = load');
+		const end = text.indexOf('return') + 'return'.length;
+		expect(lineRuns(text, lines, 10)).toEqual([{ start, end }]);
+	});
+
+	it('gives up when a line is further away than the gap allows', () => {
+		expect(lineRuns(text, ['load(id);', 'return null;'], 10)).toEqual([]);
+		expect(lineRuns(text, ['load(id);', 'return null;'], 40)).toHaveLength(1);
+	});
+
+	it('returns one run for each place the first line starts a full match', () => {
+		const twice = `${text} ${text}`;
+		const runs = lineRuns(twice, ['if (order == null) {', 'return null;'], 10);
+		expect(runs.map((r) => twice.slice(r.start, r.end))).toEqual([
+			'if (order == null) { 5 return null;',
+			'if (order == null) { 5 return null;'
+		]);
+		// Limited to the first copy.
+		expect(
+			lineRuns(twice, ['if (order == null) {', 'return null;'], 10, 0, text.length)
+		).toHaveLength(1);
+	});
+
+	it('finds nothing when the lines are out of order or missing', () => {
+		expect(lineRuns(text, ['return null;', 'if (order == null) {'], 100)).toEqual([]);
+		expect(lineRuns(text, ['if (order == null) {', 'throw'], 100)).toEqual([]);
+		expect(lineRuns(text, [], 100)).toEqual([]);
 	});
 });

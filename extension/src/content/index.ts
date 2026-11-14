@@ -40,7 +40,7 @@ import {
 	type TurnEventEnvelope,
 	type WebAnchor
 } from '../shared/protocol';
-import { describe, resolve } from './anchor';
+import { describe, resolve, resolveOnOtherView } from './anchor';
 import { controlSelection, isHiddenControl } from './control';
 import { isEditing } from './editable';
 import { Dock, fractionOf } from './dock';
@@ -54,16 +54,18 @@ import {
 	applyTurnEvent,
 	clearPage,
 	loadPage,
+	madeOnThisView,
 	orderedAskIds,
 	removeAsk,
 	setAnchor,
 	setOpen,
+	shownAskCount,
 	type AskAnchorState,
 	type AskEntry
 } from './state';
 import { passageY, scrollToSpot, spotOf } from './spot';
 import styles from './styles.css';
-import { HOST_TAG, normalise, occurrences, TextIndex } from './text';
+import { HOST_TAG, lineRuns, normalise, occurrences, TextIndex, type Offsets } from './text';
 import type { Actions } from './ui/actions';
 import App from './ui/App.svelte';
 import { rectOf, UiStore } from './ui/store.svelte';
@@ -91,11 +93,31 @@ const SCROLL_BACK_RETRY_MS = [100, 400, 1_000];
 const NAV_HEIGHT_KEY = 'navigatorHeight';
 /** How long the composer waits for Gloss to come up after "Open Gloss". */
 const LAUNCH_WAIT_MS = 45_000;
+/**
+ * The most page text allowed between two lines of a code editor's
+ * selection (see `lineRuns` in text.ts). It covers a gutter that shows
+ * line numbers and blame details beside each line.
+ */
+const EDITOR_LINE_GAP_CHARS = 200;
+/** How long a note waits to be shown after the URL was changed to the view it was made on. */
+const VIEW_FOCUS_WAIT_MS = 8_000;
 
 interface PendingAsk {
 	anchor: WebAnchor;
 	range: Range;
 	context: AskContext;
+	/** The quote shown in the composer and stored with the ask (see `quoteOf`). */
+	quote: string;
+}
+
+/** A selection Gloss can ask about. */
+interface Selected {
+	range: Range;
+	/**
+	 * The selected text as the browser or the code editor reported it, or
+	 * null when only the range is known.
+	 */
+	text: string | null;
 }
 
 class ContentApp {
@@ -113,12 +135,26 @@ class ContentApp {
 	private indexDirty = true;
 	private mutations: MutationObserver | null = null;
 	private pending: PendingAsk | null = null;
-	/** The selection the pill was last shown for, kept for `askRange`. */
-	private pillRange: Range | null = null;
+	/** The selection the pill was last shown for, kept for `askSelection`. */
+	private pillSelection: Selected | null = null;
 	/** Where the mouse was last pressed or released, to pick among repeated passages. */
 	private pointer: { x: number; y: number } | null = null;
 	private launchTimer: ReturnType<typeof setTimeout> | null = null;
 	private loading: Promise<void> | null = null;
+	/**
+	 * True from a URL change until the page has loaded from Gloss again.
+	 * The first search for passages after a URL change runs while the page
+	 * may still show its old content (see `resolvePending`).
+	 */
+	private urlChanged = false;
+	/** The ask count last sent to the background, which shows it on the toolbar badge. */
+	private sentAskCount = 0;
+	/**
+	 * A note to show once its passage is found, set when the URL was changed
+	 * to the view the note was made on (see `goToViewOf`). `until` is when
+	 * to stop waiting, in epoch milliseconds.
+	 */
+	private focusWanted: { id: string; until: number } | null = null;
 	private retryTimers: ReturnType<typeof setTimeout>[] = [];
 	private reresolveTimer: ReturnType<typeof setTimeout> | null = null;
 	private missingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -283,17 +319,23 @@ class ContentApp {
 		this.client.close();
 	}
 
-	/** Tells the UI the page state changed and shows or hides the note navigator to match. */
+	/**
+	 * Tells the UI the page state changed, shows or hides the note navigator
+	 * to match, and sends the background the new ask count when it changed.
+	 * Asks whose passage is on another view of the page are not counted.
+	 */
 	private bump(): void {
 		this.store.bump();
 		const { lastAskId } = this.store;
 		if (lastAskId && !this.store.page.asks.has(lastAskId)) this.store.lastAskId = null;
-		if (!this.disposed && this.store.page.asks.size > 0 && !this.navigatorHidden) {
+		const shown = shownAskCount(this.store.page);
+		if (!this.disposed && shown > 0 && !this.navigatorHidden) {
 			this.dock.show();
 		} else {
 			this.dock.hide();
 			this.store.dock = null;
 		}
+		if (!this.disposed && shown !== this.sentAskCount) this.subscribe();
 	}
 
 	// ---- page loading and anchoring ----------------------------------
@@ -311,70 +353,109 @@ class ContentApp {
 		return this.index;
 	}
 
-	/** Fetches the page from Gloss and anchors its asks; concurrent calls share one fetch. */
+	/**
+	 * Fetches the page from Gloss and anchors its asks; concurrent calls
+	 * share one fetch. Gloss answers for the URL the fetch was sent with. If
+	 * the URL has changed by the time the answer arrives, the answer names
+	 * another view or another page, so it is dropped and the page is
+	 * fetched again for the new URL.
+	 */
 	private loadPage(): Promise<void> {
 		if (this.loading) return this.loading;
+		const meta = this.pageMeta();
 		this.loading = (async () => {
 			let result: GetPageResult;
 			try {
-				result = await this.client.request<GetPageResult>('getPage', this.pageMeta());
+				result = await this.client.request<GetPageResult>('getPage', meta);
 			} catch (e) {
 				const f = failureOf(e);
 				if (f.code !== 'app_not_running' && f.code !== 'internal' && f.code !== 'protocol')
 					console.warn('gloss: getPage failed', f.message);
 				return;
 			}
-			if (this.disposed) return;
+			if (this.disposed || location.href !== meta.url) return;
 			const removed = new Set(this.store.page.asks.keys());
 			loadPage(this.store.page, result);
 			for (const id of this.store.page.asks.keys()) removed.delete(id);
 			for (const id of removed) this.forgetAsk(id);
 			this.subscribe();
 			this.bump();
-			this.resolvePending();
+			const settling = this.urlChanged;
+			this.urlChanged = false;
+			this.resolvePending(settling);
 			this.scheduleOrphanRetries();
-		})().finally(() => (this.loading = null));
+		})().finally(() => {
+			this.loading = null;
+			if (!this.disposed && location.href !== meta.url) void this.loadPage();
+		});
 		return this.loading;
 	}
 
 	private subscribe(): void {
 		const page = this.store.page;
+		this.sentAskCount = shownAskCount(page);
 		this.client.subscribe({
 			urlKey: page.urlKey,
 			conversationId: page.conversationId,
-			askCount: page.asks.size
+			askCount: this.sentAskCount
 		});
 	}
 
-	/** Resolves every ask that has no anchor yet and reports the states to Gloss. */
-	private resolvePending(): void {
+	/**
+	 * Resolves every ask that has no anchor yet and reports the states to
+	 * Gloss. `settling` is true for the first search after a URL change. A
+	 * page that changes its URL without loading again swaps its content a
+	 * moment later, so that search may run on the old content. It therefore
+	 * leaves out the approximate search, which could place a passage in the
+	 * old content, and it does not report an ask as an orphan. The searches
+	 * `scheduleOrphanRetries` runs afterwards do both.
+	 */
+	private resolvePending(settling = false): void {
 		const states: Record<string, AskAnchorState> = {};
 		for (const [id, entry] of this.store.page.asks) {
 			if (entry.state !== 'pending') continue;
-			this.resolveOne(id, entry);
-			states[id] = entry.state;
+			this.resolveOne(id, entry, !settling);
+			// `resolveOne` has replaced the `pending` state.
+			const state = entry.state as AskAnchorState;
+			if (!settling || state !== 'orphan') states[id] = state;
 		}
 		this.report(states);
 		this.bump();
+		this.showWantedNote();
 	}
 
 	/**
 	 * Resolves one ask against the current index and updates its highlight
-	 * and glyph. An ask not found becomes `detached` when its passage was
-	 * found earlier on this visit (the page removed its text, as pages that
-	 * render only what is on screen do), else an orphan. `approximate`
-	 * false skips the costly approximate search (see `resolve`).
+	 * and glyph.
+	 *
+	 * An ask made on the view being shown is searched for with `resolve`.
+	 * `approximate` false skips the costly approximate search there. An ask
+	 * made on another view of the page (see `madeOnThisView`) is searched
+	 * for with `resolveOnOtherView`, which accepts the passage only with
+	 * its recorded surroundings.
+	 *
+	 * An ask of this view that is not found becomes `detached` when its
+	 * passage was found earlier on this visit: the page removed its text,
+	 * as pages that render only what is on screen do. Otherwise it becomes
+	 * an orphan.
+	 *
+	 * An ask of another view that is not found always becomes `elsewhere`,
+	 * also when its passage was found a moment ago. A page that switches
+	 * views keeps showing the old view's content for a moment after the URL
+	 * changes, and the old view's asks are found in that content until the
+	 * page replaces it.
 	 */
 	private resolveOne(id: string, entry: AskEntry, approximate = true): void {
 		const anchor = entry.clarification.webAnchor;
 		if (!anchor) return;
 		const index = this.textIndex();
-		const found = resolve(anchor, index, approximate);
+		const own = madeOnThisView(this.store.page, entry.clarification);
+		const found = own ? resolve(anchor, index, approximate) : resolveOnOtherView(anchor, index);
 		if (entry.range) this.highlights.remove(entry.range);
 		if (!found) {
 			const seen =
 				entry.state === 'anchored' || entry.state === 'fuzzy' || entry.state === 'detached';
-			setAnchor(this.store.page, id, null, seen ? 'detached' : 'orphan');
+			setAnchor(this.store.page, id, null, !own ? 'elsewhere' : seen ? 'detached' : 'orphan');
 			this.glyphs.remove(id);
 			if (this.store.popover?.askId === id) this.store.anchorRect = null;
 			return;
@@ -393,11 +474,11 @@ class ContentApp {
 		}
 	}
 
-	/** Tells Gloss the anchor states found; `detached` and `pending` stay on this page. */
+	/** Tells Gloss the anchor states found; `detached`, `pending` and `elsewhere` stay on this page. */
 	private report(all: Record<string, AskAnchorState>): void {
 		const states: Record<string, AnchorState> = {};
 		for (const [id, state] of Object.entries(all))
-			if (state !== 'detached' && state !== 'pending') states[id] = state;
+			if (state !== 'detached' && state !== 'pending' && state !== 'elsewhere') states[id] = state;
 		if (!Object.keys(states).length) return;
 		this.client.request('reportAnchors', { states }).catch(() => {});
 	}
@@ -416,9 +497,9 @@ class ContentApp {
 		}
 	}
 
+	/** True when an ask's passage is not on the page now and may appear as the page changes. */
 	private hasMissing(): boolean {
-		for (const entry of this.store.page.asks.values())
-			if (entry.state === 'orphan' || entry.state === 'detached') return true;
+		for (const entry of this.store.page.asks.values()) if (isMissing(entry.state)) return true;
 		return false;
 	}
 
@@ -437,12 +518,12 @@ class ContentApp {
 		}, MISSING_SETTLE_MS);
 	}
 
-	/** Looks for every orphan and detached passage again, with the exact stages only. */
+	/** Looks for every orphan, detached and `elsewhere` passage again, without the approximate search. */
 	private retryMissing(): void {
 		if (this.disposed) return;
 		const states: Record<string, AskAnchorState> = {};
 		for (const [id, entry] of this.store.page.asks) {
-			if (entry.state !== 'orphan' && entry.state !== 'detached') continue;
+			if (!isMissing(entry.state)) continue;
 			const before = entry.state;
 			this.resolveOne(id, entry, false);
 			if (entry.state !== before) states[id] = entry.state;
@@ -450,15 +531,22 @@ class ContentApp {
 		if (!Object.keys(states).length) return;
 		this.report(states);
 		this.bump();
+		this.showWantedNote();
 	}
 
-	/** Tries orphans again at 1 s, 3 s and 6 s after a load. */
+	/**
+	 * Tries orphans again at 1 s, 3 s and 6 s after a load, with the
+	 * approximate search. Each try reports the asks it found. The last try
+	 * also reports the asks that are still orphans, because the first
+	 * search after a URL change does not report them (see `resolvePending`).
+	 */
 	private scheduleOrphanRetries(): void {
 		for (const t of this.retryTimers) clearTimeout(t);
 		this.retryTimers = [];
 		let delay = 0;
-		for (const step of ORPHAN_RETRY_MS) {
+		ORPHAN_RETRY_MS.forEach((step, i) => {
 			delay += step;
+			const last = i === ORPHAN_RETRY_MS.length - 1;
 			this.retryTimers.push(
 				setTimeout(() => {
 					if (this.disposed) return;
@@ -466,13 +554,14 @@ class ContentApp {
 					for (const [id, entry] of this.store.page.asks) {
 						if (entry.state !== 'orphan') continue;
 						this.resolveOne(id, entry);
-						if (entry.state !== 'orphan') states[id] = entry.state;
+						if (entry.state !== 'orphan' || last) states[id] = entry.state;
 					}
 					this.report(states);
 					this.bump();
+					this.showWantedNote(last);
 				}, delay)
 			);
-		}
+		});
 	}
 
 	/** An ask's range died with a DOM change; resolve it again shortly. */
@@ -493,6 +582,7 @@ class ContentApp {
 			}
 			this.report(states);
 			this.bump();
+			this.showWantedNote();
 		}, 300);
 	}
 
@@ -503,6 +593,11 @@ class ContentApp {
 		if (this.store.popover?.askId === id) this.closePopover();
 	}
 
+	/**
+	 * The URL changed without a page load. The new URL can be another page
+	 * or another view of the same page, so every ask is taken off the page
+	 * and placed again once Gloss has answered for the new URL.
+	 */
 	private onUrlChange(): void {
 		this.hidePill();
 		this.closePopover();
@@ -512,6 +607,7 @@ class ContentApp {
 		this.highlights.clear();
 		this.glyphs.clear();
 		this.indexDirty = true;
+		this.urlChanged = true;
 		for (const [id, entry] of this.store.page.asks) {
 			setAnchor(this.store.page, id, null, 'pending');
 			entry.spot = null;
@@ -540,7 +636,7 @@ class ContentApp {
 	 * they `asked` for it themselves through the context menu or the
 	 * keyboard shortcut.
 	 */
-	private selectedRange(asked = false): Range | null {
+	private currentSelection(asked = false): Selected | null {
 		const sel = document.getSelection();
 		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return this.editorSelection();
 		const range = sel.getRangeAt(0);
@@ -550,7 +646,7 @@ class ContentApp {
 		if (this.host.contains(node)) return null;
 		if (!asked && isEditing(node)) return null;
 		if (normalise(range.toString()).length < MIN_SELECTION_CHARS) return null;
-		return range;
+		return { range, text: sel.toString() };
 	}
 
 	/**
@@ -562,12 +658,13 @@ class ContentApp {
 	 * outward from the textarea so the editor that has focus wins over
 	 * another showing the same lines.
 	 */
-	private editorSelection(): Range | null {
+	private editorSelection(): Selected | null {
 		const active = document.activeElement;
 		const text = controlSelection(active);
 		if (text === null || normalise(text).length < MIN_SELECTION_CHARS) return null;
 		if (!isHiddenControl(active as HTMLElement)) return null;
-		return this.rangeOfText(text, active as HTMLElement);
+		const range = this.rangeOfText(text, active as HTMLElement);
+		return range && { range, text };
 	}
 
 	private trackPointer(e: MouseEvent): void {
@@ -576,24 +673,20 @@ class ContentApp {
 
 	private checkSelection(): void {
 		if (this.disposed || this.store.composer) return;
-		const range = this.selectedRange();
-		if (!range) {
+		const selected = this.currentSelection();
+		const rect = selected && lastRect(selected.range);
+		if (!selected || !rect) {
 			this.hidePill();
 			return;
 		}
-		const rect = lastRect(range);
-		if (!rect) {
-			this.hidePill();
-			return;
-		}
-		this.pillRange = range.cloneRange();
+		this.pillSelection = { range: selected.range.cloneRange(), text: selected.text };
 		this.store.pill = { x: rect.right, y: rect.bottom };
 	}
 
 	/** Takes the pill down along with the selection it was shown for. */
 	private hidePill(): void {
 		this.store.pill = null;
-		this.pillRange = null;
+		this.pillSelection = null;
 	}
 
 	/**
@@ -605,36 +698,55 @@ class ContentApp {
 	 * selection wherever it is, or else the one place on the page where the
 	 * text the browser reported as selected occurs.
 	 */
-	private askRange(asked: { selectionText: string } | null): Range | null {
-		const live = this.selectedRange(asked !== null);
+	private askSelection(asked: { selectionText: string } | null): Selected | null {
+		const live = this.currentSelection(asked !== null);
 		if (live) return live;
-		if (asked) return this.rangeOfText(asked.selectionText);
-		const kept = this.pillRange;
-		if (!kept || kept.collapsed || !document.contains(kept.commonAncestorContainer)) return null;
+		if (asked) {
+			// Browsers cut a long `selectionText` short, so it is not kept as the selected text.
+			const range = this.rangeOfText(asked.selectionText);
+			return range && { range, text: null };
+		}
+		const kept = this.pillSelection;
+		if (!kept) return null;
+		const { range } = kept;
+		if (range.collapsed || !document.contains(range.commonAncestorContainer)) return null;
 		return kept;
 	}
 
 	/**
-	 * The range of `text` on the page, or null when it occurs nowhere. The
-	 * search starts in the smallest ancestor of `near` whose text holds it
-	 * and widens to the whole page. Among several occurrences, the one
-	 * closest to where the mouse was last pressed or released wins; a
-	 * diff shows an unchanged line on both sides, and the reader selected
-	 * one of them.
+	 * The range of `text` on the page, or null when it is not there.
+	 *
+	 * The text is looked for as one unbroken run of page text first. Text
+	 * of several lines that is not found that way is looked for line by
+	 * line (see `lineRuns` in text.ts), with blank lines left out. A code
+	 * editor reports a selection of several lines as those lines alone,
+	 * while the page text has the editor's line numbers between them.
+	 *
+	 * The search starts in the smallest ancestor of `near` whose text holds
+	 * `text` and widens to the whole page. Among several places, the one
+	 * closest to where the mouse was last pressed or released wins; a diff
+	 * shows an unchanged line on both sides, and the reader selected one of
+	 * them.
 	 */
 	private rangeOfText(text: string, near: Element | null = null): Range | null {
 		const needle = normalise(text);
 		if (needle.length < MIN_SELECTION_CHARS) return null;
 		const index = this.textIndex();
-		let found: number[] = [];
+		const lines = text.split('\n').map(normalise).filter(Boolean);
+		const find = (from?: number, to?: number): Offsets[] => {
+			const whole = occurrences(index.text, needle, from, to);
+			if (whole.length || lines.length < 2)
+				return whole.map((start) => ({ start, end: start + needle.length }));
+			return lineRuns(index.text, lines, EDITOR_LINE_GAP_CHARS, from, to);
+		};
+		let found: Offsets[] = [];
 		for (let el: Element | null = near; el && !found.length; el = el.parentElement) {
 			const offs = index.ofElement(el);
-			if (offs) found = occurrences(index.text, needle, offs.start, offs.end);
+			if (offs) found = find(offs.start, offs.end);
 		}
-		if (!found.length) found = occurrences(index.text, needle);
+		if (!found.length) found = find();
 		if (!found.length) return null;
-		const ranges = found.map((s) => index.toRange(s, s + needle.length));
-		return this.nearestToPointer(ranges);
+		return this.nearestToPointer(found.map((o) => index.toRange(o.start, o.end)));
 	}
 
 	/** Of several ranges, the one whose box is closest to the last mouse position; the first when none is known. */
@@ -692,8 +804,8 @@ class ContentApp {
 	 * keyboard shortcut, with the text the browser reported as selected.
 	 */
 	private openComposer(asked: { selectionText: string } | null = null): void {
-		const range = this.askRange(asked);
-		if (!range) {
+		const selected = this.askSelection(asked);
+		if (!selected) {
 			this.store.showToast(
 				asked?.selectionText
 					? 'Gloss could not find that selection on the page.'
@@ -702,27 +814,29 @@ class ContentApp {
 			return;
 		}
 		const index = this.textIndex();
-		const anchor = describe(range, index);
+		const anchor = describe(selected.range, index);
 		if (!anchor || !anchor.position) {
 			this.store.showToast('That selection has no page text Gloss can anchor to.');
 			return;
 		}
 		const { start, end } = anchor.position;
-		const captured = range.cloneRange();
+		const captured = selected.range.cloneRange();
+		const quote = quoteOf(anchor.quote.exact, selected.text);
 		this.pending = {
 			anchor,
 			range: captured,
 			context: {
 				before: index.text.slice(Math.max(0, start - CONTEXT_CHARS), start),
 				after: index.text.slice(end, end + CONTEXT_CHARS)
-			}
+			},
+			quote
 		};
 		const rect = lastRect(captured) ?? captured.getBoundingClientRect();
 		this.hidePill();
 		this.closePopover();
 		this.highlights.setActive(captured);
 		this.store.composer = {
-			quote: anchor.quote.exact,
+			quote,
 			rect: rectOf(rect),
 			text: '',
 			phase: 'idle',
@@ -751,6 +865,7 @@ class ContentApp {
 			anchor: pending.anchor,
 			context: pending.context,
 			question: text,
+			quote: pending.quote === pending.anchor.quote.exact ? null : pending.quote,
 			pageText: this.settings.sendPageText ? this.pageText() : null,
 			private: inPrivateContext()
 		};
@@ -856,6 +971,7 @@ class ContentApp {
 	private focusAsk(id: string, warnOrphan: boolean): boolean {
 		const entry = this.store.page.asks.get(id);
 		if (!entry) return false;
+		if (entry.state === 'elsewhere' && this.goToViewOf(id, entry)) return true;
 		if (entry.range && (entry.state === 'anchored' || entry.state === 'fuzzy')) {
 			this.glyphs.scrollTo(id);
 		} else if (entry.state === 'detached' && entry.spot && scrollToSpot(entry.spot)) {
@@ -872,6 +988,62 @@ class ContentApp {
 		// catches the final position when the scroll fired no events.
 		setTimeout(() => this.updateAnchorRect(), 400);
 		return true;
+	}
+
+	/**
+	 * Changes the URL to the view an `elsewhere` ask was made on, and has
+	 * the note shown once its passage is found there (see `showWantedNote`).
+	 * Only the fragment of the URL is changed, so the browser does not load
+	 * the page again. The page shows the other view itself, as it does when
+	 * the reader follows a link to that fragment. An ask stored without a
+	 * view URL was made at the page's URL without a fragment. Returns false
+	 * when the URL already has the ask's fragment, so there is no other
+	 * view to go to.
+	 */
+	private goToViewOf(id: string, entry: AskEntry): boolean {
+		let hash = '';
+		try {
+			if (entry.clarification.viewUrl) hash = new URL(entry.clarification.viewUrl).hash;
+		} catch {
+			// A stored URL that does not parse counts as having no fragment.
+		}
+		if (hash === location.hash) return false;
+		// The searches scheduled for the view being left would end the wait early.
+		for (const t of this.retryTimers) clearTimeout(t);
+		this.retryTimers = [];
+		this.focusWanted = { id, until: Date.now() + VIEW_FOCUS_WAIT_MS };
+		location.hash = hash;
+		return true;
+	}
+
+	/**
+	 * Shows the note `goToViewOf` set in `focusWanted`. It is called after
+	 * every search for passages.
+	 *   - If the note's passage is on the page, the note is shown.
+	 *   - If the passage is missing and `final` is false, the note keeps
+	 *     waiting for a later search.
+	 *   - If the passage is missing and `final` is true (the last search
+	 *     after a load ran), the note is shown without a passage. A note
+	 *     still on another view gets a toast instead, since the page did
+	 *     not show the note's view.
+	 *   - If the wait is over (`VIEW_FOCUS_WAIT_MS`), nothing is shown.
+	 */
+	private showWantedNote(final = false): void {
+		const wanted = this.focusWanted;
+		if (!wanted) return;
+		const entry = this.store.page.asks.get(wanted.id);
+		if (!entry || Date.now() >= wanted.until) {
+			this.focusWanted = null;
+			return;
+		}
+		const placed = !!entry.range && (entry.state === 'anchored' || entry.state === 'fuzzy');
+		if (!placed && !final) return;
+		this.focusWanted = null;
+		if (entry.state === 'elsewhere') {
+			this.store.showToast('This note is on another view of the page.');
+			return;
+		}
+		this.focusAsk(wanted.id, true);
 	}
 
 	/** Shows the note `delta` places from the current one in reading order, wrapping at either end. */
@@ -906,8 +1078,11 @@ class ContentApp {
 	private onDocumentClick(e: MouseEvent): void {
 		if (e.button !== 0 || e.defaultPrevented || !this.glyphs) return;
 		if (e.composedPath().includes(this.host)) return;
+		// The click that ends a selection, in the page or in a code editor's
+		// hidden textarea, is not a click on a note.
 		const sel = document.getSelection();
 		if (sel && !sel.isCollapsed) return;
+		if (controlSelection(document.activeElement) !== null) return;
 		const target = e.target as Element | null;
 		if (target?.closest('a, button, input, textarea, select, [contenteditable]')) return;
 		const id = this.glyphs.askAt(e.clientX, e.clientY);
@@ -1050,9 +1225,15 @@ class ContentApp {
 				sendResponse({ ok: true });
 				return;
 			case 'navigator-state': {
+				const here: string[] = [];
+				const elsewhere: string[] = [];
+				for (const [id, entry] of this.store.page.asks)
+					(entry.state === 'elsewhere' ? elsewhere : here).push(id);
 				const reply: NavigatorState = {
 					hidden: this.navigatorHidden,
-					notes: this.store.page.asks.size
+					notes: here.length,
+					here,
+					elsewhere
 				};
 				sendResponse(reply);
 				return;
@@ -1073,6 +1254,27 @@ class ContentApp {
 			}
 		}
 	};
+}
+
+/** True for the states of an ask whose passage is not on the page now: `orphan`, `detached` and `elsewhere`. */
+function isMissing(state: AskAnchorState): boolean {
+	return state === 'orphan' || state === 'detached' || state === 'elsewhere';
+}
+
+/**
+ * The quote shown for an ask and sent to the agent. `exact` is the page
+ * text inside the selected range, as the text index holds it. `reported`
+ * is the same selection as the browser or the code editor reported it, or
+ * null when it reported none. Each of the two can hold text the reader did
+ * not select. The index includes text that cannot be selected, such as the
+ * line numbers between the lines of a diff. The browser includes the text
+ * of elements the index skips, such as ones hidden from screen readers.
+ * The shorter of the two holds less of that extra text, so it is the one
+ * returned.
+ */
+function quoteOf(exact: string, reported: string | null): string {
+	const text = reported ? normalise(reported) : '';
+	return text && text.length < exact.length ? text : exact;
 }
 
 /** The last non-empty client rect of a range, where the pill and glyph sit. */

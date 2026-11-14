@@ -429,22 +429,25 @@ impl Engine {
 
     // ── pages ───────────────────────────────────────────────────────────
 
-    /// The page a browser URL maps to: its key, and its detail when Gloss
-    /// has it. With `touch`, a known page's URL, title, favicon and
-    /// last-seen time are refreshed from `meta`.
-    pub fn get_page_by_url(
-        &self,
-        meta: &PageMeta,
-        touch: bool,
-    ) -> Result<(String, Option<PageDetail>)> {
-        let url_key = pages::url_key(&meta.url)?;
-        let Some(page) = self.store.get_page(&url_key)? else {
-            return Ok((url_key, None));
+    /// The page a browser URL maps to: the keys of the page and of the view
+    /// the URL shows, and the page's detail when Gloss has it. With
+    /// `touch`, a known page's URL, title, favicon and last-seen time are
+    /// refreshed from `meta`, and so are the URL and last-seen time of the
+    /// view when it has been asked about.
+    pub fn get_page_by_url(&self, meta: &PageMeta, touch: bool) -> Result<PageLookup> {
+        let keys = pages::page_keys(&meta.url)?;
+        let Some(page) = self.store.get_page(&keys.url_key)? else {
+            return Ok(PageLookup {
+                url_key: keys.url_key,
+                view_key: keys.view_key,
+                page: None,
+            });
         };
         let page = if touch {
+            self.store.touch_view(&keys.view_key, &meta.url)?;
             self.store.upsert_page(
-                &url_key,
-                &meta.url,
+                &keys.url_key,
+                &keys.page_url,
                 &meta.title,
                 meta.favicon_url.as_deref(),
                 &page.conversation_id,
@@ -453,7 +456,11 @@ impl Engine {
             page
         };
         let conversation = self.get_conversation(&page.conversation_id)?;
-        Ok((url_key, Some(PageDetail { page, conversation })))
+        Ok(PageLookup {
+            url_key: keys.url_key,
+            view_key: keys.view_key,
+            page: Some(PageDetail { page, conversation }),
+        })
     }
 
     pub fn get_page(&self, url_key: &str) -> Result<Option<PageDetail>> {
@@ -495,7 +502,8 @@ impl Engine {
     }
 
     /// A question from the browser about a page. The page's conversation is
-    /// created on the first ask, with the page's title; the readable text is
+    /// created on the first ask, with the page's title. The ask belongs to
+    /// the view of the page its URL shows, and that view's readable text is
     /// handed to the agent when it is new or has changed since last time.
     pub async fn page_ask(
         self: &Arc<Self>,
@@ -510,7 +518,11 @@ impl Engine {
             return Err(anyhow!("message is empty"));
         }
         let settings = self.store.settings()?;
-        let url_key = pages::url_key(&req.page.url)?;
+        let pages::PageKeys {
+            url_key,
+            view_key,
+            page_url,
+        } = pages::page_keys(&req.page.url)?;
         let host = pages::host_of(&req.page.url);
         if pages::host_matches(&settings.page_deny_list, &host) {
             return Err(anyhow!("{} is on the deny list", host));
@@ -525,7 +537,7 @@ impl Engine {
             Some(page) => {
                 let page = self.store.upsert_page(
                     &url_key,
-                    &req.page.url,
+                    &page_url,
                     &given_title,
                     req.page.favicon_url.as_deref(),
                     &page.conversation_id,
@@ -542,21 +554,22 @@ impl Engine {
                 self.store.rename_conversation(&conv.summary.id, &title)?;
                 self.store.upsert_page(
                     &url_key,
-                    &req.page.url,
+                    &page_url,
                     &given_title,
                     req.page.favicon_url.as_deref(),
                     &conv.summary.id,
                 )?
             }
         };
-        // The page text goes along when the agent has not seen this version.
-        // Its hash is recorded only once the turn has started, so a refused
-        // ask (a turn already running) sends the text again next time.
+        self.store.upsert_view(&url_key, &view_key, &req.page.url)?;
+        // The view's text goes along when the agent has not seen this version
+        // of it. Its hash is recorded only once the turn has started, so a
+        // refused ask (a turn already running) sends the text again next time.
         let page_text = match req.page_text.filter(|_| settings.send_page_text) {
             Some(text) if !text.trim().is_empty() => {
                 let text = pages::truncate_page_text(&text);
                 let hash = pages::page_text_hash(&text);
-                let previous = self.store.page_text_hash(&url_key)?;
+                let previous = self.store.view_text_hash(&view_key)?;
                 if previous.as_deref() == Some(hash.as_str()) {
                     None
                 } else {
@@ -565,11 +578,18 @@ impl Engine {
             }
             _ => None,
         };
+        let selected = req
+            .quote
+            .map(|q| q.trim().to_string())
+            .filter(|q| !q.is_empty());
         let target = req.anchor.map(|anchor| ClarificationTarget::Web {
-            quote: anchor.quote.exact.clone(),
+            quote: selected.unwrap_or_else(|| anchor.quote.exact.clone()),
             anchor,
             context: req.context,
+            view_key: Some(view_key.clone()),
         });
+        // The prompt names the view only when a fragment selects it.
+        let view_url = (view_key != url_key).then(|| req.page.url.trim().to_string());
         let res = self
             .send_turn_with_page(
                 SendTurnRequest {
@@ -578,14 +598,17 @@ impl Engine {
                     clarification: target,
                     attachments: vec![],
                 },
-                page_text
-                    .as_ref()
-                    .map(|(text, _, changed)| (text.clone(), *changed)),
+                PageTurn {
+                    view_url,
+                    text: page_text
+                        .as_ref()
+                        .map(|(text, _, changed)| (text.clone(), *changed)),
+                },
                 sink,
             )
             .await?;
         if let Some((text, hash, _)) = &page_text {
-            self.store.set_page_text(&url_key, text, hash)?;
+            self.store.set_view_text(&view_key, text, hash)?;
         }
         self.publish(AppEvent::Page {
             url_key: url_key.clone(),
@@ -593,6 +616,7 @@ impl Engine {
         });
         Ok(PageAskResult {
             url_key,
+            view_key,
             conversation_id: page.conversation_id,
             clarification: res.clarification,
             user_turn: res.user_turn,
@@ -713,15 +737,16 @@ impl Engine {
         req: SendTurnRequest,
         sink: EventSink,
     ) -> Result<SendTurnResult> {
-        self.send_turn_with_page(req, None, sink).await
+        self.send_turn_with_page(req, PageTurn::default(), sink)
+            .await
     }
 
-    /// `send_turn` with, for a page conversation, the page's readable text
-    /// to include in the prompt and whether it replaces an earlier copy.
+    /// `send_turn` with what a turn of a page conversation adds to the
+    /// prompt (see `PageTurn`).
     async fn send_turn_with_page(
         self: &Arc<Self>,
         req: SendTurnRequest,
-        page_text: Option<(String, bool)>,
+        page_turn: PageTurn,
         sink: EventSink,
     ) -> Result<SendTurnResult> {
         let text = req.text.trim().to_string();
@@ -769,7 +794,7 @@ impl Engine {
             agent,
             text,
             req.clarification,
-            page_text,
+            page_turn,
             &req.attachments,
             cancel.clone(),
             interaction,
@@ -788,7 +813,7 @@ impl Engine {
         agent: AgentId,
         text: String,
         target: Option<ClarificationTarget>,
-        page_text: Option<(String, bool)>,
+        page_turn: PageTurn,
         attachment_ids: &[String],
         cancel: CancellationToken,
         interaction: agents::process::Interaction,
@@ -820,7 +845,8 @@ impl Engine {
         // even when an earlier attempt failed before the agent reported one.
         let is_first_turn = conv.agent_session_id.is_none();
 
-        let (page_body, page_changed) = match &page_text {
+        let view_url = page_turn.view_url.as_deref();
+        let (page_body, page_changed) = match &page_turn.text {
             Some((t, changed)) => (Some(t.as_str()), *changed),
             None => (None, false),
         };
@@ -828,7 +854,7 @@ impl Engine {
             None if page.is_some() => (
                 None,
                 None,
-                prompt::page_question_prompt(&text, page_body, page_changed),
+                prompt::page_question_prompt(&text, view_url, page_body, page_changed),
             ),
             None => (None, None, text.clone()),
             Some(ClarificationTarget::New {
@@ -842,6 +868,7 @@ impl Engine {
                     &quote,
                     parent_id.as_deref(),
                     None,
+                    None,
                 )?;
                 let body = prompt::clarification_prompt(&quote, &text);
                 (Some(cl.clone()), Some(cl.id), body)
@@ -850,6 +877,7 @@ impl Engine {
                 quote,
                 anchor,
                 context,
+                view_key,
             }) => {
                 let anchor_json = serde_json::to_string(&anchor)?;
                 let cl = self.store.create_clarification(
@@ -858,9 +886,16 @@ impl Engine {
                     &quote,
                     None,
                     Some(&anchor_json),
+                    view_key.as_deref(),
                 )?;
-                let body =
-                    prompt::page_ask_prompt(&quote, &context, &text, page_body, page_changed);
+                let body = prompt::page_ask_prompt(
+                    &quote,
+                    &context,
+                    &text,
+                    view_url,
+                    page_body,
+                    page_changed,
+                );
                 (Some(cl.clone()), Some(cl.id), body)
             }
             Some(ClarificationTarget::Existing { clarification_id }) => {
@@ -1085,6 +1120,20 @@ impl Engine {
             Err(e) => warn!(error = %e, "could not persist final turn state"),
         }
     }
+}
+
+/// What a turn of a page conversation adds to its prompt.
+#[derive(Default)]
+struct PageTurn {
+    /// The browser URL of the view the question is about, when a fragment
+    /// selects that view. None for a question about the page at its plain
+    /// URL, and for a turn that names no view (a follow-up, or a turn sent
+    /// from the Gloss window).
+    view_url: Option<String>,
+    /// The view's readable text to include, and whether it replaces a copy
+    /// the agent was given before. None when the agent already has this
+    /// text or the text is not sent.
+    text: Option<(String, bool)>,
 }
 
 /// A turn in progress: how to stop it, how to reach the agent's stdin, and
@@ -1426,9 +1475,117 @@ mod tests {
                 after: "after text".into(),
             },
             question: question.into(),
+            quote: None,
             page_text: text.map(String::from),
             private: false,
         }
+    }
+
+    #[tokio::test]
+    async fn asks_on_two_fragments_share_a_page_and_keep_their_views() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = ShellEnv::from_process();
+        env.vars.insert("PATH".into(), "/nonexistent".into());
+        let engine = Arc::new(Engine::open_with_env(GlossPaths::at(dir.path()), env).unwrap());
+        let (sink, _) = collect();
+        let page_key = "https://git.example.com/pr/7/diff";
+        let foo = "https://git.example.com/pr/7/diff#src%2FFoo.java";
+        let bar = "https://git.example.com/pr/7/diff#src/Bar.java";
+
+        // The reader's own selection becomes the quote; the anchor keeps the page text.
+        let mut req = page_ask(
+            foo,
+            "PR 7",
+            Some("12 + int a; 13 + int b;"),
+            "why?",
+            Some("Foo text"),
+        );
+        req.quote = Some("  int a; int b; ".into());
+        let first = engine.page_ask(req, sink.clone()).await.unwrap();
+        assert_eq!(first.url_key, page_key);
+        assert_eq!(first.view_key, format!("{}#src/Foo.java", page_key));
+        let cl1 = first.clarification.clone().unwrap();
+        assert_eq!(cl1.quote, "int a; int b;");
+        assert_eq!(
+            cl1.web_anchor.as_ref().unwrap().quote.exact,
+            "12 + int a; 13 + int b;"
+        );
+        assert_eq!(cl1.view_key.as_deref(), Some(first.view_key.as_str()));
+        assert_eq!(cl1.view_url.as_deref(), Some(foo));
+        let p1 = first.user_turn.prompt_text.clone().unwrap();
+        assert!(p1.contains(&format!("in the view at {}", foo)));
+        assert!(p1.contains("The readable text of that view:\n<page>\nFoo text\n</page>"));
+        settle(&engine, &first.conversation_id).await;
+
+        // Another file of the same diff: the same page and conversation, its
+        // own view, and its own text sent as new rather than as a change.
+        let second = engine
+            .page_ask(
+                page_ask(bar, "PR 7", Some("other"), "and?", Some("Bar text")),
+                sink.clone(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(second.conversation_id, first.conversation_id);
+        assert_eq!(second.view_key, format!("{}#src/Bar.java", page_key));
+        let p2 = second.user_turn.prompt_text.clone().unwrap();
+        assert!(p2.contains("<page>\nBar text\n</page>"));
+        assert!(!p2.contains("has changed"));
+        settle(&engine, &first.conversation_id).await;
+
+        // Back on the first file with the same text: nothing is sent again.
+        let third = engine
+            .page_ask(
+                page_ask(foo, "PR 7", Some("third"), "more?", Some("Foo text")),
+                sink.clone(),
+            )
+            .await
+            .unwrap();
+        assert!(!third.user_turn.prompt_text.unwrap().contains("<page>"));
+        settle(&engine, &first.conversation_id).await;
+
+        // One entry under Pages, whose URL has no view fragment.
+        let pages = engine.list_pages(10).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].url, page_key);
+        assert_eq!(pages[0].ask_count, 3);
+
+        // Looking the page up from either file returns every ask with its
+        // view, and visiting a file does not change the page URL.
+        let meta = PageMeta {
+            url: bar.into(),
+            title: "PR 7".into(),
+            favicon_url: None,
+        };
+        let lookup = engine.get_page_by_url(&meta, true).unwrap();
+        assert_eq!(lookup.url_key, page_key);
+        assert_eq!(lookup.view_key, second.view_key);
+        let detail = lookup.page.unwrap();
+        assert_eq!(detail.page.url, page_key);
+        let views: Vec<_> = detail
+            .conversation
+            .clarifications
+            .iter()
+            .map(|c| c.view_key.clone().unwrap())
+            .collect();
+        assert_eq!(
+            views,
+            vec![
+                first.view_key.clone(),
+                second.view_key.clone(),
+                first.view_key.clone()
+            ]
+        );
+
+        // The page at its plain URL is a third view; a lookup makes no row for it.
+        let plain = PageMeta {
+            url: page_key.into(),
+            title: "PR 7".into(),
+            favicon_url: None,
+        };
+        let lookup = engine.get_page_by_url(&plain, true).unwrap();
+        assert_eq!(lookup.view_key, page_key);
+        assert!(engine.store.view_text_hash(page_key).unwrap().is_none());
     }
 
     async fn settle(engine: &Engine, conv_id: &str) {

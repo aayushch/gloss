@@ -66,8 +66,9 @@ pub fn page_system_note(title: &str, url: &str) -> String {
 do not offer to read, edit or create files, and do not propose running commands. ",
         &format!(
             "The user is reading a web page in their browser and asking about it through the Gloss browser extension. \
-The page is \"{}\" at {}. Each question quotes the passage the user highlighted, with the text around it; \
-the page's readable text is included with the first question and again whenever it changes. \
+The page is \"{}\" at {}. Each question quotes the passage the user highlighted, with the text around it. \
+One address can show several views of the page, such as the files of a diff, and a question names its view when it has one. \
+The readable text of the page, or of the view, is included the first time it is asked about and again whenever it changes. \
 Answer about the highlighted passage directly and briefly, in markdown. \
 You have no files to work on and cannot open other pages unless you have a web tool. ",
             title.trim(),
@@ -77,19 +78,23 @@ You have no files to work on and cannot open other pages unless you have a web t
 }
 
 /// What a question about a highlighted passage of a web page becomes when
-/// sent to the agent. `page_text` is included when the page's text is new
-/// to the conversation; `page_changed` says it replaces an earlier copy.
+/// sent to the agent. `view_url` is the URL of the view the passage is on,
+/// given when a fragment selects that view. `page_text` is the readable
+/// text of the page or of that view, included when it is new to the
+/// conversation; `page_changed` says it replaces an earlier copy.
 pub fn page_ask_prompt(
     quote: &str,
     context: &AskContext,
     question: &str,
+    view_url: Option<&str>,
     page_text: Option<&str>,
     page_changed: bool,
 ) -> String {
     let mut p = format!(
-        "The user highlighted this passage on the page and is asking about it.\n\
+        "The user highlighted this passage on the page{} and is asking about it.\n\
 Answer about the passage directly, in markdown, without summarising the whole page.\n\n\
 > \"{}\"\n",
+        view_clause(view_url),
         quote.trim()
     );
     let before = context.before.trim();
@@ -102,23 +107,48 @@ Answer about the passage directly, in markdown, without summarising the whole pa
     }
     p.push('\n');
     p.push_str(question.trim());
-    append_page_text(&mut p, page_text, page_changed);
+    append_page_text(&mut p, view_url, page_text, page_changed);
     p
 }
 
 /// A question about the page as a whole, with no highlighted passage.
-pub fn page_question_prompt(question: &str, page_text: Option<&str>, page_changed: bool) -> String {
+/// `view_url`, `page_text` and `page_changed` are as in `page_ask_prompt`.
+pub fn page_question_prompt(
+    question: &str,
+    view_url: Option<&str>,
+    page_text: Option<&str>,
+    page_changed: bool,
+) -> String {
     let mut p = format!(
-        "The user is asking about the page as a whole.\n\n{}",
+        "The user is asking about the page as a whole{}.\n\n{}",
+        view_clause(view_url),
         question.trim()
     );
-    append_page_text(&mut p, page_text, page_changed);
+    append_page_text(&mut p, view_url, page_text, page_changed);
     p
 }
 
-fn append_page_text(p: &mut String, page_text: Option<&str>, page_changed: bool) {
+/// The words that name the view in the first sentence of a page prompt, or
+/// nothing when the question is about the page at its plain URL.
+fn view_clause(view_url: Option<&str>) -> String {
+    match view_url {
+        Some(url) => format!(", in the view at {}", url.trim()),
+        None => String::new(),
+    }
+}
+
+fn append_page_text(
+    p: &mut String,
+    view_url: Option<&str>,
+    page_text: Option<&str>,
+    page_changed: bool,
+) {
     if let Some(text) = page_text {
-        p.push_str("\n\n---\nThe page's readable text");
+        p.push_str(if view_url.is_some() {
+            "\n\n---\nThe readable text of that view"
+        } else {
+            "\n\n---\nThe page's readable text"
+        });
         if page_changed {
             p.push_str(", which has changed since last time");
         }
@@ -258,19 +288,37 @@ mod tests {
             before: "the cache ".into(),
             after: " is flushed".into(),
         };
-        let p = page_ask_prompt("store buffer", &ctx, "Why?", Some("Full page"), false);
+        let p = page_ask_prompt("store buffer", &ctx, "Why?", None, Some("Full page"), false);
         assert!(p.starts_with("The user highlighted this passage on the page"));
         assert!(p.contains("> \"store buffer\""));
         assert!(p.contains("Text just before it: \"…the cache\""));
         assert!(p.contains("Text just after it: \"is flushed…\""));
         assert!(p.contains("\nWhy?\n\n---\nThe page's readable text:\n<page>\nFull page\n</page>"));
-        let again = page_ask_prompt("x", &AskContext::default(), "q", Some("New"), true);
+        let again = page_ask_prompt("x", &AskContext::default(), "q", None, Some("New"), true);
         assert!(again.contains("which has changed since last time"));
         assert!(!again.contains("Text just before"));
-        let none = page_ask_prompt("x", &AskContext::default(), "q", None, false);
+        let none = page_ask_prompt("x", &AskContext::default(), "q", None, None, false);
         assert!(!none.contains("<page>"));
         assert!(none.ends_with("q"));
-        assert!(page_question_prompt("what is this", None, false).ends_with("what is this"));
+        assert!(page_question_prompt("what is this", None, None, false).ends_with("what is this"));
+    }
+
+    #[test]
+    fn page_prompts_name_the_view_a_fragment_selects() {
+        let view = Some("https://git.example.com/pr/7/diff#src/Foo.java");
+        let p = page_ask_prompt("x", &AskContext::default(), "q", view, Some("File"), true);
+        assert!(p.starts_with(
+            "The user highlighted this passage on the page, in the view at \
+https://git.example.com/pr/7/diff#src/Foo.java and is asking about it."
+        ));
+        assert!(p.contains(
+            "---\nThe readable text of that view, which has changed since last time:\n<page>\nFile\n</page>"
+        ));
+        let q = page_question_prompt("what is this", view, None, false);
+        assert!(q.starts_with(
+            "The user is asking about the page as a whole, in the view at \
+https://git.example.com/pr/7/diff#src/Foo.java.\n\nwhat is this"
+        ));
     }
 
     #[test]

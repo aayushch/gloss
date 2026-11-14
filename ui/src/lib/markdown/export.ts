@@ -9,6 +9,7 @@
 
 import type { Clarification, Conversation, Page, Turn } from '$lib/api/types';
 import { AGENT_NAMES } from '$lib/state/app.svelte';
+import { hasViewHeadings, pageViews } from '$lib/state/threads';
 import { parseBlocks, type Block, type Run } from './blocks';
 
 export function runsToMarkdown(runs: Run[]): string {
@@ -181,7 +182,11 @@ export function exportConversation(conv: Conversation): string {
 /** The asks made on a web page as notes: the page's title and URL, the
  * questions asked about the page as a whole, then each ask as its quoted
  * passage followed by its question/answer pairs. `page` is null when only
- * the conversation is at hand; the URL then comes from its pageKey. */
+ * the conversation is at hand; the URL then comes from its pageKey.
+ *
+ * When the asks were made on more than one view of the page, or on a view
+ * that a URL fragment selects, they are grouped under a heading per view
+ * that gives the view's URL (see `hasViewHeadings`). */
 export function exportPage(conv: Conversation, page: Page | null): string {
 	const ctx = context(conv);
 	const title = page?.title || conv.title;
@@ -195,11 +200,20 @@ export function exportPage(conv: Conversation, page: Page | null): string {
 		if (t.clarificationId) continue;
 		parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));
 	}
-	for (const cl of conv.clarifications) {
-		if (!cl.webAnchor || cl.parentId) continue;
-		parts.push(quoteLines(cl.quote.replace(/\s+/g, ' ').trim()));
-		for (const t of ctx.byClarification.get(cl.id) ?? []) {
-			parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));
+	const views = pageViews(conv);
+	const headings = hasViewHeadings(views);
+	for (const view of views) {
+		const asks = view.asks.map((th) => th.clarification).filter((cl) => !cl.parentId);
+		if (!asks.length) continue;
+		if (headings) {
+			parts.push(`## ${view.fragment ? `#${view.fragment}` : 'Page URL'}`);
+			if (view.url ?? url) parts.push(`<${view.url ?? url}>`);
+		}
+		for (const cl of asks) {
+			parts.push(quoteLines(cl.quote.replace(/\s+/g, ' ').trim()));
+			for (const t of ctx.byClarification.get(cl.id) ?? []) {
+				parts.push(t.role === 'user' ? `**Q:** ${t.text.trim()}` : answer(t));
+			}
 		}
 	}
 	return parts.join('\n\n').trim() + '\n';

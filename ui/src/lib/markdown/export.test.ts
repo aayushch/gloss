@@ -246,6 +246,51 @@ describe('exportConversation', () => {
 		);
 	});
 
+	it('groups the asks under a heading per view when a fragment selects a view', () => {
+		const key = 'https://git.example.com/pr/7/diff';
+		const diff: Conversation = {
+			...pageConv,
+			pageKey: key,
+			turns: pageConv.turns.filter((t) => t.clarificationId),
+			clarifications: [
+				{
+					...pageConv.clarifications[0],
+					viewKey: `${key}#src/Foo.java`,
+					viewUrl: `${key}#src/Foo.java`
+				},
+				{ ...pageConv.clarifications[1], viewKey: key, viewUrl: key }
+			]
+		};
+		expect(exportPage(diff, null)).toBe(
+			[
+				'# Store buffers',
+				'',
+				`<${key}>`,
+				'',
+				'## #src/Foo.java',
+				'',
+				`<${key}#src/Foo.java>`,
+				'',
+				'> a store retires into the buffer',
+				'',
+				'**Q:** Why no wait?',
+				'',
+				'Because the buffer absorbs it.',
+				'',
+				'## Page URL',
+				'',
+				`<${key}>`,
+				'',
+				'> drains in order',
+				'',
+				'**Q:** On ARM too?',
+				'',
+				'No.',
+				''
+			].join('\n')
+		);
+	});
+
 	it('falls back to the conversation title and pageKey without a page record', () => {
 		expect(
 			exportPage(pageConv, null).startsWith('# Store buffers\n\n<https://example.com/post>\n\n')

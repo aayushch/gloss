@@ -85,8 +85,19 @@ export type TabMessage =
 export interface NavigatorState {
 	/** The reader hid it with its ×. */
 	hidden: boolean;
-	/** Notes on the page; the navigator shows only when there is at least one. */
+	/**
+	 * Notes that belong on the view of the page the tab is showing; the
+	 * navigator shows only when there is at least one.
+	 */
 	notes: number;
+	/** The ids of those notes. */
+	here: string[];
+	/**
+	 * The ids of the page's other notes. Each was made on another view of
+	 * the page, such as another file of a diff, and its passage is not on
+	 * the view the tab is showing.
+	 */
+	elsewhere: string[];
 }
 
 export interface PageTextReply {

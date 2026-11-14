@@ -135,6 +135,13 @@ export interface Clarification {
 	createdAt: number;
 	webAnchor?: WebAnchor | null;
 	anchorState?: AnchorState | null;
+	/**
+	 * Key of the view of the page the ask was made on. Missing for an ask
+	 * stored before Gloss recorded views, and when Gloss is older than that.
+	 */
+	viewKey?: string | null;
+	/** The browser URL of that view. */
+	viewUrl?: string | null;
 }
 
 export interface AskContext {
@@ -207,12 +214,21 @@ export interface PageAskRequest {
 	anchor: WebAnchor | null;
 	context: AskContext;
 	question: string;
+	/**
+	 * The text the reader selected, as the browser reported it. Gloss shows
+	 * it as the ask's quote in place of `anchor.quote.exact`, which can hold
+	 * page text the reader did not select, such as the line numbers between
+	 * the lines of a diff.
+	 */
+	quote?: string | null;
 	pageText?: string | null;
 	private: boolean;
 }
 
 export interface PageAskResult {
 	urlKey: string;
+	/** Key of the view the ask was made on. Missing when Gloss is older than views. */
+	viewKey?: string;
 	conversationId: string;
 	clarification: Clarification | null;
 	userTurn: Turn;
@@ -262,7 +278,15 @@ export interface HelloResult {
 }
 
 export interface GetPageResult {
+	/** Key of the page. Every URL of the page has it, whatever its fragment. */
 	urlKey: string;
+	/**
+	 * Key of the view of the page the URL shows. A fragment that is not a
+	 * hash route selects a view, such as one file of a diff. The key equals
+	 * `urlKey` for a URL without such a fragment. Missing when Gloss is
+	 * older than views.
+	 */
+	viewKey?: string;
 	/** Null when Gloss has not stored this page yet, so it has no conversation or asks. */
 	page: PageDetail | null;
 }

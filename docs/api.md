@@ -106,15 +106,25 @@ the same protocol: one JSON object per line.
   `shutdown`; `gloss-bridge` adds `app_state` (`{ running }`).
 - Methods: `hello` (must come first; `{ protocol, extensionVersion, browser }` →
   `{ protocol, minProtocol, appVersion, settings, agent }`), `getPage`
-  (`PageMeta` → `{ urlKey, page }`), `getTurn` (`{ turnId }` → `{ turn, running,
-  request }`), `ask` (`PageAskRequest` → `PageAskResult`), `askPage` (same with
-  no anchor), `followUp` (`{ clarificationId, question }`), `setOpen`,
+  (`PageMeta` → `{ urlKey, viewKey, page }`), `getTurn` (`{ turnId }` → `{ turn,
+  running, request }`), `ask` (`PageAskRequest` → `PageAskResult`), `askPage`
+  (same with no anchor), `followUp` (`{ clarificationId, question }`), `setOpen`,
   `cancel`, `deleteAsk`, `reportAnchors` (`{ states: { id: 'anchored' |
   'fuzzy' | 'orphan' } }`), `listRecentPages`, `openInGloss`, and `launchApp`
   (handled by the host, never by the app).
 - Every line the app writes stays under 900 KB, Chrome's frame limit; a page
   whose replies would exceed it comes back with long turn texts cut and
   `truncated: true` on those turns.
+- `urlKey` names the page and `viewKey` the view of it that the URL shows
+  (see "A page has views" in `docs/architecture.md`). Only the app computes
+  them. `getPage` returns every ask of the page, each with the `viewKey` and
+  `viewUrl` of the view it was made on, and the extension decides which to
+  place on the view it is showing. `PageAskRequest.quote` is the reader's
+  selection as the browser reported it, stored as the ask's quote when set;
+  the anchor's `exact` text is what the ask is found by. These fields were
+  added without a protocol bump: an app that predates them omits them from
+  its replies and ignores `quote`, and the extension then treats every ask
+  as made on the view it is showing.
 
 Protocol constants live in `engine/src/bridge/mod.rs` and
 `extension/src/shared/protocol.ts`. The headless CLI speaks it too:

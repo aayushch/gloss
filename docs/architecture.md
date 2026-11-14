@@ -170,8 +170,17 @@ the running app.
   the page in context across asks. Each ask is a clarification whose
   `web_anchor` holds a W3C-style selector (exact quote with prefix and suffix,
   character position, container hint); `anchor_block_id` is empty for those.
-  The page's readable text goes into the first prompt and again only when its
-  hash changes. The rail lists pages under **Pages**.
+  The rail lists pages under **Pages**.
+- **A page has views.** A fragment that is not a hash route (`#/…`, `#!/…`)
+  does not make a new page, but it can change what the page shows: a diff
+  viewer puts the selected file there, an article only scrolls. Every such
+  URL is a view of the page, keyed by the page key plus the decoded fragment
+  (`pages::page_keys`), and each ask records the view it was made on
+  (`clarifications.view_key`, with the view's URL and the text last sent to
+  the agent in `page_views`). So a pull request's diff is one entry under
+  **Pages** with one conversation, however many files were asked about, and
+  the transcript groups its asks by file. A view's readable text goes into
+  the first prompt about that view and again only when its hash changes.
 - **One protocol, two transports.** `engine/src/bridge/` handles requests
   and fans the engine's event broadcast out to every connection (`docs/api.md`
   has the method table). The `gloss-bridge` sidecar (`bridge/`) is what
@@ -184,7 +193,16 @@ the running app.
 - **Re-anchoring is the extension's job.** It resolves an anchor by exact
   text at the stored position, then by prefix and suffix among repeats, then
   inside the container, then fuzzily; what it finds (or not) is reported back
-  and shown in Gloss as "approximate" or "not on the page any more".
+  and shown in Gloss as "approximate" or "not on the page any more". That
+  search runs only for the asks of the view the browser is showing. No URL
+  pattern tells a fragment that scrolls from one that swaps the content, so
+  the page content decides for the other views' asks: one is placed only
+  where its exact quote sits between the full prefix and suffix recorded
+  with it, and otherwise it is left off the page without being reported as
+  missing. An ask of a section link still shows on the article, and an ask
+  of one file does not show on another file that repeats its words. The
+  toolbar popup lists the asks of other views, and showing one changes the
+  fragment to its view first.
 - **The app stays up.** Closing the window hides Gloss to a menu-bar icon so
   the bridge keeps answering; Quit is in the tray menu and the app menu. A
   `gloss://pages/<url key>` link opens a page in the window, which is how the

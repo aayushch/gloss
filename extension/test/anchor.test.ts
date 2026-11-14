@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from 'vitest';
-import { describe as describeRange, resolve, cssPath } from '../src/content/anchor';
+import {
+	describe as describeRange,
+	resolve,
+	resolveOnOtherView,
+	cssPath
+} from '../src/content/anchor';
 import { TextIndex } from '../src/content/text';
 import type { WebAnchor } from '../src/shared/protocol';
 
@@ -161,5 +166,63 @@ describe('resolve', () => {
 		const r = resolve(a, idx)!;
 		expect(r.state).toBe('anchored');
 		expect(r.range.toString()).toBe('beta\ngamma');
+	});
+});
+
+describe('resolveOnOtherView', () => {
+	// Two files of one diff, as a page shows them under two URL fragments.
+	const FOO = `
+<table>
+<tr><td>10</td><td>Order order = repository.load(id);</td></tr>
+<tr><td>11</td><td>if (order == null) {</td></tr>
+<tr><td>12</td><td>return null;</td></tr>
+<tr><td>13</td><td>}</td></tr>
+</table>`;
+	const BAR = `
+<table>
+<tr><td>40</td><td>List orders = customers.find(name);</td></tr>
+<tr><td>41</td><td>if (orders == null) {</td></tr>
+<tr><td>42</td><td>return null;</td></tr>
+<tr><td>43</td><td>}</td></tr>
+</table>`;
+
+	it('leaves a passage off a view where only its words occur', () => {
+		const a = anchorFor(load(FOO), 'return null;');
+		const bar = load(BAR);
+		// The words are in the other file, so the search for an ask of this view finds them.
+		expect(resolve(a, bar)!.state).toBe('anchored');
+		expect(resolveOnOtherView(a, bar)).toBeNull();
+	});
+
+	it('leaves out a passage that only resembles text on the view', () => {
+		const a = anchorFor(load(FOO), 'if (order == null) {');
+		const bar = load(BAR);
+		expect(resolve(a, bar)!.state).toBe('fuzzy');
+		expect(resolveOnOtherView(a, bar)).toBeNull();
+	});
+
+	it('places a passage whose surroundings are the same on the view', () => {
+		const foo = load(FOO);
+		const a = anchorFor(foo, 'return null;');
+		// The same file under another fragment, with a banner above it.
+		const again = load('<p>Reviewed by two people.</p>' + FOO);
+		const r = resolveOnOtherView(a, again)!;
+		expect(r.state).toBe('anchored');
+		expect(r.range.toString()).toBe('return null;');
+		expect(r.offsets.start).toBe(again.text.indexOf('return null;'));
+	});
+
+	it('picks the copy nearest the recorded position among equal surroundings', () => {
+		const twice = load(FOO + FOO);
+		const second = twice.text.lastIndexOf('return null;');
+		const a = describeRange(twice.toRange(second, second + 'return null;'.length), twice)!;
+		expect(resolveOnOtherView(a, twice)!.offsets.start).toBe(second);
+	});
+
+	it('never places an anchor that recorded no surroundings', () => {
+		const idx = load('<p>return null;</p>');
+		const a = anchorFor(idx, 'return null;');
+		expect(a.quote.prefix + a.quote.suffix).toBe('');
+		expect(resolveOnOtherView(a, idx)).toBeNull();
 	});
 });

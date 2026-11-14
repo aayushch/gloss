@@ -191,8 +191,7 @@ impl BridgeHandler {
             }
             "getPage" => {
                 let meta: PageMeta = params(&req.params)?;
-                let (url_key, detail) = engine.get_page_by_url(&meta, true)?;
-                let mut v = json!({ "urlKey": url_key, "page": detail });
+                let mut v = json!(engine.get_page_by_url(&meta, true)?);
                 fit(&mut v);
                 Ok(v)
             }
@@ -490,6 +489,27 @@ mod tests {
             page["page"]["conversation"]["clarifications"][0]["id"],
             cl_id
         );
+        // The ask carries the view it was made on, and a fragment on the
+        // same page is another view of it.
+        assert_eq!(page["viewKey"], "https://example.com/post");
+        assert_eq!(
+            page["page"]["conversation"]["clarifications"][0]["viewKey"],
+            "https://example.com/post"
+        );
+        let section = result(
+            h.handle(
+                &mut s,
+                req(
+                    "3b",
+                    "getPage",
+                    json!({"url": "https://example.com/post#part%20two"}),
+                ),
+            )
+            .await,
+        );
+        assert_eq!(section["urlKey"], "https://example.com/post");
+        assert_eq!(section["viewKey"], "https://example.com/post#part two");
+        assert_eq!(section["page"]["page"]["url"], "https://example.com/post");
 
         let turn = result(
             h.handle(&mut s, req("4", "getTurn", json!({"turnId": turn_id})))

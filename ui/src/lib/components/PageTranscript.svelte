@@ -6,12 +6,19 @@
 	// a card naming the page, the questions asked about the page as a whole,
 	// then one card per highlighted passage with its thread under it. It
 	// renders inside Transcript, which owns selection, jumps and scrolling.
+	//
+	// One page can show different content under each URL fragment, such as
+	// the files of a diff. Each such URL is a view of the page. When the
+	// passages were asked about on more than one view, or on a view that a
+	// fragment selects, they are listed under a heading per view, with a
+	// button that opens that view in the browser (see `hasViewHeadings`).
 	import type { Conversation, Turn } from '$lib/api/types';
 	import { app } from '$lib/state/app.svelte';
 	import {
+		hasViewHeadings,
 		hostOf,
 		pageQuestions,
-		pageThreads,
+		pageViews,
 		relativeTime,
 		type Thread
 	} from '$lib/state/threads';
@@ -27,7 +34,9 @@
 	const title = $derived(page?.title || conv.title);
 	const host = $derived(hostOf(url));
 	const questions = $derived(pageQuestions(conv));
-	const asks = $derived(pageThreads(conv));
+	const views = $derived(pageViews(conv));
+	const askCount = $derived(views.reduce((n, v) => n + v.asks.length, 0));
+	const headings = $derived(hasViewHeadings(views));
 
 	/** The user turn that produced an assistant turn, for the retry button. */
 	function userBefore(turns: Turn[], i: number): Turn | undefined {
@@ -73,10 +82,26 @@
 	{/if}
 {/each}
 
-{#if asks.length}
-	<div class="label">{asks.length} {asks.length === 1 ? 'passage' : 'passages'} asked about</div>
-	{#each asks as th (th.clarification.id)}
-		<PageAskCard thread={th} {conv} {threads} />
+{#if askCount}
+	<div class="label">{askCount} {askCount === 1 ? 'passage' : 'passages'} asked about</div>
+	{#each views as view (view.key)}
+		{#if headings}
+			<div class="view">
+				<span class="vname" title={view.url ?? url}
+					>{view.fragment ? `#${view.fragment}` : 'Page URL'}</span
+				>
+				<button
+					type="button"
+					class="ibtn vopen"
+					title="Open {view.url ?? url} in the browser"
+					onclick={() => app.openUrl(view.url ?? url)}
+					><Icon name="external" size={12} /> Open in browser</button
+				>
+			</div>
+		{/if}
+		{#each view.asks as th (th.clarification.id)}
+			<PageAskCard thread={th} {conv} {threads} />
+		{/each}
 	{/each}
 {:else if !questions.length}
 	<div class="empty">
@@ -155,6 +180,27 @@
 		letter-spacing: 0.08em;
 		color: var(--text-3);
 		margin: 8px 0 12px;
+	}
+	.view {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 14px 0 10px;
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--line);
+	}
+	.vname {
+		flex: 1;
+		min-width: 0;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--text-2);
+		overflow-wrap: anywhere;
+	}
+	.vopen {
+		flex: none;
+		font-size: 11.5px;
+		padding: 3px 8px;
 	}
 	.empty {
 		color: var(--text-3);

@@ -22,8 +22,13 @@ import type { PassageSpot } from './spot';
  * left the page, as on pages that render only what is on screen; it is
  * looked for again whenever the page changes, and Gloss is not told,
  * since the passage is still part of the page.
+ * `elsewhere`: the ask was made on another view of this page (see
+ * `madeOnThisView`) and its passage is not on the view being shown. The
+ * ask has no highlight, the note navigator leaves it out, and Gloss is not
+ * told, since the passage is not missing from its own view. It is looked
+ * for again whenever the page changes.
  */
-export type AskAnchorState = AnchorState | 'pending' | 'detached';
+export type AskAnchorState = AnchorState | 'pending' | 'detached' | 'elsewhere';
 
 export interface AskEntry {
 	clarification: Clarification;
@@ -37,6 +42,12 @@ export interface AskEntry {
 
 export interface PageState {
 	urlKey: string | null;
+	/**
+	 * Key of the view of the page the browser is showing (see
+	 * `GetPageResult.viewKey`). Null before the page has loaded from Gloss,
+	 * and when Gloss is older than views.
+	 */
+	viewKey: string | null;
 	conversationId: string | null;
 	/** A turn of this page's conversation is running; new asks must wait. */
 	running: boolean;
@@ -44,7 +55,26 @@ export interface PageState {
 }
 
 export function createPageState(): PageState {
-	return { urlKey: null, conversationId: null, running: false, asks: new Map() };
+	return { urlKey: null, viewKey: null, conversationId: null, running: false, asks: new Map() };
+}
+
+/**
+ * True when the ask was made on the view the browser is showing. An ask
+ * without a view key was stored before Gloss recorded views. It counts as
+ * made at the page's URL without a fragment, whose view key is the page
+ * key. When Gloss sent no view key for the page, Gloss is older than views
+ * and every ask counts as made on this view.
+ */
+export function madeOnThisView(state: PageState, cl: Clarification): boolean {
+	if (!state.viewKey) return true;
+	return (cl.viewKey ?? state.urlKey) === state.viewKey;
+}
+
+/** How many asks belong on the view being shown: every ask except the `elsewhere` ones. */
+export function shownAskCount(state: PageState): number {
+	let n = 0;
+	for (const entry of state.asks.values()) if (entry.state !== 'elsewhere') n++;
+	return n;
 }
 
 function turnsOf(turns: Turn[], clarificationId: string): Turn[] {
@@ -57,6 +87,7 @@ function turnsOf(turns: Turn[], clarificationId: string): Turn[] {
  */
 export function loadPage(state: PageState, result: GetPageResult): void {
 	state.urlKey = result.urlKey;
+	state.viewKey = result.viewKey ?? null;
 	// A page Gloss has not stored yet has no conversation and no asks.
 	if (!result.page) {
 		state.conversationId = null;
@@ -84,6 +115,7 @@ export function loadPage(state: PageState, result: GetPageResult): void {
 
 export function clearPage(state: PageState): void {
 	state.urlKey = null;
+	state.viewKey = null;
 	state.conversationId = null;
 	state.running = false;
 	state.asks = new Map();
@@ -97,6 +129,7 @@ export function addAsk(
 	anchorState: AskAnchorState
 ): AskEntry | null {
 	state.urlKey = result.urlKey;
+	state.viewKey = result.viewKey ?? state.viewKey;
 	state.conversationId = result.conversationId;
 	state.running = true;
 	if (!result.clarification) return null;
@@ -143,16 +176,18 @@ export function setAnchor(
 }
 
 /**
- * The page's asks in reading order, as the note navigator steps through
- * them: asks with a place on the page by how far down it is (`yOf`, see
- * `passageY` in spot.ts), then the ones without one (orphans, unresolved)
- * by their number. Two asks at the same height go by where their passages
- * start when both are on the page.
+ * The asks of the view being shown in reading order, as the note navigator
+ * steps through them: asks with a place on the page by how far down it is
+ * (`yOf`, see `passageY` in spot.ts), then the ones without one (orphans,
+ * unresolved) by their number. Two asks at the same height go by where
+ * their passages start when both are on the page. `elsewhere` asks are
+ * left out.
  */
 export function orderedAskIds(state: PageState, yOf: (entry: AskEntry) => number | null): string[] {
 	const placed: [AskEntry, number][] = [];
 	const rest: AskEntry[] = [];
 	for (const entry of state.asks.values()) {
+		if (entry.state === 'elsewhere') continue;
 		const y = entry.state === 'orphan' || entry.state === 'pending' ? null : yOf(entry);
 		if (y === null) rest.push(entry);
 		else placed.push([entry, y]);

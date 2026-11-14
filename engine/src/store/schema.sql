@@ -67,7 +67,11 @@ CREATE TABLE IF NOT EXISTS clarifications (
     -- JSON WebAnchor for an ask made on a web page; NULL for in-app clarifications.
     web_anchor TEXT,
     -- 'anchored', 'fuzzy' or 'orphan': how the extension last placed the anchor.
-    anchor_state TEXT
+    anchor_state TEXT,
+    -- For an ask made on a web page: the view of the page it was made on
+    -- (page_views.view_key). NULL for in-app clarifications and for asks
+    -- stored before views were recorded.
+    view_key TEXT
 );
 
 CREATE INDEX IF NOT EXISTS clarifications_by_conversation ON clarifications (conversation_id, number);
@@ -75,20 +79,37 @@ CREATE INDEX IF NOT EXISTS clarifications_by_conversation ON clarifications (con
 -- Web pages asked about from the browser extension. Each page owns one
 -- conversation; the asks made on it are that conversation's clarifications.
 CREATE TABLE IF NOT EXISTS pages (
-    -- Canonical URL (see pages::url_key).
+    -- Canonical URL (see pages::page_keys).
     url_key TEXT PRIMARY KEY,
-    -- The URL as the browser last reported it.
+    -- The URL as the browser last reported it, without a fragment that only
+    -- selects a view of the page.
     url TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
     favicon_url TEXT,
     conversation_id TEXT NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
-    -- The readable text last sent to the agent and its hash, so the text is
-    -- sent again only when the page changed.
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+);
+
+-- The views of a page that were asked about. A view is what one URL of the
+-- page shows: the page itself, or what a fragment selects, such as one file
+-- of a diff. A page that never has a fragment has one view, whose key is
+-- the page's key.
+CREATE TABLE IF NOT EXISTS page_views (
+    -- Key of the view (see pages::page_keys). No two pages share one.
+    view_key TEXT PRIMARY KEY,
+    url_key TEXT NOT NULL REFERENCES pages(url_key) ON DELETE CASCADE,
+    -- The URL of the view as the browser last reported it.
+    url TEXT NOT NULL,
+    -- The readable text of the view last sent to the agent and its hash, so
+    -- the text is sent again only when the view changed.
     text TEXT,
     text_hash TEXT,
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS page_views_by_page ON page_views (url_key);
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

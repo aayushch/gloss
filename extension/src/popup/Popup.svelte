@@ -46,7 +46,11 @@
 	let navState = $state<NavigatorState | null>(null);
 
 	const asks = $derived((page?.page?.conversation.clarifications ?? []).filter((c) => c.webAnchor));
-	const orphans = $derived(asks.filter((c) => c.anchorState === 'orphan').length);
+	/** The asks whose passages are on another view of the page (see `onOtherView`). */
+	const elsewhere = $derived(asks.filter(onOtherView));
+	/** The asks that belong on the view the tab is showing. */
+	const here = $derived(asks.filter((c) => !elsewhere.includes(c)));
+	const orphans = $derived(here.filter((c) => c.anchorState === 'orphan').length);
 	const connected = $derived(status.state === 'connected');
 	const running = $derived(page?.page?.conversation.running || isLive(reply));
 	const askable = $derived(!!tab?.url && /^(https?|file):/.test(tab.url));
@@ -224,6 +228,39 @@
 	function shortQuote(c: Clarification): string {
 		return c.quote.length > 70 ? c.quote.slice(0, 70) + '…' : c.quote;
 	}
+
+	/**
+	 * True when the ask's passage is on another view of the page than the
+	 * one the tab is showing. One page can show different content under
+	 * each URL fragment, such as the files of a diff.
+	 *
+	 * The tab's content script knows where it placed each ask, so its
+	 * answer (`navState`) is used for the asks it lists. For an ask it does
+	 * not list, and in a tab without a content script, the ask's view key is
+	 * compared with the view key of the tab's URL. An ask without a view key
+	 * was made at the page's URL without a fragment, whose view key is the
+	 * page key. When Gloss sent no view key for the tab's URL, Gloss is
+	 * older than views and no ask counts as being on another view.
+	 */
+	function onOtherView(c: Clarification): boolean {
+		if (navState?.elsewhere?.includes(c.id)) return true;
+		if (navState?.here?.includes(c.id)) return false;
+		if (!page?.viewKey) return false;
+		return (c.viewKey ?? page.urlKey) !== page.viewKey;
+	}
+
+	/**
+	 * A short name for the view an ask was made on: the last part of the
+	 * URL fragment that selects it, which for a diff is the file name.
+	 * Empty for an ask made at the page's URL without a fragment.
+	 */
+	function viewName(c: Clarification): string {
+		const prefix = `${page?.urlKey ?? ''}#`;
+		if (!c.viewKey?.startsWith(prefix)) return '';
+		const fragment = c.viewKey.slice(prefix.length);
+		const last = fragment.split('/').filter(Boolean).pop() ?? fragment;
+		return last.length > 28 ? last.slice(0, 27) + '…' : last;
+	}
 </script>
 
 <div class="page popup">
@@ -253,8 +290,11 @@
 					No notes on this page yet. Highlight text and click “Ask about this”.
 				</div>
 			{:else}
+				{#if here.length === 0}
+					<div class="muted">No notes on this view of the page yet.</div>
+				{/if}
 				<div class="list">
-					{#each asks as c (c.id)}
+					{#each here as c (c.id)}
 						<button
 							class="item"
 							class:is-orphan={c.anchorState === 'orphan'}
@@ -272,6 +312,22 @@
 					<div class="muted">
 						{orphans}
 						{orphans === 1 ? 'note' : 'notes'} not found on this page.
+					</div>
+				{/if}
+				{#if elsewhere.length > 0}
+					<div class="muted" style="margin-top:8px">On other views of this page</div>
+					<div class="list">
+						{#each elsewhere as c (c.id)}
+							<button
+								class="item"
+								onclick={() => focusAsk(c)}
+								title={c.viewUrl ? `${c.quote}\n${c.viewUrl}` : c.quote}
+							>
+								<span class="mark" style="font-size:15px">{@html MARK_SVG}</span>
+								<span class="title">{shortQuote(c)}</span>
+								{#if viewName(c)}<span class="sub">{viewName(c)}</span>{/if}
+							</button>
+						{/each}
 					</div>
 				{/if}
 				{#if navState?.hidden}

@@ -216,6 +216,44 @@ export function resolve(anchor: WebAnchor, index: TextIndex, approximate = true)
 	return null;
 }
 
+/**
+ * Finds the anchor's passage on a view of the page other than the one the
+ * ask was made on. One page can show different content under each URL
+ * fragment, such as the files of a diff, and the same words often occur in
+ * several of them. So the passage counts as present only where the exact
+ * quote sits between the text recorded before it and the text recorded
+ * after it, all of both. An anchor that recorded no surrounding text is
+ * never placed: nothing tells its passage apart from a repeat of the same
+ * words. Among several such places, the one nearest the recorded position
+ * is returned. Null means the passage is not on this view.
+ */
+export function resolveOnOtherView(anchor: WebAnchor, index: TextIndex): Resolved | null {
+	const text = index.text;
+	const exact = normalise(anchor.quote.exact);
+	const prefix = (anchor.quote.prefix ?? '').replace(/\s+/g, ' ');
+	const suffix = (anchor.quote.suffix ?? '').replace(/\s+/g, ' ');
+	if (!exact || (!prefix && !suffix)) return null;
+	const pos = anchor.position;
+	let best = -1;
+	let bestDist = Infinity;
+	for (const at of occurrences(text, exact)) {
+		const end = at + exact.length;
+		if (!text.startsWith(suffix, end)) continue;
+		if (at < prefix.length || !text.startsWith(prefix, at - prefix.length)) continue;
+		const dist = pos ? Math.abs(at - pos.start) : 0;
+		if (dist < bestDist) {
+			best = at;
+			bestDist = dist;
+		}
+	}
+	if (best < 0) return null;
+	return {
+		range: index.toRange(best, best + exact.length),
+		offsets: { start: best, end: best + exact.length },
+		state: 'anchored'
+	};
+}
+
 /** Offsets of the anchor's container element in the index, when the selector still finds one. */
 function containerOffsets(selector: string | null | undefined, index: TextIndex): Offsets | null {
 	if (!selector) return null;

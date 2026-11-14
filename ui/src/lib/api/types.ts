@@ -120,6 +120,17 @@ export interface Clarification {
 	webAnchor: WebAnchor | null;
 	/** How the extension last managed to place the anchor on its page. */
 	anchorState: AnchorState | null;
+	/**
+	 * For an ask on a web page: the key of the view of the page it was made
+	 * on. A URL fragment that is not a hash route selects a view, such as
+	 * one file of a diff, and the key is then the page key followed by `#`
+	 * and the fragment. For an ask made at the page's URL without such a
+	 * fragment it equals the page key. Missing for an ask stored before
+	 * views were recorded.
+	 */
+	viewKey?: string | null;
+	/** The browser URL of that view, for opening the ask where it was made. */
+	viewUrl?: string | null;
 }
 
 /** The highlighted passage with the text just before and after it, so it can be found again. */
@@ -156,6 +167,7 @@ export interface AskContext {
 export interface Page {
 	/** Normalised URL that identifies the page; the pageKey of its conversation. */
 	urlKey: string;
+	/** The URL as the browser last had it, without a fragment that only selects a view of the page. */
 	url: string;
 	title: string;
 	faviconUrl: string | null;

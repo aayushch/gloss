@@ -9,9 +9,11 @@ import {
 	createPageState,
 	isStreaming,
 	loadPage,
+	madeOnThisView,
 	orderedAskIds,
 	removeAsk,
 	setOpen,
+	shownAskCount,
 	type AskEntry
 } from '../src/content/state';
 
@@ -234,6 +236,14 @@ describe('orderedAskIds', () => {
 		]);
 	});
 
+	it('leaves out asks whose passage is on another view of the page', () => {
+		const s = createPageState();
+		s.asks.set('here', entry('here', 1, null, 'orphan'));
+		s.asks.set('other', entry('other', 2, null, 'elsewhere'));
+		expect(orderedAskIds(s, () => null)).toEqual(['here']);
+		expect(shownAskCount(s)).toBe(1);
+	});
+
 	it('orders asks on one line by where their passages start', () => {
 		document.body.innerHTML = '<p id="a">first</p><p id="b">second</p>';
 		const rangeOf = (id: string) => {
@@ -245,5 +255,38 @@ describe('orderedAskIds', () => {
 		s.asks.set('second', entry('second', 1, rangeOf('b'), 'anchored'));
 		s.asks.set('first', entry('first', 2, rangeOf('a'), 'anchored'));
 		expect(orderedAskIds(s, () => 100)).toEqual(['first', 'second']);
+	});
+});
+
+describe('madeOnThisView', () => {
+	const PAGE = 'https://git.example.com/pr/7/diff';
+	const onView = (viewKey: string | null | undefined): Clarification => ({
+		...clarification('c1'),
+		viewKey
+	});
+
+	it('compares the view of the ask with the view being shown', () => {
+		const s = createPageState();
+		loadPage(s, { urlKey: PAGE, viewKey: `${PAGE}#src/Foo.java`, page: null });
+		expect(s.viewKey).toBe(`${PAGE}#src/Foo.java`);
+		expect(madeOnThisView(s, onView(`${PAGE}#src/Foo.java`))).toBe(true);
+		expect(madeOnThisView(s, onView(`${PAGE}#src/Bar.java`))).toBe(false);
+		expect(madeOnThisView(s, onView(PAGE))).toBe(false);
+	});
+
+	it('counts an ask without a view as made at the URL without a fragment', () => {
+		const s = createPageState();
+		loadPage(s, { urlKey: PAGE, viewKey: PAGE, page: null });
+		expect(madeOnThisView(s, onView(undefined))).toBe(true);
+		loadPage(s, { urlKey: PAGE, viewKey: `${PAGE}#src/Foo.java`, page: null });
+		expect(madeOnThisView(s, onView(null))).toBe(false);
+	});
+
+	it('counts every ask as made on this view when Gloss sends no view key', () => {
+		const s = createPageState();
+		loadPage(s, { urlKey: PAGE, page: null });
+		expect(s.viewKey).toBeNull();
+		expect(madeOnThisView(s, onView(undefined))).toBe(true);
+		expect(madeOnThisView(s, onView(`${PAGE}#src/Bar.java`))).toBe(true);
 	});
 });

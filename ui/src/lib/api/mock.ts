@@ -462,7 +462,10 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 			position: { start: 1240, end: 1303 },
 			container: 'article > p:nth-of-type(3)'
 		},
-		anchorState: 'anchored'
+		anchorState: 'anchored',
+		// Asked after following a link to one section of the page.
+		viewKey: `${STORE_BUFFER_URL}#the-write-path`,
+		viewUrl: `${STORE_BUFFER_URL}#the-write-path`
 	};
 	const orphan: Clarification = {
 		id: 'cl_web2',
@@ -482,7 +485,9 @@ function seedPage(): { conv: Conv; page: PageRecord } {
 			position: null,
 			container: null
 		},
-		anchorState: 'orphan'
+		anchorState: 'orphan',
+		viewKey: STORE_BUFFER_URL,
+		viewUrl: STORE_BUFFER_URL
 	};
 	conv.clarifications.push(anchored, orphan);
 	conv.clarificationCount = 2;

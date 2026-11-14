@@ -12,7 +12,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use crate::types::*;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 /// Columns and data a version 1 database lacks. `turns_fts` itself comes from
 /// the schema; this only fills it from the turns that already exist.
@@ -61,6 +61,37 @@ const MIGRATE_V6_TO_V7: &str = "
     UPDATE schema_version SET version = 7;
 ";
 
+/// Version 8 gives a page views. The `page_views` table comes from the
+/// schema. Each ask gains the key of the view it was made on, the text sent
+/// to the agent is recorded per view instead of per page, and a stored page
+/// URL loses a fragment that only selects a view (a fragment that does not
+/// start with `/` or `!/`, see `pages::page_keys`).
+///
+/// The two text columns are dropped only where they exist. A database older
+/// than version 7 has no `pages` table when it is opened, so the schema has
+/// just created that table without them.
+fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE clarifications ADD COLUMN view_key TEXT;")?;
+    for column in ["text", "text_hash"] {
+        let exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name = ?1",
+            params![column],
+            |r| r.get::<_, i64>(0).map(|n| n > 0),
+        )?;
+        if exists {
+            conn.execute_batch(&format!("ALTER TABLE pages DROP COLUMN {};", column))?;
+        }
+    }
+    conn.execute_batch(
+        "UPDATE pages SET url = substr(url, 1, instr(url, '#') - 1)
+            WHERE instr(url, '#') > 0
+              AND substr(url, instr(url, '#') + 1, 1) <> '/'
+              AND substr(url, instr(url, '#') + 1, 2) <> '!/';
+         UPDATE schema_version SET version = 8;",
+    )?;
+    Ok(())
+}
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -105,6 +136,7 @@ impl Store {
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
                 conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
             }
             Some(2) => {
                 conn.execute_batch(MIGRATE_V2_TO_V3)?;
@@ -112,23 +144,31 @@ impl Store {
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
                 conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
             }
             Some(3) => {
                 conn.execute_batch(MIGRATE_V3_TO_V4)?;
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
                 conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
             }
             Some(4) => {
                 conn.execute_batch(MIGRATE_V4_TO_V5)?;
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
                 conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
             }
             Some(5) => {
                 conn.execute_batch(MIGRATE_V5_TO_V6)?;
                 conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
             }
-            Some(6) => conn.execute_batch(MIGRATE_V6_TO_V7)?,
+            Some(6) => {
+                conn.execute_batch(MIGRATE_V6_TO_V7)?;
+                migrate_v7_to_v8(&conn)?;
+            }
+            Some(7) => migrate_v7_to_v8(&conn)?,
             Some(v) if v > SCHEMA_VERSION => {
                 return Err(anyhow!(
                     "database schema version {} is newer than this build supports ({})",
@@ -430,7 +470,7 @@ impl Store {
                     t.attachments.push(att);
                 }
             }
-            let mut stmt = c.prepare(&format!("{} WHERE conversation_id = ?1 ORDER BY number", CLARIFICATION_SELECT))?;
+            let mut stmt = c.prepare(&format!("{} WHERE k.conversation_id = ?1 ORDER BY k.number", CLARIFICATION_SELECT))?;
             let clarifications = stmt
                 .query_map(params![id], row_clarification)?
                 .collect::<Result<Vec<_>, _>>()?;
@@ -782,7 +822,8 @@ impl Store {
     // ── clarifications ──────────────────────────────────────────────────
 
     /// Creates a clarification. `web_anchor` is the JSON anchor of an ask made
-    /// on a web page; in-app clarifications pass None and a block id.
+    /// on a web page and `view_key` the view of the page it was made on;
+    /// in-app clarifications pass None for both and a block id.
     pub fn create_clarification(
         &self,
         conversation_id: &str,
@@ -790,6 +831,7 @@ impl Store {
         quote: &str,
         parent_id: Option<&str>,
         web_anchor: Option<&str>,
+        view_key: Option<&str>,
     ) -> Result<Clarification> {
         let id = new_id("cl");
         self.with(|c| {
@@ -799,9 +841,9 @@ impl Store {
                 |r| r.get(0),
             )?;
             c.execute(
-                "INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at, web_anchor)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)",
-                params![id, conversation_id, number, anchor_block_id, quote, parent_id, now_ms(), web_anchor],
+                "INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at, web_anchor, view_key)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9)",
+                params![id, conversation_id, number, anchor_block_id, quote, parent_id, now_ms(), web_anchor, view_key],
             )?;
             Ok(())
         })?;
@@ -811,7 +853,7 @@ impl Store {
     pub fn get_clarification(&self, id: &str) -> Result<Clarification> {
         self.with(|c| {
             c.query_row(
-                &format!("{} WHERE id = ?1", CLARIFICATION_SELECT),
+                &format!("{} WHERE k.id = ?1", CLARIFICATION_SELECT),
                 params![id],
                 row_clarification,
             )
@@ -950,47 +992,65 @@ impl Store {
         })
     }
 
-    /// The hash of the page text last sent to the agent, if any.
-    pub fn page_text_hash(&self, url_key: &str) -> Result<Option<String>> {
-        self.with(|c| {
-            Ok(c.query_row(
-                "SELECT text_hash FROM pages WHERE url_key = ?1",
-                params![url_key],
-                |r| r.get(0),
-            )
-            .optional()?
-            .flatten())
-        })
-    }
-
-    /// The page text last sent to the agent, if any.
-    pub fn page_text(&self, url_key: &str) -> Result<Option<String>> {
-        self.with(|c| {
-            Ok(c.query_row(
-                "SELECT text FROM pages WHERE url_key = ?1",
-                params![url_key],
-                |r| r.get(0),
-            )
-            .optional()?
-            .flatten())
-        })
-    }
-
-    pub fn set_page_text(&self, url_key: &str, text: &str, hash: &str) -> Result<()> {
+    /// Creates the row of a view of a page, or refreshes its URL and
+    /// last-seen time.
+    pub fn upsert_view(&self, url_key: &str, view_key: &str, url: &str) -> Result<()> {
+        let now = now_ms();
         self.with(|c| {
             c.execute(
-                "UPDATE pages SET text = ?2, text_hash = ?3 WHERE url_key = ?1",
-                params![url_key, text, hash],
+                "INSERT INTO page_views (view_key, url_key, url, first_seen, last_seen)
+                 VALUES (?1, ?2, ?3, ?4, ?4)
+                 ON CONFLICT(view_key) DO UPDATE SET url = excluded.url, last_seen = excluded.last_seen",
+                params![view_key, url_key, url, now],
             )?;
             Ok(())
         })
     }
 
-    pub fn touch_page(&self, url_key: &str) -> Result<()> {
+    /// Refreshes the URL and last-seen time of a view that has a row. A
+    /// view without a row stays without one: a row is only made when the
+    /// view is asked about.
+    pub fn touch_view(&self, view_key: &str, url: &str) -> Result<()> {
         self.with(|c| {
             c.execute(
-                "UPDATE pages SET last_seen = ?2 WHERE url_key = ?1",
-                params![url_key, now_ms()],
+                "UPDATE page_views SET url = ?2, last_seen = ?3 WHERE view_key = ?1",
+                params![view_key, url, now_ms()],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// The hash of the view's text last sent to the agent, if any.
+    pub fn view_text_hash(&self, view_key: &str) -> Result<Option<String>> {
+        self.with(|c| {
+            Ok(c.query_row(
+                "SELECT text_hash FROM page_views WHERE view_key = ?1",
+                params![view_key],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
+        })
+    }
+
+    /// The view's text last sent to the agent, if any.
+    pub fn view_text(&self, view_key: &str) -> Result<Option<String>> {
+        self.with(|c| {
+            Ok(c.query_row(
+                "SELECT text FROM page_views WHERE view_key = ?1",
+                params![view_key],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
+        })
+    }
+
+    pub fn set_view_text(&self, view_key: &str, text: &str, hash: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE page_views SET text = ?2, text_hash = ?3 WHERE view_key = ?1",
+                params![view_key, text, hash],
             )?;
             Ok(())
         })
@@ -1015,8 +1075,9 @@ const SUMMARY_SELECT: &str = "SELECT c.id, c.title, c.agent, c.model, c.web_sear
      FROM conversations c";
 
 const CLARIFICATION_SELECT: &str =
-    "SELECT id, conversation_id, number, anchor_block_id, quote, parent_id, open, created_at, web_anchor, anchor_state
-     FROM clarifications";
+    "SELECT k.id, k.conversation_id, k.number, k.anchor_block_id, k.quote, k.parent_id, k.open, k.created_at, k.web_anchor, k.anchor_state,
+        k.view_key, (SELECT v.url FROM page_views v WHERE v.view_key = k.view_key)
+     FROM clarifications k";
 
 const PAGE_SELECT: &str = "SELECT p.url_key, p.url, p.title, p.favicon_url, p.conversation_id, p.first_seen, p.last_seen,
         c.updated_at,
@@ -1150,6 +1211,8 @@ fn row_clarification(r: &Row<'_>) -> rusqlite::Result<Clarification> {
         created_at: r.get(7)?,
         web_anchor: web_anchor.and_then(|j| serde_json::from_str(&j).ok()),
         anchor_state: anchor_state.as_deref().and_then(AnchorState::parse),
+        view_key: r.get(10)?,
+        view_url: r.get(11)?,
     })
 }
 
@@ -1210,6 +1273,7 @@ mod tests {
                 "answer",
                 None,
                 None,
+                None,
             )
             .unwrap();
         assert_eq!(cl.number, 1);
@@ -1219,6 +1283,7 @@ mod tests {
                 &format!("{}:0", a.id),
                 "partial",
                 Some(&cl.id),
+                None,
                 None,
             )
             .unwrap();
@@ -1330,11 +1395,13 @@ mod tests {
             conn.execute_batch(SCHEMA).unwrap();
             conn.execute_batch(
                 "DROP TABLE projects;
+                 DROP TABLE page_views;
                  DROP TABLE pages;
                  ALTER TABLE conversations DROP COLUMN origin_file;
                  ALTER TABLE conversations DROP COLUMN origin_until;
                  ALTER TABLE clarifications DROP COLUMN web_anchor;
                  ALTER TABLE clarifications DROP COLUMN anchor_state;
+                 ALTER TABLE clarifications DROP COLUMN view_key;
                  INSERT INTO schema_version VALUES (4);
                  INSERT INTO conversations (id, title, agent, project_dir, created_at, updated_at) VALUES
                     ('c1', 'One', 'claude', '/work/alpha', 5, 5),
@@ -1364,9 +1431,11 @@ mod tests {
             let conn = Connection::open(&path).unwrap();
             conn.execute_batch(SCHEMA).unwrap();
             conn.execute_batch(
-                "DROP TABLE pages;
+                "DROP TABLE page_views;
+                 DROP TABLE pages;
                  ALTER TABLE clarifications DROP COLUMN web_anchor;
                  ALTER TABLE clarifications DROP COLUMN anchor_state;
+                 ALTER TABLE clarifications DROP COLUMN view_key;
                  INSERT INTO schema_version VALUES (6);
                  INSERT INTO conversations (id, title, agent, created_at, updated_at) VALUES ('c1', 'One', 'claude', 5, 5);
                  INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, created_at)
@@ -1382,7 +1451,7 @@ mod tests {
             .create_conversation(AgentId::Claude, "", true, None)
             .unwrap();
         let cl = s
-            .create_clarification(&page_conv.summary.id, "", "hi", None, Some(anchor))
+            .create_clarification(&page_conv.summary.id, "", "hi", None, Some(anchor), None)
             .unwrap();
         assert_eq!(cl.web_anchor.unwrap().quote.exact, "hi");
         s.upsert_page(
@@ -1394,6 +1463,60 @@ mod tests {
         )
         .unwrap();
         assert_eq!(s.list_pages(10).unwrap()[0].ask_count, 1);
+    }
+
+    #[test]
+    fn migrates_version_7_to_page_views() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v7.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA).unwrap();
+            conn.execute_batch(
+                "DROP TABLE page_views;
+                 ALTER TABLE clarifications DROP COLUMN view_key;
+                 ALTER TABLE pages ADD COLUMN text TEXT;
+                 ALTER TABLE pages ADD COLUMN text_hash TEXT;
+                 INSERT INTO schema_version VALUES (7);
+                 INSERT INTO conversations (id, title, agent, created_at, updated_at) VALUES
+                    ('c1', 'Diff', 'claude', 5, 5), ('c2', 'App', 'claude', 5, 5), ('c3', 'Doc', 'claude', 5, 5);
+                 INSERT INTO pages (url_key, url, title, conversation_id, text, text_hash, first_seen, last_seen) VALUES
+                    ('https://git.example.com/pr/7/diff', 'https://git.example.com/pr/7/diff#src/Foo.java', 'Diff', 'c1', 'body', 'h', 5, 5),
+                    ('https://app.example.com/#/inbox', 'https://app.example.com/#/inbox', 'App', 'c2', NULL, NULL, 5, 5),
+                    ('https://example.com/doc', 'https://example.com/doc?x=1', 'Doc', 'c3', NULL, NULL, 5, 5);
+                 INSERT INTO clarifications (id, conversation_id, number, anchor_block_id, quote, created_at, web_anchor)
+                    VALUES ('k1', 'c1', 1, '', 'old quote', 5, '{\"quote\":{\"exact\":\"old quote\"}}');",
+            )
+            .unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        // The view fragment is gone from the page URL; a hash route and a query stay.
+        let url = |key: &str| s.get_page(key).unwrap().unwrap().url;
+        assert_eq!(
+            url("https://git.example.com/pr/7/diff"),
+            "https://git.example.com/pr/7/diff"
+        );
+        assert_eq!(
+            url("https://app.example.com/#/inbox"),
+            "https://app.example.com/#/inbox"
+        );
+        assert_eq!(
+            url("https://example.com/doc"),
+            "https://example.com/doc?x=1"
+        );
+        // An ask from before the migration has no view.
+        let old = s.get_clarification("k1").unwrap();
+        assert_eq!(old.web_anchor.unwrap().quote.exact, "old quote");
+        assert!(old.view_key.is_none() && old.view_url.is_none());
+        // No view has had its text sent yet.
+        assert!(s
+            .view_text_hash("https://git.example.com/pr/7/diff")
+            .unwrap()
+            .is_none());
+        // Opening the migrated file again changes nothing.
+        drop(s);
+        let s = Store::open(&path).unwrap();
+        assert_eq!(s.list_pages(10).unwrap().len(), 3);
     }
 
     #[test]
@@ -1432,9 +1555,14 @@ mod tests {
 
         let anchor =
             r#"{"quote":{"exact":"x","prefix":"","suffix":""},"position":{"start":1,"end":2}}"#;
-        let cl = s
-            .create_clarification(&id, "", "x", None, Some(anchor))
+        let view = "https://e.com/a#part";
+        s.upsert_view("https://e.com/a", view, "https://e.com/a?utm=1#part")
             .unwrap();
+        let cl = s
+            .create_clarification(&id, "", "x", None, Some(anchor), Some(view))
+            .unwrap();
+        assert_eq!(cl.view_key.as_deref(), Some(view));
+        assert_eq!(cl.view_url.as_deref(), Some("https://e.com/a?utm=1#part"));
         let t = s
             .create_turn(
                 &id,
@@ -1458,15 +1586,26 @@ mod tests {
             Some(AnchorState::Orphan)
         );
 
-        assert!(s.page_text_hash("https://e.com/a").unwrap().is_none());
-        s.set_page_text("https://e.com/a", "body", "h1").unwrap();
+        // The text sent to the agent is recorded per view, and only for a
+        // view that has a row.
+        assert!(s.view_text_hash(view).unwrap().is_none());
+        s.set_view_text(view, "body", "h1").unwrap();
+        assert_eq!(s.view_text_hash(view).unwrap().as_deref(), Some("h1"));
+        assert_eq!(s.view_text(view).unwrap().as_deref(), Some("body"));
+        s.set_view_text("https://e.com/a", "other", "h2").unwrap();
+        assert!(s.view_text_hash("https://e.com/a").unwrap().is_none());
+        // Touching refreshes a view's URL and makes no row for an unknown view.
+        s.touch_view(view, "https://e.com/a#part").unwrap();
+        s.touch_view("https://e.com/a#other", "https://e.com/a#other")
+            .unwrap();
         assert_eq!(
-            s.page_text_hash("https://e.com/a").unwrap().as_deref(),
-            Some("h1")
+            s.get_clarification(&cl.id).unwrap().view_url.as_deref(),
+            Some("https://e.com/a#part")
         );
+        assert!(s.view_text_hash("https://e.com/a#other").unwrap().is_none());
 
         let nested = s
-            .create_clarification(&id, "", "y", Some(&cl.id), Some(anchor))
+            .create_clarification(&id, "", "y", Some(&cl.id), Some(anchor), Some(view))
             .unwrap();
         s.delete_clarification(&cl.id).unwrap();
         assert!(s.get_clarification(&cl.id).is_err());
@@ -1476,6 +1615,8 @@ mod tests {
         s.delete_page("https://e.com/a").unwrap();
         assert!(s.get_page("https://e.com/a").unwrap().is_none());
         assert!(s.get_summary(&id).is_err());
+        // The page's views go with it.
+        assert!(s.view_text_hash(view).unwrap().is_none());
     }
 }
 

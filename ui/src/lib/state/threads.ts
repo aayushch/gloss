@@ -161,6 +161,55 @@ export function pageThreads(conv: Conversation): Thread[] {
 	return [...buildThreads(conv).values()].filter((th) => th.clarification.webAnchor);
 }
 
+/** The asks of a web page that were made on one view of it. */
+export interface PageView {
+	/** Key of the view: `Clarification.viewKey` of its asks, or the page key for asks stored without one. */
+	key: string;
+	/**
+	 * The URL fragment that selects the view, such as the path of one file
+	 * of a diff. Empty for the view at the page's URL without a fragment.
+	 */
+	fragment: string;
+	/** The browser URL of the view, or null when none of its asks recorded one. */
+	url: string | null;
+	asks: Thread[];
+}
+
+/**
+ * The asks made on a web page, grouped by the view of the page each was
+ * made on. Views are in the order of their first ask, and the asks of a
+ * view are in clarification order. An ask stored without a view key counts
+ * as made at the page's URL without a fragment.
+ */
+export function pageViews(conv: Conversation): PageView[] {
+	const pageKey = conv.pageKey ?? '';
+	const views = new Map<string, PageView>();
+	for (const th of pageThreads(conv)) {
+		const cl = th.clarification;
+		const key = cl.viewKey ?? pageKey;
+		let view = views.get(key);
+		if (!view) {
+			const prefix = `${pageKey}#`;
+			const fragment = key.startsWith(prefix) ? key.slice(prefix.length) : '';
+			view = { key, fragment, url: null, asks: [] };
+			views.set(key, view);
+		}
+		view.url ??= cl.viewUrl ?? null;
+		view.asks.push(th);
+	}
+	return [...views.values()];
+}
+
+/**
+ * True when a page's asks are shown under a heading per view: the page has
+ * asks on more than one view, or its only view is one a fragment selects.
+ * A page whose asks were all made at its URL without a fragment needs no
+ * headings.
+ */
+export function hasViewHeadings(views: PageView[]): boolean {
+	return views.length > 1 || (views.length === 1 && views[0].fragment !== '');
+}
+
 /** Turns asked about the page as a whole rather than about one passage. */
 export function pageQuestions(conv: Conversation): Turn[] {
 	return conv.turns.filter((t) => !t.clarificationId);

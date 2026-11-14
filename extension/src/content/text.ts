@@ -301,6 +301,48 @@ export function occurrences(text: string, needle: string, from = 0, to = text.le
 	return out;
 }
 
+/**
+ * Finds where `lines` occur in `text` one after another, within `[from, to)`,
+ * and returns the offsets from the start of the first line to the end of
+ * the last. The lines need not touch. Up to `maxGap` characters may sit
+ * between the end of one line and the start of the next, and each next
+ * line is taken at its first occurrence inside that gap.
+ *
+ * This is how a selection of several lines in a code editor is found on
+ * the page. The editor reports the selected lines alone, while the page
+ * text has more between them: the line numbers of the editor's gutter, and
+ * anything else the editor renders between two lines.
+ *
+ * Every occurrence of the first line is tried as a start, so the result
+ * can hold several runs. An empty `lines` gives no runs.
+ */
+export function lineRuns(
+	text: string,
+	lines: string[],
+	maxGap: number,
+	from = 0,
+	to = text.length
+): Offsets[] {
+	const out: Offsets[] = [];
+	if (!lines.length || lines.some((l) => !l)) return out;
+	for (const start of occurrences(text, lines[0], from, to)) {
+		let end = start + lines[0].length;
+		let complete = true;
+		for (let i = 1; i < lines.length; i++) {
+			const line = lines[i];
+			const limit = Math.min(to, end + maxGap + line.length);
+			const at = text.slice(end, limit).indexOf(line);
+			if (at < 0) {
+				complete = false;
+				break;
+			}
+			end += at + line.length;
+		}
+		if (complete) out.push({ start, end });
+	}
+	return out;
+}
+
 /** Collapses whitespace runs to one space and trims, the way the index normalises page text. */
 export function normalise(s: string): string {
 	return s.replace(/\s+/g, ' ').trim();

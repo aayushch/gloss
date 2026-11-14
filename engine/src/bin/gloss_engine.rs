@@ -382,6 +382,7 @@ async fn main() -> Result<()> {
                         anchor,
                         context: AskContext { before, after },
                         question,
+                        quote: None,
                         page_text,
                         private: false,
                     },
