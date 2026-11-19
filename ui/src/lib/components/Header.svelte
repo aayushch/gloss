@@ -587,7 +587,11 @@
 	.ico.on {
 		color: var(--accent-text);
 	}
+	/* The button keeps its full width and its label stays on one line. When
+	   the header is too narrow, the conversation title (h1) truncates instead. */
 	.continue {
+		flex: none;
+		white-space: nowrap;
 		height: 28px;
 		padding: 0 12px;
 		font-size: 12.5px;
