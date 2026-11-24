@@ -2,6 +2,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { innerWidth, innerHeight } from 'svelte/reactivity/window';
 	import { renderMarkdown } from '../markdown';
 	import { MARK_SVG } from '../../shared/mark';
@@ -35,6 +36,10 @@
 	/** True while the footer asks to confirm removing the note. */
 	let confirmRemove = $state(false);
 	const WIDTH = 400;
+	/** The thread counts as scrolled to the bottom when less than this many pixels are below the visible part. */
+	const AT_BOTTOM_PX = 4;
+	/** The id of the note the thread was showing when the streaming effect below last ran. */
+	let scrolledAskId = '';
 
 	const style = $derived.by(() => {
 		const vw = innerWidth.current ?? 1024;
@@ -56,13 +61,29 @@
 		return q.length > 90 ? q.slice(0, 90) + '…' : q;
 	});
 
-	// The thread follows new text while a reply streams in.
-	$effect(() => {
-		if (streaming && entry && thread) {
-			entry.turns.length;
-			entry.turns[entry.turns.length - 1]?.text;
-			thread.scrollTop = thread.scrollHeight;
-		}
+	// Keeps the end of a streaming reply in view, but only while the reader
+	// is already at the bottom of the thread. This runs before the new text
+	// is put into the DOM, so it measures where the reader was before the
+	// thread grew.
+	//   - If the thread is scrolled to the bottom, it is scrolled to the new
+	//     bottom once the new text is in the DOM.
+	//   - If the reader has scrolled up, the thread is left where it is. It
+	//     follows the reply again after the reader scrolls back to the bottom.
+	//   - If the popover has just opened on a note whose reply is streaming,
+	//     or has just changed to such a note, the thread is scrolled to the
+	//     bottom.
+	$effect.pre(() => {
+		const switched = askId !== scrolledAskId;
+		scrolledAskId = askId;
+		if (!streaming || !entry) return;
+		entry.turns.length;
+		entry.turns[entry.turns.length - 1]?.text;
+		const atBottom =
+			!thread || thread.scrollHeight - thread.scrollTop - thread.clientHeight < AT_BOTTOM_PX;
+		if (!switched && !atBottom) return;
+		void tick().then(() => {
+			if (thread) thread.scrollTop = thread.scrollHeight;
+		});
 	});
 
 	// Switching to another note drops a pending confirmation.
@@ -76,6 +97,9 @@
 		if (!t || running || !entry) return;
 		actions.followUp(askId, t);
 		text = '';
+		// The reader's own follow-up is added at the end of the thread, so
+		// the thread is scrolled there for the question and its reply.
+		if (thread) thread.scrollTop = thread.scrollHeight;
 	}
 
 	function onkeydown(e: KeyboardEvent) {

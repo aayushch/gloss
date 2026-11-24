@@ -67,6 +67,15 @@ textarea {
 	height: 0;
 }
 
+/* The content script gives both layers `is-hidden` while the "Show notes
+   on pages" switch in the toolbar popup is off. Every highlight and mark is
+   then hidden, except those of the note whose popover is open, which have
+   `is-active`. */
+.gloss-hls.is-hidden .gloss-hl:not(.is-active),
+.gloss-glyphs.is-hidden .gloss-glyph:not(.is-active) {
+	display: none;
+}
+
 /* One line of an asked passage: a rounded tint under a hairline, as the
    app draws a quoted span. Placed with a transform in page coordinates. */
 .gloss-hl {

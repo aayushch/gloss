@@ -12,6 +12,8 @@ import {
 	inPrivateContext,
 	localGet,
 	localSet,
+	NOTES_HIDDEN_KEY,
+	onLocalChange,
 	SETTINGS_KEY,
 	storageGet
 } from '../shared/browser';
@@ -131,6 +133,9 @@ class ContentApp {
 	private dock!: Dock;
 	/** The reader hid the note navigator; it comes back with the next ask or page load. */
 	private navigatorHidden = false;
+	/** The two elements the highlights and the marks are drawn in; see `setNotesHidden`. */
+	private noteLayers: HTMLElement[] = [];
+	private stopNotesWatch: (() => void) | null = null;
 	private index: TextIndex | null = null;
 	private indexDirty = true;
 	private mutations: MutationObserver | null = null;
@@ -172,7 +177,14 @@ class ContentApp {
 		AddEventListenerOptions | boolean | undefined
 	][] = [];
 
-	constructor(private settings: ExtensionSettings) {}
+	/**
+	 * `notesHidden` is true while the "Show notes on pages" switch in the
+	 * toolbar popup is off (see `setNotesHidden`).
+	 */
+	constructor(
+		private settings: ExtensionSettings,
+		private notesHidden: boolean
+	) {}
 
 	start(): void {
 		this.host = document.createElement(HOST_TAG);
@@ -193,6 +205,11 @@ class ContentApp {
 		const uiRoot = document.createElement('div');
 		this.shadow.appendChild(uiRoot);
 		document.documentElement.appendChild(this.host);
+		this.noteLayers = [highlightRoot, glyphRoot];
+		for (const layer of this.noteLayers) layer.classList.toggle('is-hidden', this.notesHidden);
+		this.stopNotesWatch = onLocalChange<boolean>(NOTES_HIDDEN_KEY, (hidden) =>
+			this.setNotesHidden(hidden === true)
+		);
 
 		this.highlights = new HighlightLayer(highlightRoot);
 		this.glyphs = new GlyphLayer(glyphRoot, {
@@ -305,6 +322,7 @@ class ContentApp {
 		const holder = globalThis as GuardHolder;
 		if (holder[GUARD_KEY] === this.uiGuard.handle) delete holder[GUARD_KEY];
 		this.stopUrlWatch?.();
+		this.stopNotesWatch?.();
 		this.mutations?.disconnect();
 		for (const t of this.retryTimers) clearTimeout(t);
 		if (this.reresolveTimer) clearTimeout(this.reresolveTimer);
@@ -323,19 +341,45 @@ class ContentApp {
 	 * Tells the UI the page state changed, shows or hides the note navigator
 	 * to match, and sends the background the new ask count when it changed.
 	 * Asks whose passage is on another view of the page are not counted.
+	 * The navigator is not shown while `notesHidden` is true.
 	 */
 	private bump(): void {
 		this.store.bump();
 		const { lastAskId } = this.store;
 		if (lastAskId && !this.store.page.asks.has(lastAskId)) this.store.lastAskId = null;
 		const shown = shownAskCount(this.store.page);
-		if (!this.disposed && shown > 0 && !this.navigatorHidden) {
+		if (!this.disposed && shown > 0 && !this.navigatorHidden && !this.notesHidden) {
 			this.dock.show();
 		} else {
 			this.dock.hide();
 			this.store.dock = null;
 		}
 		if (!this.disposed && shown !== this.sentAskCount) this.subscribe();
+	}
+
+	/**
+	 * Hides or shows every note on the page. It is called when the "Show
+	 * notes on pages" switch in the toolbar popup is flipped, in this tab or
+	 * in any other.
+	 *
+	 * While notes are hidden, the highlights, the marks beside the passages
+	 * and the note navigator are not shown, and a click on a passage does
+	 * not open its note. The notes stay placed on the page, so they show
+	 * again at once when the switch is turned back on.
+	 *
+	 * A note can still be opened while notes are hidden: the reply to a new
+	 * ask opens, and so does a note picked from the list in the toolbar
+	 * popup. That note's popover, highlight and mark show until its popover
+	 * is closed (see `.is-hidden` in styles.css).
+	 *
+	 * Hiding closes the popover that is open.
+	 */
+	private setNotesHidden(hidden: boolean): void {
+		if (this.disposed || hidden === this.notesHidden) return;
+		this.notesHidden = hidden;
+		for (const layer of this.noteLayers) layer.classList.toggle('is-hidden', hidden);
+		if (hidden) this.closePopover();
+		this.bump();
 	}
 
 	// ---- page loading and anchoring ----------------------------------
@@ -1086,7 +1130,10 @@ class ContentApp {
 		const target = e.target as Element | null;
 		if (target?.closest('a, button, input, textarea, select, [contenteditable]')) return;
 		const id = this.glyphs.askAt(e.clientX, e.clientY);
-		if (id) this.togglePopover(id);
+		if (!id) return;
+		// While notes are hidden, only the open note's passage is highlighted, so only it takes clicks.
+		if (this.notesHidden && id !== this.store.popover?.askId) return;
+		this.togglePopover(id);
 	}
 
 	private actions(): Actions {
@@ -1353,9 +1400,13 @@ let app: ContentApp | null = null;
 
 async function start(): Promise<void> {
 	if (!document.body || document.documentElement.querySelector(HOST_TAG)) return;
-	const cached = (await storageGet<ExtensionSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS;
+	const [settings, notesHidden] = await Promise.all([
+		storageGet<ExtensionSettings>(SETTINGS_KEY),
+		localGet<boolean>(NOTES_HIDDEN_KEY)
+	]);
+	const cached = settings ?? DEFAULT_SETTINGS;
 	if (isDeniedHost(location.hostname, cached.denyList)) return;
-	app = new ContentApp(cached);
+	app = new ContentApp(cached, notesHidden === true);
 	app.start();
 }
 

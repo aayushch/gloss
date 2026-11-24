@@ -2,10 +2,11 @@
 <!-- SPDX-License-Identifier: MIT -->
 
 <script lang="ts">
-	// The toolbar popup: connection status, this page's asks, an ask about
-	// the whole page, and recently asked pages.
+	// The toolbar popup: connection status, the switch that shows or hides
+	// notes on every page, this page's asks, an ask about the whole page,
+	// and recently asked pages.
 	import { onDestroy, onMount } from 'svelte';
-	import { browser } from '../shared/browser';
+	import { browser, localGet, localSet, NOTES_HIDDEN_KEY } from '../shared/browser';
 	import { connectClient, type Client } from '../shared/client';
 	import { MARK_SVG } from '../shared/mark';
 	import {
@@ -44,6 +45,12 @@
 	let launching = $state(false);
 	/** The tab's note navigator; null where no content script runs, such as the PDF viewer. */
 	let navState = $state<NavigatorState | null>(null);
+	/**
+	 * True while the "Show notes on pages" switch is off. The value is kept
+	 * in local storage under `NOTES_HIDDEN_KEY`, and the content script of
+	 * every tab hides or shows its notes when it changes.
+	 */
+	let notesHidden = $state(false);
 
 	const asks = $derived((page?.page?.conversation.clarifications ?? []).filter((c) => c.webAnchor));
 	/** The asks whose passages are on another view of the page (see `onOtherView`). */
@@ -130,6 +137,7 @@
 	onMount(async () => {
 		client = connectClient();
 		client.onEvent(onEvent);
+		notesHidden = (await localGet<boolean>(NOTES_HIDDEN_KEY)) === true;
 		const [active] = await browser.tabs.query({ active: true, currentWindow: true });
 		tab = active ?? null;
 		navState = await sendToTab<NavigatorState>({ type: 'navigator-state' });
@@ -215,6 +223,11 @@
 		client.request('openInGloss', { urlKey: page.urlKey }).catch(() => launch());
 	}
 
+	function setNotesShown(shown: boolean) {
+		notesHidden = !shown;
+		void localSet(NOTES_HIDDEN_KEY, !shown);
+	}
+
 	async function showNavigator() {
 		await sendToTab({ type: 'show-navigator' });
 		window.close();
@@ -280,6 +293,24 @@
 		{/if}
 	</div>
 
+	<div>
+		<label class="switch-row">
+			<span class="text">Show notes on pages</span>
+			<input
+				type="checkbox"
+				role="switch"
+				class="switch"
+				checked={!notesHidden}
+				onchange={(e) => setNotesShown(e.currentTarget.checked)}
+			/>
+		</label>
+		{#if notesHidden}
+			<div class="muted" style="padding:2px 10px 0">
+				Highlights, marks and the note navigator are hidden on every page.
+			</div>
+		{/if}
+	</div>
+
 	{#if connected && askable}
 		<section>
 			<h2>This page</h2>
@@ -330,7 +361,7 @@
 						{/each}
 					</div>
 				{/if}
-				{#if navState?.hidden}
+				{#if navState?.hidden && !notesHidden}
 					<div class="row" style="margin-top:6px">
 						<span class="muted">The note navigator is hidden on this page.</span>
 						<span class="spacer"></span>

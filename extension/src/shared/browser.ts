@@ -55,6 +55,32 @@ export async function localSet(key: string, value: unknown): Promise<void> {
 	}
 }
 
+/**
+ * Local storage key of the "Show notes on pages" switch in the toolbar
+ * popup. The value is `true` while the switch is off and notes are hidden
+ * on every page. A missing value means notes are shown.
+ */
+export const NOTES_HIDDEN_KEY = 'notesHidden';
+
+/**
+ * Calls `fn` with the new value each time `key` is written in local
+ * storage, whichever extension page or tab wrote it. The value is
+ * undefined when the key was removed. Returns a function that stops the
+ * calls.
+ */
+export function onLocalChange<T>(key: string, fn: (value: T | undefined) => void): () => void {
+	const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+		if (area === 'local' && key in changes) fn(changes[key].newValue as T | undefined);
+	};
+	try {
+		browser.storage.onChanged.addListener(listener);
+	} catch {
+		// Without storage events the value is still read when a page starts.
+		return () => {};
+	}
+	return () => browser.storage.onChanged.removeListener(listener);
+}
+
 /** The key under which the background caches settings from Gloss. */
 export const SETTINGS_KEY = 'settings';
 
